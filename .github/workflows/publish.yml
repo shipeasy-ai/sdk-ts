@@ -1,0 +1,62 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# Lock to one publish at a time so a rapid double-tag can't race the npm
+# version bump and the R2 upload out of order.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run type-check
+      - run: pnpm run test
+      - run: pnpm run build
+
+      # ----- npm -----
+      - name: Publish @shipeasy/sdk to npm
+        id: npm
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "@shipeasy/sdk@$PKG_VERSION" version 2>/dev/null | grep -q "$PKG_VERSION"; then
+            echo "Already published: @shipeasy/sdk@$PKG_VERSION"
+            echo "published=0" >> "$GITHUB_OUTPUT"
+          else
+            npm publish --access public --provenance
+            echo "published=1" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # ----- R2 (the drop-in <script> loader) -----
+      # Only publish the loader artifact when npm actually shipped a new
+      # version, so the immutable `loader-v<version>.js` and the rolling
+      # `loader.js` stay in lockstep with the npm release.
+      - name: Publish loader to R2
+        if: steps.npm.outputs.published == '1'
+        run: pnpm run publish-loader
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

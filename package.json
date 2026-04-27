@@ -1,0 +1,72 @@
+{
+  "name": "@shipeasy/sdk",
+  "version": "1.0.0",
+  "description": "Shipeasy SDK — feature gates, runtime configs, experiments, and metrics for the Shipeasy hosted service.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://shipeasy.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shipeasy-ai/sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shipeasy-ai/sdk/issues"
+  },
+  "main": "./dist/server/index.js",
+  "module": "./dist/server/index.mjs",
+  "browser": "./dist/client/index.js",
+  "exports": {
+    ".": {
+      "node": "./dist/server/index.js",
+      "browser": "./dist/client/index.js",
+      "default": "./dist/server/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.mjs",
+      "default": "./dist/server/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
+    },
+    "./templates/*": "./templates/*.js"
+  },
+  "files": [
+    "dist/server/",
+    "dist/client/",
+    "templates/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "publish-loader": "wrangler r2 object put shipeasy-sdk/loader-v$npm_package_version.js --file=dist/loader/loader.global.js --content-type 'application/javascript; charset=utf-8' --cache-control 'public, max-age=31536000, immutable' --remote && wrangler r2 object put shipeasy-sdk/loader.js --file=dist/loader/loader.global.js --content-type 'application/javascript; charset=utf-8' --cache-control 'public, max-age=300' --remote"
+  },
+  "dependencies": {
+    "murmurhash-js": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/murmurhash-js": "^1.0.6",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.4",
+    "vitest": "^2.1.0",
+    "wrangler": "^4.83.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
