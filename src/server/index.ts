@@ -352,3 +352,74 @@ export class FlagsClient {
       .catch((err) => console.warn("[shipeasy] track failed:", String(err)));
   }
 }
+
+// ---- Module-scope singleton ----
+//
+// Mirrors the client SDK pattern: configure once at app boot, then call
+// the `flags` facade from any module without passing the FlagsClient
+// around. Methods return safe defaults when the singleton hasn't been
+// configured (or after destroy()), so importing `flags` into a module
+// that loads before the configure() call is harmless.
+
+let _server: FlagsClient | null = null;
+
+export function configureShipeasyServer(opts: FlagsClientOptions): FlagsClient {
+  if (_server) return _server;
+  _server = new FlagsClient(opts);
+  return _server;
+}
+
+export function getShipeasyServerClient(): FlagsClient | null {
+  return _server;
+}
+
+export function _resetShipeasyServerForTests(): void {
+  _server?.destroy();
+  _server = null;
+}
+
+export const flags = {
+  configure(opts: FlagsClientOptions): void {
+    configureShipeasyServer(opts);
+  },
+  /**
+   * Long-running server: starts the background poll. Call once at app boot.
+   * Throws if the initial fetch fails (caller decides whether to crash or degrade).
+   */
+  init(): Promise<void> {
+    if (!_server) throw new Error("[shipeasy] flags.init called before configure()");
+    return _server.init();
+  },
+  /** Serverless / edge: fetch rules once, no background timer. */
+  initOnce(): Promise<void> {
+    if (!_server) throw new Error("[shipeasy] flags.initOnce called before configure()");
+    return _server.initOnce();
+  },
+  /** Stop background timers. Safe to call repeatedly. */
+  destroy(): void {
+    _server?.destroy();
+  },
+  get(name: string, user: User): boolean {
+    return _server?.getFlag(name, user) ?? false;
+  },
+  getConfig<T = unknown>(name: string, decode?: (raw: unknown) => T): T | undefined {
+    return _server?.getConfig(name, decode);
+  },
+  getExperiment<P extends Record<string, unknown>>(
+    name: string,
+    user: User,
+    defaultParams: P,
+    decode?: (raw: unknown) => P,
+  ): ExperimentResult<P> {
+    return (
+      _server?.getExperiment(name, user, defaultParams, decode) ?? {
+        inExperiment: false,
+        group: "control",
+        params: defaultParams,
+      }
+    );
+  },
+  track(userId: string, eventName: string, props?: Record<string, unknown>): void {
+    _server?.track(userId, eventName, props);
+  },
+};
