@@ -1,6 +1,6 @@
 {
   "name": "@shipeasy/sdk",
-  "version": "2.1.1",
+  "version": "2.1.8",
   "description": "Shipeasy SDK — feature gates, runtime configs, experiments, and metrics for the Shipeasy hosted service.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://shipeasy.ai",
@@ -65,14 +65,6 @@
     "typescript": "^5.7.4",
     "vitest": "^2.1.0",
     "wrangler": "^4.83.0"
-  },
-  "peerDependencies": {
-    "zod": "^4.0.0"
-  },
-  "peerDependenciesMeta": {
-    "zod": {
-      "optional": true
-    }
   },
   "publishConfig": {
     "access": "public"

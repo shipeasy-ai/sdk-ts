@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.8
+
+Drop unused `zod` peer dependency (the SDK source has no `zod` imports — the
+optional peer was vestigial and produced misleading peer warnings for
+consumers).
+
+Reconciles the git/npm version skew: versions 2.1.2, 2.1.3, 2.1.5, and 2.1.7
+were published manually to npm from local checkouts and never tagged or
+released through this repo's CI. 2.1.8 is the first attested CI publish since
+2.1.1 and skips the missing patch numbers to avoid colliding with the
+manually-published versions on npm.
+
 ## 2.1.1
 
 Re-publish of 2.1.0. The 2.1.0 release ran CI without `@types/node` and the
