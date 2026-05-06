@@ -542,7 +542,17 @@ Object.defineProperty(globalThis, _EDIT_MODE_SSR_SYM, {
     false,
   set: (v: unknown) => {
     const b = Boolean(v);
-    _editModeALS.enterWith(b);
+    // workerd does not implement AsyncLocalStorage.enterWith() — every
+    // assignment to the SSR symbol would crash the worker with
+    // "asyncLocalStorage.enterWith() is not implemented". Swallow it; the
+    // fallback global below still gives us a per-isolate value (correctness
+    // only degrades under concurrent requests with mixed edit-mode, which
+    // is dev-only and rare).
+    try {
+      _editModeALS.enterWith(b);
+    } catch {
+      /* workerd: enterWith unsupported, fall back to global below */
+    }
     (globalThis as GlobalWithFallback)[_EDIT_MODE_FALLBACK_SYM] = b;
   },
   configurable: true,

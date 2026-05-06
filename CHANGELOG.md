@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.10
+
+### Fixed
+
+- **CF Workers crash on every `shipeasy()` call.** The SSR edit-mode
+  setter installed via `Object.defineProperty(globalThis, …)` called
+  `AsyncLocalStorage.enterWith()`, which workerd does not implement —
+  every server-rendered page returned HTTP 500 with
+  `Error: asyncLocalStorage.enterWith() is not implemented`. The
+  `enterWith` call is now wrapped in try/catch; the per-isolate
+  fallback global already covers the read path on runtimes without
+  enterWith.
+
 ## 2.1.9
 
 `getBootstrapHtml()` is now self-contained — consumers just inline its
