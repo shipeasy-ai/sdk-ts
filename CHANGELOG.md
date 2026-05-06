@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.1.11
+
+### Changed
+
+- **Label markers now carry variables.** `?se_edit_labels=1` produces
+  3-section markers `￹key￺varsJson￺value￻` (was `￹key￺value￻`).
+  Devtools picks up `{key, vars, value}` directly from any text node or
+  attribute that contains the marker — no more value-based reverse-lookups
+  or template/value diffing to recover variable names. `varsJson` is `""`
+  when the call site passed no variables.
+- **SSR `i18n.t()` wraps with markers in edit-labels mode.** Previously
+  only `tEl()` did. Server Component-rendered text (e.g. `<span>Member</span>`)
+  now arrives in the DOM as `￹common.member￺￺Member￻` instead of plain
+  `Member`, so devtools doesn't need to guess which key produced a string.
+
+### Compat
+
+- `encodeLabelMarker(key, value, variables?)` — `variables` is a new
+  optional third arg. Existing 2-arg callers keep compiling; the emitted
+  marker just has an empty `varsJson` section.
+- `LABEL_MARKER_RE` now has three capture groups. Anything that destructures
+  exec results expecting `[, key, value]` must update to `[, key, vars, value]`.
+
 ## 2.1.10
 
 ### Fixed

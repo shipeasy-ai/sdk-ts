@@ -1027,10 +1027,18 @@ export const flags = {
 export const LABEL_MARKER_START = "￹";
 export const LABEL_MARKER_SEP = "￺";
 export const LABEL_MARKER_END = "￻";
-export const LABEL_MARKER_RE = /￹([^￺￻]+)￺([^￻]*)￻/g;
+// 3-section format: ￹key￺varsJson￺value￻ — varsJson is "" when no vars,
+// otherwise JSON.stringify(vars). Devtools picks up vars without diffing
+// template against value.
+export const LABEL_MARKER_RE = /￹([^￺￻]+)￺([^￺￻]*)￺([^￻]*)￻/g;
 
-export function encodeLabelMarker(key: string, value: string): string {
-  return `${LABEL_MARKER_START}${key}${LABEL_MARKER_SEP}${value}${LABEL_MARKER_END}`;
+export function encodeLabelMarker(
+  key: string,
+  value: string,
+  variables?: I18nVariables,
+): string {
+  const varsJson = variables && Object.keys(variables).length > 0 ? JSON.stringify(variables) : "";
+  return `${LABEL_MARKER_START}${key}${LABEL_MARKER_SEP}${varsJson}${LABEL_MARKER_SEP}${value}${LABEL_MARKER_END}`;
 }
 
 export interface LabelAttrs {
@@ -1256,8 +1264,23 @@ export const i18n: I18nFacade = {
       variables = fallbackOrVars;
     }
     const resolved = _resolveTranslation(key, variables);
-    if (resolved !== undefined) return resolved;
-    if (fallback !== undefined) return interpolate(fallback, variables);
+    if (resolved !== undefined) {
+      // SSR + edit-labels: wrap with marker so devtools can pick up the key
+      // and variable values without reverse-lookups. On the client the patched
+      // window.i18n.t already wraps the string for us, so resolved comes back
+      // marker-wrapped — no double-wrap here.
+      if (typeof window === "undefined" && isEditLabelsMode()) {
+        return encodeLabelMarker(key, resolved, variables);
+      }
+      return resolved;
+    }
+    if (fallback !== undefined) {
+      const text = interpolate(fallback, variables);
+      if (typeof window === "undefined" && isEditLabelsMode()) {
+        return encodeLabelMarker(key, text, variables);
+      }
+      return text;
+    }
     return key;
   },
   /**
@@ -1306,7 +1329,7 @@ export const i18n: I18nFacade = {
     if (isEditLabelsMode()) {
       const resolved = _resolveTranslation(key, variables);
       const text = resolved ?? interpolate(fallback, variables);
-      return encodeLabelMarker(key, text) as F;
+      return encodeLabelMarker(key, text, variables) as F;
     }
     return (this as I18nFacade).t<F>(key, fallback, variables);
   },

@@ -851,7 +851,11 @@ export function getBootstrapHtml(
       `window._sei18n_t=O;` +
       `v.t=function(k,vars){` +
       `var r=O(k,vars);` +
-      `return r===k?k:'\\uFFF9'+k+'\\uFFFA'+r+'\\uFFFB';` +
+      `if(r===k)return k;` +
+      // 3-section marker: key | varsJson | value. varsJson is "" when no vars.
+      // Stringification is wrapped in try/catch so circular vars never break the page.
+      `var V='';try{if(vars&&typeof vars==='object'){var hasKey=false;for(var _k in vars){hasKey=true;break;}if(hasKey)V=JSON.stringify(vars);}}catch(_){V='';}` +
+      `return '\\uFFF9'+k+'\\uFFFA'+V+'\\uFFFA'+r+'\\uFFFB';` +
       `};` +
       `}` +
       `Object.defineProperty(window,'i18n',{configurable:true,` +
