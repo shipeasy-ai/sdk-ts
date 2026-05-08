@@ -467,6 +467,9 @@ export class FlagsClientBrowser {
   private guardrailsInstalled = false;
   private listeners = new Set<() => void>();
   private overrideListenerInstalled = false;
+  // Monotonic counter so a later identify() always wins even if its /sdk/evaluate
+  // response races and lands before an earlier in-flight call's response.
+  private identifySeq = 0;
   private onOverrideChange = () => {
     this.installBridge();
     this.notify();
@@ -483,8 +486,12 @@ export class FlagsClientBrowser {
   }
 
   async identify(user: User): Promise<void> {
+    const seq = ++this.identifySeq;
     const prevUserId = this.userId;
-    this.userId = user.user_id ?? "";
+    // Override caller-supplied user fields onto whatever was set by previous
+    // identify()s — last call wins. anonId is held separately and never
+    // touched by this path, so it stays stable for the lifetime of the tab.
+    if (user.user_id !== undefined) this.userId = user.user_id;
 
     // Stitch anonymous → identified user in analysis
     if (this.anonId && this.userId && this.userId !== prevUserId) {
@@ -509,7 +516,12 @@ export class FlagsClientBrowser {
       }),
     });
     if (!res.ok) throw new Error(`/sdk/evaluate returned ${res.status}`);
-    this.evalResult = (await res.json()) as EvalResponse;
+    const data = (await res.json()) as EvalResponse;
+    // Drop stale responses: a newer identify() has already started and its
+    // result will replace ours. Don't notify or install guardrails either,
+    // so a single later identify never gets shadowed.
+    if (seq !== this.identifySeq) return;
+    this.evalResult = data;
 
     if (this.autoGuardrails && !this.guardrailsInstalled) {
       this.guardrailsInstalled = true;
@@ -844,12 +856,23 @@ export interface ShipeasyClientConfig {
   baseUrl?: string;
   /** Override the admin URL for the devtools overlay (dev use). */
   adminUrl?: string;
+  /**
+   * Skip the lazy auto-identify({}) at boot. Defaults to true (auto-identify on).
+   * Turn off when the host has its own identify orchestration and wants to
+   * avoid the initial anon /sdk/evaluate round-trip.
+   */
+  autoIdentify?: boolean;
 }
 
 /**
  * Initialise the ShipEasy client SDK and wire up lazy devtools.
  * Call this once at app startup (e.g. in a useEffect in your root layout).
  * Returns a cleanup function — call it on unmount to remove event listeners.
+ *
+ * Lazy-identifies the visitor under the hood with a stable anonId + auto-collected
+ * browser attrs (locale, timezone, path, screen, referrer, user_agent), so flags
+ * and experiments are warm without callers having to wire identify() manually.
+ * A later flags.identify({ user_id }) overrides this in place; anonId stays stable.
  */
 export function shipeasy(opts: ShipeasyClientConfig): () => void {
   const client = configureShipeasy({
@@ -857,6 +880,11 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
     baseUrl: opts.baseUrl ?? "https://cdn.shipeasy.ai",
   });
   flags.notifyMounted();
+  if (opts.autoIdentify !== false) {
+    void client.identify({}).catch((err) => {
+      console.warn("[shipeasy] auto-identify failed:", String(err));
+    });
+  }
   return attachDevtools(client, { adminUrl: opts.adminUrl });
 }
 

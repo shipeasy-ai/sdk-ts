@@ -322,7 +322,16 @@ describe("FlagsClientBrowser", () => {
       setItem: vi.fn(),
     });
     vi.stubGlobal("crypto", { randomUUID: () => "test-anon-id" });
-    vi.stubGlobal("window", { addEventListener: vi.fn() });
+    // The shipeasy() code path goes through flags.notifyMounted() and attachDevtools(),
+    // which reach for dispatchEvent / removeEventListener / location / screen / navigator.
+    vi.stubGlobal("window", {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      location: { search: "", pathname: "/" },
+      screen: { width: 1024, height: 768 },
+    });
+    vi.stubGlobal("navigator", { language: "en-US", userAgent: "test-ua" });
     vi.stubGlobal("document", {
       addEventListener: vi.fn(),
       visibilityState: "visible",
@@ -412,5 +421,125 @@ describe("FlagsClientBrowser", () => {
     expect(r.inExperiment).toBe(true);
     expect(r.group).toBe("test");
     expect(r.params).toEqual({ color: "blue" });
+  });
+
+  it("late-arriving stale identify does not overwrite a newer result", async () => {
+    vi.resetModules();
+    const { FlagsClientBrowser } = await import("../client/index");
+    // First /sdk/evaluate resolves slowly with the OLD payload. Second resolves
+    // immediately with the NEW payload. /collect calls (alias, etc.) resolve
+    // unconditionally — they're not what we're asserting on.
+    let resolveFirst: ((v: Response) => void) | null = null;
+    let evalCallCount = 0;
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (!url.includes("/sdk/evaluate")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+        } as Response);
+      }
+      evalCallCount += 1;
+      if (evalCallCount === 1) {
+        return new Promise<Response>((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ flags: { f: true }, configs: {}, experiments: {} }),
+      } as Response);
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("setInterval", () => 1);
+    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const firstP = client.identify({});
+    const secondP = client.identify({ user_id: "u1" });
+    await secondP;
+    expect(client.getFlag("f")).toBe(true);
+    // Now resolve the first (stale) call — it must be dropped.
+    resolveFirst!({
+      ok: true,
+      status: 200,
+      json: async () => ({ flags: { f: false }, configs: {}, experiments: {} }),
+    } as Response);
+    await firstP;
+    expect(client.getFlag("f")).toBe(true);
+  });
+
+  it("anonId is stable across successive identify() calls", async () => {
+    vi.resetModules();
+    const { FlagsClientBrowser } = await import("../client/index");
+    const calls: { anonymous_id?: string; user_id?: string }[] = [];
+    const mockFetch = vi.fn().mockImplementation((url: string, init: RequestInit) => {
+      if (url.includes("/sdk/evaluate")) {
+        const body = JSON.parse(init.body as string) as {
+          user: { anonymous_id?: string; user_id?: string };
+        };
+        calls.push(body.user);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ flags: {}, configs: {}, experiments: {} }),
+      } as Response);
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("setInterval", () => 1);
+    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    await client.identify({});
+    await client.identify({ user_id: "u1" });
+    await client.identify({ user_id: "u2" });
+    expect(calls.length).toBe(3);
+    const anonIds = calls.map((c) => c.anonymous_id);
+    expect(new Set(anonIds).size).toBe(1);
+    expect(anonIds[0]).toBe("test-anon-id");
+    expect(calls[0].user_id).toBeUndefined();
+    expect(calls[1].user_id).toBe("u1");
+    expect(calls[2].user_id).toBe("u2");
+  });
+
+  it("shipeasy() auto-identifies at init and a later flags.identify() overrides", async () => {
+    vi.resetModules();
+    const sdk = await import("../client/index");
+    const calls: { anonymous_id?: string; user_id?: string }[] = [];
+    const mockFetch = vi.fn().mockImplementation((url: string, init: RequestInit) => {
+      if (url.includes("/sdk/evaluate")) {
+        const body = JSON.parse(init.body as string) as {
+          user: { anonymous_id?: string; user_id?: string };
+        };
+        calls.push(body.user);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ flags: {}, configs: {}, experiments: {} }),
+      } as Response);
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("setInterval", () => 1);
+    sdk._resetShipeasyForTests();
+    sdk.shipeasy({ apiKey: "k", baseUrl: "http://x" });
+    await sdk.flags.identify({ user_id: "u1" });
+    expect(calls.length).toBe(2);
+    expect(calls[0].user_id).toBeUndefined();
+    expect(calls[1].user_id).toBe("u1");
+    expect(calls[0].anonymous_id).toBe(calls[1].anonymous_id);
+    sdk._resetShipeasyForTests();
+  });
+
+  it("shipeasy({ autoIdentify: false }) does not fire an auto identify", async () => {
+    vi.resetModules();
+    const sdk = await import("../client/index");
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("setInterval", () => 1);
+    sdk._resetShipeasyForTests();
+    sdk.shipeasy({ apiKey: "k", baseUrl: "http://x", autoIdentify: false });
+    // Give microtasks a chance to run.
+    await Promise.resolve();
+    expect(mockFetch).not.toHaveBeenCalled();
+    sdk._resetShipeasyForTests();
   });
 });

@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.1.13
+
+### Added
+
+- **`shipeasy()` lazy auto-identifies the visitor at boot.** Previously
+  `shipeasy({ apiKey })` only configured the singleton; callers had to
+  wire `flags.identify({ user_id })` themselves before flag/experiment
+  reads returned anything useful. Now `shipeasy()` fires
+  `client.identify({})` once after configure, sending the stable
+  localStorage `anonId` and auto-collected browser attrs (locale,
+  timezone, path, screen, referrer, user_agent) so anonymous-targeting
+  gates evaluate immediately.
+- **`autoIdentify?: boolean` opt-out** on `ShipeasyClientConfig` for hosts
+  with their own identify orchestration that want to skip the boot
+  `/sdk/evaluate` round-trip.
+
+### Fixed
+
+- **Race protection in `FlagsClientBrowser.identify()`.** A monotonic
+  sequence counter ensures a later identify() always wins even when its
+  `/sdk/evaluate` response races and lands before an earlier in-flight
+  call's. Stale responses are dropped — `evalResult` and exposure
+  logging only reflect the latest identify. Callers can now safely fire
+  `flags.identify({ user_id })` while the boot auto-identify is still
+  in flight without risk of being overwritten by it.
+- **`identify()` no longer clears `userId` on a `{}` call.** Previously
+  any identify with no `user_id` reset the stored user to `""`. Now the
+  stored user is only overwritten when the call explicitly supplies a
+  `user_id`, which is what the auto-identify path relies on to coexist
+  with later authenticated identify()s.
+
+### Compat
+
+- Pure additive change to `ShipeasyClientConfig`. Existing 2-arg
+  `shipeasy({ apiKey, baseUrl })` callers keep their behaviour and pick
+  up auto-identify automatically.
+- `FlagsClientBrowser.identify()` signature is unchanged. Direct callers
+  (e.g. the `loader.js` script-tag bundle) get the race protection for
+  free.
+
 ## 2.1.12
 
 ### Fixed
