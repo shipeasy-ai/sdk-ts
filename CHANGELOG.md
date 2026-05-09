@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.1.14
+
+### Fixed
+
+- **SSR i18n no longer flashes raw keys in `"use client"` components.**
+  In Next.js App Router, RSC and the SSR-of-client-components pass run
+  in separate module graphs. Server Components import
+  `@shipeasy/sdk/server` (which installs the
+  `Symbol.for("@shipeasy/sdk:ssr-i18n")` getter on `globalThis`); client
+  components only import `@shipeasy/sdk/client`, so the SSR pass for
+  them ran in a graph where the getter was missing — `i18n.t()` returned
+  the raw key, the SSR HTML embedded it, and on hydration the client
+  (with `window.i18n` populated by the bootstrap shim) rendered the
+  translated string, producing a hydration mismatch and a visible flash
+  of keys before React swapped them out. The client SDK now falls back
+  to reading the shared `Symbol.for("@shipeasy/sdk:ssr-i18n-cache")` Map
+  directly when the getter isn't installed, so SSR strings resolve
+  regardless of which module graph the component renders in.
+
 ## 2.1.13
 
 ### Added

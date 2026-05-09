@@ -1102,13 +1102,34 @@ void _createElement;
 // In the browser the symbol is never set, so getSSRI18nStore() returns null and
 // all paths fall back to window.i18n (populated by the CDN loader script) or to
 // the hardcoded fallback string in tEl().
+//
+// Next.js compiles RSC and the SSR-of-client-components pass into separate
+// module graphs. Server Components import @shipeasy/sdk/server, which installs
+// the getter; "use client" components only import this module, so the SSR pass
+// for them can run in a graph where the server module never evaluated and the
+// getter is missing. To keep SSR strings reachable in that case, fall back to
+// reading the shared cache Map directly — the server SDK parks it on globalThis
+// under the same registry-shared Symbol.for() key, so it's visible across
+// module instances.
 
 const _I18N_SSR_SYM = Symbol.for("@shipeasy/sdk:ssr-i18n");
+const _I18N_CACHE_SYM = Symbol.for("@shipeasy/sdk:ssr-i18n-cache");
 const _EDIT_MODE_SSR_SYM = Symbol.for("@shipeasy/sdk:ssr-edit-mode");
 
-function getSSRI18nStore(): { strings: Record<string, string>; locale: string } | null {
+type _SSRI18nStore = { strings: Record<string, string>; locale: string };
+
+function getSSRI18nStore(): _SSRI18nStore | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (globalThis as any)[_I18N_SSR_SYM]?.() ?? null;
+  const fromGetter = (globalThis as any)[_I18N_SSR_SYM]?.() as _SSRI18nStore | null | undefined;
+  if (fromGetter && Object.keys(fromGetter.strings).length > 0) return fromGetter;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cache = (globalThis as any)[_I18N_CACHE_SYM] as Map<string, _SSRI18nStore> | undefined;
+  if (cache) {
+    for (const v of cache.values()) {
+      if (Object.keys(v.strings).length > 0) return v;
+    }
+  }
+  return fromGetter ?? null;
 }
 
 // Server-side fallback symbol kept in lockstep with server/index.ts so the
