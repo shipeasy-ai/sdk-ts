@@ -30,12 +30,23 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
+      # npm Trusted Publishing (OIDC, no token) requires npm >= 11.5.1.
+      # Node 22 ships with npm 10.x which falls back to NODE_AUTH_TOKEN.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm run type-check
       - run: pnpm run test
       - run: pnpm run build
 
       # ----- npm -----
+      # Trusted Publishing via OIDC — no token required. Requires a matching
+      # Trusted Publisher rule on
+      # https://www.npmjs.com/package/@shipeasy/sdk/access (Settings →
+      # Trusted Publishers → GitHub Actions, repo shipeasy-ai/sdk, workflow
+      # publish.yml).
+      #
       # The drop-in <script> loader artifact (R2 upload) is published from the
       # private shipeasy monorepo on submodule bump — keeping CF account id /
       # API token out of this public repo.
@@ -47,5 +58,3 @@ jobs:
           else
             npm publish --access public --provenance
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
