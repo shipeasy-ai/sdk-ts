@@ -97,11 +97,17 @@ interface Universe {
   holdout_range: [number, number] | null;
 }
 
+interface Killswitch {
+  killed: 0 | 1 | boolean;
+  switches?: Record<string, 0 | 1 | boolean>;
+}
+
 interface FlagsBlob {
   version: string;
   plan: string;
   gates: Record<string, Gate>;
   configs: Record<string, { value: unknown }>;
+  killswitches: Record<string, Killswitch>;
 }
 
 interface ExpsBlob {
@@ -114,6 +120,7 @@ export interface BootstrapPayload {
   flags: Record<string, boolean>;
   configs: Record<string, unknown>;
   experiments: Record<string, ExperimentResult<Record<string, unknown>>>;
+  killswitches: Record<string, boolean | Record<string, boolean>>;
 }
 
 // ---- Evaluation helpers ----
@@ -242,6 +249,11 @@ export interface FlagsClientOptions {
   baseUrl?: string;
   /** Which published env to read values from. Defaults to "prod". */
   env?: FlagsClientEnv;
+  /**
+   * Preload the flags blob synchronously without a network fetch. Primarily
+   * for tests; production callers should rely on init()/initOnce().
+   */
+  initialBlob?: FlagsBlob;
 }
 
 export class FlagsClient {
@@ -260,6 +272,10 @@ export class FlagsClient {
     this.apiKey = opts.apiKey;
     this.baseUrl = (opts.baseUrl ?? "https://cdn.shipeasy.ai").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
+    if (opts.initialBlob) {
+      this.flagsBlob = opts.initialBlob;
+      this.initialized = true;
+    }
   }
 
   async init(): Promise<void> {
@@ -427,6 +443,7 @@ export class FlagsClient {
     const flags: Record<string, boolean> = {};
     const configs: Record<string, unknown> = {};
     const experiments: Record<string, ExperimentResult<Record<string, unknown>>> = {};
+    const killswitches: Record<string, boolean | Record<string, boolean>> = {};
 
     for (const [name, gate] of Object.entries(this.flagsBlob?.gates ?? {})) {
       flags[name] = evalGateInternal(gate, user);
@@ -440,6 +457,16 @@ export class FlagsClient {
       experiments[name] = this.getExperiment(name, user, {});
     }
 
+    for (const [name, ks] of Object.entries(this.flagsBlob?.killswitches ?? {})) {
+      if (ks.switches && Object.keys(ks.switches).length > 0) {
+        const out: Record<string, boolean> = {};
+        for (const [k, v] of Object.entries(ks.switches)) out[k] = isEnabled(v);
+        killswitches[name] = out;
+      } else {
+        killswitches[name] = isEnabled(ks.killed);
+      }
+    }
+
     if (rawUrl) {
       const ov = parseOverrides(rawUrl);
       Object.assign(flags, ov.gates);
@@ -449,7 +476,14 @@ export class FlagsClient {
       }
     }
 
-    return { flags, configs, experiments };
+    return { flags, configs, experiments, killswitches };
+  }
+
+  getKillswitch(name: string, switchKey?: string): boolean {
+    const ks = this.flagsBlob?.killswitches?.[name];
+    if (!ks) return false;
+    if (switchKey === undefined) return isEnabled(ks.killed);
+    return isEnabled(ks.switches?.[switchKey]);
   }
 }
 
@@ -965,6 +999,14 @@ export const flags = {
       }
     );
   },
+  /**
+   * Read a killswitch. Without `switchKey`, returns true when the whole
+   * killswitch is killed. With `switchKey`, returns true when that specific
+   * switch is on. Unknown killswitches / switches return false.
+   */
+  ks(name: string, switchKey?: string): boolean {
+    return _server?.getKillswitch(name, switchKey) ?? false;
+  },
   track(userId: string, eventName: string, props?: Record<string, unknown>): void {
     _server?.track(userId, eventName, props);
   },
@@ -974,6 +1016,13 @@ export const flags = {
    * overrides. Returns an empty payload when the blob hasn't been fetched yet.
    */
   evaluate(user: User, rawUrl?: string): BootstrapPayload {
-    return _server?.evaluate(user, rawUrl) ?? { flags: {}, configs: {}, experiments: {} };
+    return (
+      _server?.evaluate(user, rawUrl) ?? {
+        flags: {},
+        configs: {},
+        experiments: {},
+        killswitches: {},
+      }
+    );
   },
 };

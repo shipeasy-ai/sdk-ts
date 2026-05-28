@@ -543,3 +543,117 @@ describe("FlagsClientBrowser", () => {
     sdk._resetShipeasyForTests();
   });
 });
+
+import {
+  flags as serverFlags,
+  configureShipeasyServer,
+  _resetShipeasyServerForTests,
+} from "../server";
+
+describe("server flags.ks", () => {
+  beforeEach(() => _resetShipeasyServerForTests());
+
+  it("returns false when the killswitch is unknown", () => {
+    configureShipeasyServer({
+      apiKey: "k",
+      initialBlob: {
+        version: "1",
+        plan: "free",
+        gates: {},
+        configs: {},
+        killswitches: {},
+      } as any,
+    });
+    expect(serverFlags.ks("missing")).toBe(false);
+  });
+
+  it("returns true when the killswitch is killed and no switch arg given", () => {
+    configureShipeasyServer({
+      apiKey: "k",
+      initialBlob: {
+        version: "1",
+        plan: "free",
+        gates: {},
+        configs: {},
+        killswitches: { "payments-disable": { killed: 1 } },
+      } as any,
+    });
+    expect(serverFlags.ks("payments-disable")).toBe(true);
+  });
+
+  it("returns per-switch state when switch arg given", () => {
+    configureShipeasyServer({
+      apiKey: "k",
+      initialBlob: {
+        version: "1",
+        plan: "free",
+        gates: {},
+        configs: {},
+        killswitches: {
+          "payments-disable": { killed: 0, switches: { stripe: 1, paypal: 0 } },
+        },
+      } as any,
+    });
+    expect(serverFlags.ks("payments-disable", "stripe")).toBe(true);
+    expect(serverFlags.ks("payments-disable", "paypal")).toBe(false);
+    expect(serverFlags.ks("payments-disable", "unknown")).toBe(false);
+  });
+});
+
+describe("client flags.ks", () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.stubGlobal("window", {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      location: { search: "", pathname: "/" },
+      screen: { width: 1024, height: 768 },
+    });
+    vi.stubGlobal("navigator", { language: "en-US", userAgent: "test-ua" });
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      visibilityState: "visible",
+    });
+    vi.stubGlobal("setInterval", () => 1);
+    vi.stubGlobal("PerformanceObserver", undefined);
+    const sdk = await import("../client/index");
+    sdk._resetShipeasyForTests();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("returns false when no bootstrap is loaded", async () => {
+    const sdk = await import("../client/index");
+    sdk.configureShipeasy({ sdkKey: "k" });
+    expect(sdk.flags.ks("missing")).toBe(false);
+  });
+
+  it("reads killed state from bootstrap", async () => {
+    (window as any).__SE_BOOTSTRAP = {
+      flags: {},
+      configs: {},
+      experiments: {},
+      killswitches: { "payments-disable": true },
+    };
+    const sdk = await import("../client/index");
+    sdk.configureShipeasy({ sdkKey: "k" });
+    expect(sdk.flags.ks("payments-disable")).toBe(true);
+  });
+
+  it("reads per-switch state from bootstrap object", async () => {
+    (window as any).__SE_BOOTSTRAP = {
+      flags: {},
+      configs: {},
+      experiments: {},
+      killswitches: { "payments-disable": { stripe: true, paypal: false } },
+    };
+    const sdk = await import("../client/index");
+    sdk.configureShipeasy({ sdkKey: "k" });
+    expect(sdk.flags.ks("payments-disable", "stripe")).toBe(true);
+    expect(sdk.flags.ks("payments-disable", "paypal")).toBe(false);
+  });
+});

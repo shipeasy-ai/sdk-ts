@@ -36,6 +36,12 @@ interface EvalResponse {
   flags: Record<string, boolean>;
   configs: Record<string, unknown>;
   experiments: Record<string, EvalExpResult>;
+  /**
+   * Killswitch state, flattened by the server. A boolean means the killswitch
+   * is whole-killed; an object means it's not whole-killed and carries per-
+   * switch booleans.
+   */
+  killswitches?: Record<string, boolean | Record<string, boolean>>;
 }
 
 // ---- EventBuffer ----
@@ -709,6 +715,20 @@ export class FlagsClientBrowser {
     this.buffer.pushMetric(eventName, this.userId, this.anonId, props);
   }
 
+  /**
+   * Read a killswitch from the server's evaluated state. Without `switchKey`,
+   * returns true when the killswitch is whole-killed. With `switchKey`, returns
+   * the per-switch state. Returns false for unknown killswitches / switches.
+   */
+  getKillswitch(name: string, switchKey?: string): boolean {
+    if (this.evalResult === null) return false;
+    const ks = this.evalResult.killswitches?.[name];
+    if (ks === undefined) return false;
+    if (typeof ks === "boolean") return switchKey === undefined ? ks : false;
+    if (switchKey === undefined) return false;
+    return ks[switchKey] === true;
+  }
+
   async flush(): Promise<void> {
     await this.buffer.flushAsync();
   }
@@ -1005,6 +1025,12 @@ export interface BootstrapPayload {
     string,
     { inExperiment: boolean; group: string; params: Record<string, unknown> }
   >;
+  /**
+   * Killswitch state, flattened by the server. A value of `boolean` means the
+   * killswitch is killed as a whole (no per-switch detail); a `Record` means
+   * the killswitch is not whole-killed and the map carries per-switch state.
+   */
+  killswitches?: Record<string, boolean | Record<string, boolean>>;
   /** Set by getBootstrapHtml() for auto-init. Not part of evaluate() output. */
   apiKey?: string;
   apiUrl?: string;
@@ -1104,6 +1130,26 @@ export const flags = {
   },
   track(eventName: string, props?: Record<string, unknown>): void {
     _client?.track(eventName, props);
+  },
+  /**
+   * Read a killswitch. Without `switchKey`, returns true when the killswitch is
+   * killed as a whole. With `switchKey`, returns true when that specific switch
+   * is on. Unknown killswitches / switches return false.
+   *
+   * Priority: bootstrap → CDN evalResult (post-mount) → false. Matches the
+   * pattern used by `flags.get` / `flags.getConfig` so SSR-hydrated values are
+   * available synchronously on first render.
+   */
+  ks(name: string, switchKey?: string): boolean {
+    const bs = getBootstrap();
+    if (bs !== null && bs.killswitches && name in bs.killswitches) {
+      const ks = bs.killswitches[name];
+      if (typeof ks === "boolean") return switchKey === undefined ? ks : false;
+      if (switchKey === undefined) return false;
+      return ks[switchKey] === true;
+    }
+    if (!_mountedAndReady) return false;
+    return _client?.getKillswitch(name, switchKey) ?? false;
   },
   flush(): Promise<void> {
     return _client?.flush() ?? Promise.resolve();
