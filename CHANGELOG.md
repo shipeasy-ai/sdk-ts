@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.5.1
+
+### Fixed
+
+- **Unload event flush no longer drops events.** `navigator.sendBeacon()` can't
+  set the `X-SDK-Key` header, so page-unload flushes hit `/collect` unauthenticated
+  and were rejected (401). The beacon now carries the key in the request body as
+  `k`; the edge `/collect` endpoint reads it as a fallback when the header is absent.
+
+
 ## 2.5.0
 
 ### Added

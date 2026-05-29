@@ -168,8 +168,11 @@ class EventBuffer {
     const batch = this.queue.splice(0);
     const body = JSON.stringify({ events: batch });
     if (useBeacon && typeof navigator !== "undefined" && navigator.sendBeacon) {
-      // text/plain avoids CORS preflight on mobile Safari
-      navigator.sendBeacon(this.collectUrl, new Blob([body], { type: "text/plain" }));
+      // text/plain avoids CORS preflight on mobile Safari. sendBeacon can't set
+      // the X-SDK-Key header, so carry the key in the body as `k` — the
+      // /collect endpoint reads it as a fallback when the header is absent.
+      const beaconBody = JSON.stringify({ k: this.sdkKey, events: batch });
+      navigator.sendBeacon(this.collectUrl, new Blob([beaconBody], { type: "text/plain" }));
       return;
     }
     fetch(this.collectUrl, {
