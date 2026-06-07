@@ -1,5 +1,7 @@
 // ShipEasy browser SDK — calls /sdk/evaluate on identify(), logs exposures + events via /collect.
 
+import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
+
 declare global {
   interface Window {
     i18n?: {
@@ -458,6 +460,15 @@ export interface FlagsClientBrowserOptions {
   autoGuardrailGroups?: Partial<AutoCollectGroups>;
   /** Which published env to read values from. Defaults to "prod". */
   env?: FlagsClientBrowserEnv;
+  /**
+   * Per-evaluation usage telemetry. ON by default — each getFlag/getConfig/
+   * getExperiment/getKillswitch call fires one fire-and-forget sendBeacon so
+   * usage is counted by Cloudflare's native per-path analytics. Pass `true` to
+   * disable entirely.
+   */
+  disableTelemetry?: boolean;
+  /** Override the telemetry beacon host. Defaults to {@link DEFAULT_TELEMETRY_URL}. */
+  telemetryUrl?: string;
 }
 
 /**
@@ -525,6 +536,7 @@ export class FlagsClientBrowser {
   private anonId: string;
   private userId = "";
   private buffer: EventBuffer;
+  private telemetry: Telemetry;
   private guardrailsInstalled = false;
   private listeners = new Set<() => void>();
   private overrideListenerInstalled = false;
@@ -553,6 +565,13 @@ export class FlagsClientBrowser {
     };
     this.anonId = getOrCreateAnonId();
     this.buffer = new EventBuffer(`${this.baseUrl}/collect`, this.sdkKey);
+    this.telemetry = new Telemetry({
+      endpoint: opts.telemetryUrl ?? DEFAULT_TELEMETRY_URL,
+      sdkKey: this.sdkKey,
+      side: "client",
+      env: this.env,
+      disabled: opts.disableTelemetry,
+    });
     void this.buffer.flushPendingAlias();
   }
 
@@ -624,6 +643,7 @@ export class FlagsClientBrowser {
   }
 
   getFlag(name: string): boolean {
+    this.telemetry.emit("gate", name);
     if (this.evalResult === null) return false;
     const ov = readGateOverride(name);
     if (ov !== null) return ov;
@@ -631,6 +651,7 @@ export class FlagsClientBrowser {
   }
 
   getConfig<T = unknown>(name: string, decode?: (raw: unknown) => T): T | undefined {
+    this.telemetry.emit("config", name);
     if (this.evalResult === null) return undefined;
     const ov = readConfigOverride(name);
     const raw = ov !== undefined ? ov : this.evalResult.configs?.[name];
@@ -650,6 +671,7 @@ export class FlagsClientBrowser {
     decode?: (raw: unknown) => P,
     variants?: Record<string, Partial<P>>,
   ): ExperimentResult<P> {
+    this.telemetry.emit("experiment", name);
     const notIn: ExperimentResult<P> = {
       inExperiment: false,
       group: "control",
@@ -724,6 +746,7 @@ export class FlagsClientBrowser {
    * the per-switch state. Returns false for unknown killswitches / switches.
    */
   getKillswitch(name: string, switchKey?: string): boolean {
+    this.telemetry.emit("ks", name);
     if (this.evalResult === null) return false;
     const ks = this.evalResult.killswitches?.[name];
     if (ks === undefined) return false;
@@ -977,6 +1000,12 @@ export interface ShipeasyClientConfig {
    * ```
    */
   autoCollect?: boolean | Partial<AutoCollectGroups>;
+  /**
+   * Disable per-evaluation usage telemetry. Telemetry is ON by default — every
+   * flag/config/experiment/killswitch read fires one fire-and-forget beacon
+   * counted by Cloudflare's native per-path analytics. Pass `true` to opt out.
+   */
+  disableTelemetry?: boolean;
 }
 
 /**
@@ -1000,6 +1029,7 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
     baseUrl,
     autoGuardrails: blanket,
     autoGuardrailGroups: groups,
+    disableTelemetry: opts.disableTelemetry,
   });
   // Inject the runtime i18n loader with the client key. The server no longer
   // does this (it doesn't hold the client key); the SSR shim in __SE_BOOTSTRAP

@@ -2,6 +2,8 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
+
 export const version = "1.0.0";
 
 // ---- MurmurHash3_x86_32 (seed 0) — must match packages/core/src/eval/hash.ts ----
@@ -254,12 +256,24 @@ export interface FlagsClientOptions {
    * for tests; production callers should rely on init()/initOnce().
    */
   initialBlob?: FlagsBlob;
+  /**
+   * Per-evaluation usage telemetry. ON by default — each getFlag/getConfig/
+   * getExperiment/getKillswitch (and the per-key evaluate() loop) fires one
+   * fire-and-forget beacon counted by Cloudflare's native per-path analytics.
+   * Pass `true` to disable. NOTE: on Cloudflare Workers each beacon is an
+   * outbound subrequest (cap 50 free / 1000 paid per invocation), so disable
+   * this on hot request paths that evaluate many flags per request.
+   */
+  disableTelemetry?: boolean;
+  /** Override the telemetry beacon host. Defaults to {@link DEFAULT_TELEMETRY_URL}. */
+  telemetryUrl?: string;
 }
 
 export class FlagsClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly env: FlagsClientEnv;
+  private readonly telemetry: Telemetry;
   private flagsBlob: FlagsBlob | null = null;
   private expsBlob: ExpsBlob | null = null;
   private flagsEtag: string | null = null;
@@ -272,6 +286,13 @@ export class FlagsClient {
     this.apiKey = opts.apiKey;
     this.baseUrl = (opts.baseUrl ?? "https://cdn.shipeasy.ai").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
+    this.telemetry = new Telemetry({
+      endpoint: opts.telemetryUrl ?? DEFAULT_TELEMETRY_URL,
+      sdkKey: this.apiKey,
+      side: "server",
+      env: this.env,
+      disabled: opts.disableTelemetry,
+    });
     if (opts.initialBlob) {
       this.flagsBlob = opts.initialBlob;
       this.initialized = true;
@@ -341,12 +362,14 @@ export class FlagsClient {
   }
 
   getFlag(name: string, user: User): boolean {
+    this.telemetry.emit("gate", name);
     const gate = this.flagsBlob?.gates[name];
     if (!gate) return false;
     return evalGateInternal(gate, user);
   }
 
   getConfig<T = unknown>(name: string, decode?: (raw: unknown) => T): T | undefined {
+    this.telemetry.emit("config", name);
     const entry = this.flagsBlob?.configs[name];
     if (!entry) return undefined;
     if (!decode) return entry.value as T;
@@ -359,6 +382,7 @@ export class FlagsClient {
     defaultParams: P,
     decode?: (raw: unknown) => P,
   ): ExperimentResult<P> {
+    this.telemetry.emit("experiment", name);
     const notIn: ExperimentResult<P> = {
       inExperiment: false,
       group: "control",
@@ -446,10 +470,12 @@ export class FlagsClient {
     const killswitches: Record<string, boolean | Record<string, boolean>> = {};
 
     for (const [name, gate] of Object.entries(this.flagsBlob?.gates ?? {})) {
+      this.telemetry.emit("gate", name);
       flags[name] = evalGateInternal(gate, user);
     }
 
     for (const [name, entry] of Object.entries(this.flagsBlob?.configs ?? {})) {
+      this.telemetry.emit("config", name);
       configs[name] = entry.value;
     }
 
@@ -458,6 +484,7 @@ export class FlagsClient {
     }
 
     for (const [name, ks] of Object.entries(this.flagsBlob?.killswitches ?? {})) {
+      this.telemetry.emit("ks", name);
       if (ks.switches && Object.keys(ks.switches).length > 0) {
         const out: Record<string, boolean> = {};
         for (const [k, v] of Object.entries(ks.switches)) out[k] = isEnabled(v);
@@ -480,6 +507,7 @@ export class FlagsClient {
   }
 
   getKillswitch(name: string, switchKey?: string): boolean {
+    this.telemetry.emit("ks", name);
     const ks = this.flagsBlob?.killswitches?.[name];
     if (!ks) return false;
     if (switchKey === undefined) return isEnabled(ks.killed);
@@ -769,6 +797,12 @@ export interface ShipeasyServerConfig {
   user?: User;
   /** i18n profile to load for SSR translations, e.g. "en:prod". Defaults to "en:prod". */
   i18nDefaultProfile?: string;
+  /**
+   * Disable per-evaluation usage telemetry. ON by default. On Cloudflare
+   * Workers each beacon is an outbound subrequest, so disable on hot SSR paths
+   * that evaluate many flags per request. See {@link FlagsClientOptions.disableTelemetry}.
+   */
+  disableTelemetry?: boolean;
 }
 
 export interface ShipeasyServerHandle {
@@ -804,7 +838,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
     );
   }
   const profile = opts.i18nDefaultProfile ?? "en:prod";
-  flags.configure({ apiKey: serverKey });
+  flags.configure({ apiKey: serverKey, disableTelemetry: opts.disableTelemetry });
   // Resolve URL overrides: explicit opts.urlOverrides wins; otherwise try
   // (a) the x-se-search header (injected by middleware when one is wired up)
   // and (b) the `se_edit_labels` cookie that the inline patcher sets on the
