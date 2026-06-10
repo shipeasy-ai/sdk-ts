@@ -53,6 +53,58 @@ const client = new FlagsClient({ sdkKey: process.env.SHIPEASY_SERVER_KEY! });
 const cfg = await client.getConfig("plan_limits", { user_id: "u-1" });
 ```
 
+## Error tracking — `see()`
+
+`see` (shipeasy error) is the structured error reporter — opes-style: every
+handled exception documents its **product consequence**, not just its stack.
+Works in vanilla JS on both sides; the whole grammar hangs off one import:
+
+```ts
+import { see } from "@shipeasy/sdk/client"; // or "@shipeasy/sdk/server"
+
+try {
+  await submitOrder(order);
+} catch (e) {
+  see(e).causes_the("checkout").to("use cached prices").extras({ order_id: order.id });
+}
+
+// Non-exception problems — the name is a stable identifier (it participates
+// in the issue fingerprint); variable data goes in .message() / .extras():
+if (rows.length > LIMIT) {
+  see.Violation("large query")
+    .message(`got ${rows.length} rows`)
+    .causes_the("search results")
+    .to("be trimmed");
+}
+
+// Expected control-flow exceptions: document them, report nothing —
+// auto-capture skips marked errors. The reason must start with "because".
+try {
+  return decodeFoo(blob);
+} catch (e) {
+  see.ControlFlowException(e, "because it wasn't an encoded Foo");
+  return decodeBar(blob);
+}
+```
+
+Reports land in the Shipeasy **errors** primitive: fingerprint-grouped issues
+(open / resolved / ignored, regression auto-reopens) with a near-real-time
+occurrence timeseries. The chain dispatches on the next microtask — no
+`.send()` — and ships immediately (`sendBeacon` in the browser, fire-and-forget
+`fetch` on the server), spam-guarded by a 30s dedup window and a per-session
+cap.
+
+The client SDK also auto-captures uncaught exceptions, unhandled rejections,
+and network failures (fetch network errors + 5xx) into the same primitive
+(`autoCollect: { errors }`, on by default). Auto-capture is the outer safety
+net — it does not replace `see()` in catch blocks, where you know the
+consequence and it cannot.
+
+**Rules**: if you don't know the consequence, don't catch the exception. Never
+`see()` then `throw` (double counting — either handle or rethrow). Never use
+`see.Violation()` for a caught exception (you'd drop the stack). No PII or
+high-cardinality data in extras.
+
 ## Drop-in `<script>` loader (no bundler)
 
 ```html

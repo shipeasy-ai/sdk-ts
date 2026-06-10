@@ -3,8 +3,32 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
+import {
+  buildSeeEvent,
+  markExpected,
+  SeeLimiter,
+  startSeeChain,
+  startSeeViolationChain,
+  type Consequence,
+  type SeeChain,
+  type SeeErrorEvent,
+  type SeeExtras,
+  type SeeKind,
+  type SeeViolationChain,
+  type Violation,
+} from "../see/core";
 
-export const version = "1.0.0";
+export type {
+  Consequence,
+  SeeChain,
+  SeeErrorEvent,
+  SeeExtras,
+  SeeKind,
+  SeeViolationChain,
+  Violation,
+};
+
+export const version = "4.0.0";
 
 // ---- MurmurHash3_x86_32 (seed 0) — must match packages/core/src/eval/hash.ts ----
 
@@ -274,6 +298,7 @@ export class FlagsClient {
   private readonly baseUrl: string;
   private readonly env: FlagsClientEnv;
   private readonly telemetry: Telemetry;
+  private readonly seeLimiter = new SeeLimiter();
   private flagsBlob: FlagsBlob | null = null;
   private expsBlob: ExpsBlob | null = null;
   private flagsEtag: string | null = null;
@@ -452,6 +477,36 @@ export class FlagsClient {
         body,
       })
       .catch((err) => console.warn("[shipeasy] track failed:", String(err)));
+  }
+
+  /**
+   * Report a structured error into the errors primitive. Fire-and-forget —
+   * never blocks or throws into the request path. Spam-guarded by a 30s
+   * dedup window + per-process cap.
+   */
+  reportError(
+    problem: unknown,
+    consequence: Consequence,
+    extras?: SeeExtras,
+    kind?: SeeKind,
+  ): void {
+    try {
+      const ev = buildSeeEvent(problem, consequence, extras, {
+        side: "server",
+        sdkVersion: version,
+        env: this.env,
+      }, kind);
+      if (!this.seeLimiter.shouldSend(ev)) return;
+      globalThis
+        .fetch(`${this.baseUrl}/collect`, {
+          method: "POST",
+          headers: { "X-SDK-Key": this.apiKey, "Content-Type": "text/plain" },
+          body: JSON.stringify({ events: [ev] }),
+        })
+        .catch((err) => console.warn("[shipeasy] see() send failed:", String(err)));
+    } catch {
+      /* error reporting must never throw into product code */
+    }
   }
 
   /**
@@ -1086,3 +1141,70 @@ export const flags = {
     );
   },
 };
+
+// ---- see (structured error reporting) ----
+
+export interface SeeApi {
+  /**
+   * Report a handled problem and its product consequence:
+   *
+   * ```ts
+   * import { see } from "@shipeasy/sdk/server";
+   *
+   * try {
+   *   await chargeCard(order);
+   * } catch (e) {
+   *   see(e).causes_the("payment").to("use the backup processor").extras({ order_id: order.id });
+   *   await chargeViaBackup(order);
+   * }
+   * ```
+   *
+   * The chain dispatches on the next microtask — fire-and-forget into the
+   * errors primitive (grouped by fingerprint, near-real-time timeseries).
+   * If you don't know the consequence of an exception, don't catch it.
+   */
+  (problem: unknown): SeeChain;
+  /**
+   * Report a non-exception problem. Prefer passing a caught Error to `see()`
+   * when one exists. The name is a stable identifier (it participates in the
+   * issue fingerprint) — variable data goes in `.message()` or `.extras()`.
+   *
+   * ```ts
+   * if (results.length > LIMIT) {
+   *   see.Violation("large query").causes_the("search results").to("be trimmed");
+   * }
+   * ```
+   */
+  Violation(name: string): SeeViolationChain;
+  /**
+   * Mark an exception as expected control flow — documents the expectation and
+   * reports nothing. The reason must start with "because".
+   */
+  ControlFlowException(err: unknown, because: string): void;
+}
+
+function dispatchSee(
+  problem: unknown,
+  consequence: Consequence,
+  extras: SeeExtras | undefined,
+  kind?: SeeKind,
+): void {
+  if (!_server) {
+    console.warn("[shipeasy] see() called before shipeasy({ serverKey }) — error dropped");
+    return;
+  }
+  _server.reportError(problem, consequence, extras, kind);
+}
+
+/**
+ * Structured error reporter — the whole grammar hangs off this one import.
+ * Safe to import anywhere; a call before `shipeasy({ serverKey })` warns and
+ * drops (never throws).
+ */
+export const see: SeeApi = Object.assign(
+  (problem: unknown): SeeChain => startSeeChain(() => problem, dispatchSee),
+  {
+    Violation: (name: string): SeeViolationChain => startSeeViolationChain(name, dispatchSee),
+    ControlFlowException: markExpected,
+  },
+);

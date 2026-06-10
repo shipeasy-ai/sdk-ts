@@ -1,5 +1,62 @@
 # Changelog
 
+## 4.1.0
+
+### Changed (behavioral)
+
+- **Auto-metrics are now experiment-participant-scoped by default.** The
+  browser SDK only emits `__auto_*` metric events (web vitals, navigation
+  timing, session activity) for visitors who are in ≥1 active experiment
+  (`exposureSeen` non-empty). The experiment analysis pipeline only ever reads
+  auto-metrics joined against exposures, so ungated emission was pure
+  Analytics Engine write cost — ~60% of AE cost at scale (see the platform's
+  cost model). Exceptions:
+  - `__auto_abandoned` is still emitted unconditionally — it fires precisely
+    when the user leaves before an exposure could land; the analysis-side
+    post-exposure filter handles attribution.
+  - Error capture (`see()` pipeline) is unaffected.
+
+### Added
+
+- `autoCollect: { always: true }` escape hatch on the `shipeasy()` client
+  entrypoint (and `autoCollectAlways` on `FlagsClientBrowserOptions`) for
+  customers who want site-wide vitals without running experiments.
+
+## 4.0.0
+
+### Added
+
+- **`see()` — structured error reporting** (both entrypoints, vanilla JS, one
+  import). A handled problem documents its product consequence with a fluent
+  chain:
+
+  ```ts
+  see(err).causes_the("checkout").to("use cached prices").extras({ order_id });
+  see.Violation("large query").message("got 5000 rows")
+     .causes_the("results").to("be trimmed");
+  see.ControlFlowException(err, "because the blob wasn't an encoded Foo");
+  ```
+
+  Reports land in the shipeasy **errors** primitive (fingerprint-grouped
+  issues + near-real-time occurrence timeseries). The chain dispatches on the
+  next microtask; error events bypass the 5s metric batch and ship immediately
+  (`sendBeacon`-first in the browser, fire-and-forget `fetch` on the server),
+  spam-guarded by a 30s dedup window and a 25-per-session/process cap.
+  `see.ControlFlowException(err, "because …")`-marked exceptions are skipped
+  by auto-capture and never reported.
+
+### Changed (BREAKING)
+
+- **Auto-captured errors moved to the errors primitive.** `window.onerror`,
+  `unhandledrejection`, and fetch network/5xx failures are now reported as
+  structured error events; the SDK **no longer emits the `__auto_js_error` and
+  `__auto_network_error` metric events**. Metrics or alert rules built on
+  those events (e.g. the `js_error_rate` / `network_error_rate` presets) stop
+  receiving data — use the errors primitive instead. All other `__auto_*`
+  vitals/engagement metrics are unchanged.
+- The SDK's own collector/telemetry requests are excluded from network-error
+  auto-capture (prevents self-amplifying feedback loops).
+
 ## 3.1.0
 
 ### Added

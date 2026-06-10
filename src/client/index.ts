@@ -1,6 +1,33 @@
 // ShipEasy browser SDK — calls /sdk/evaluate on identify(), logs exposures + events via /collect.
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
+import {
+  buildSeeEvent,
+  causesThe,
+  isExpected,
+  markExpected,
+  SeeLimiter,
+  startSeeChain,
+  startSeeViolationChain,
+  violation,
+  type Consequence,
+  type SeeChain,
+  type SeeErrorEvent,
+  type SeeExtras,
+  type SeeKind,
+  type SeeViolationChain,
+  type Violation,
+} from "../see/core";
+
+export type {
+  Consequence,
+  SeeChain,
+  SeeErrorEvent,
+  SeeExtras,
+  SeeKind,
+  SeeViolationChain,
+  Violation,
+};
 
 declare global {
   interface Window {
@@ -13,7 +40,7 @@ declare global {
   }
 }
 
-export const version = "1.0.0";
+export const version = "4.0.0";
 
 // ---- Types ----
 
@@ -96,6 +123,14 @@ class EventBuffer {
     }
   }
 
+  /** True once this visitor has been exposed to ≥1 experiment (this tab or a
+   *  prior page in the session — the dedup set persists in sessionStorage).
+   *  Gates auto-metric emission: vitals from non-participants are never read
+   *  by the analysis pipeline and would be pure AE write cost (see cost.md). */
+  hasExposures(): boolean {
+    return this.exposureSeen.size > 0;
+  }
+
   pushExposure(experiment: string, group: string, userId: string, anonId: string): void {
     const key = `${userId || anonId}:${experiment}`;
     if (this.exposureSeen.has(key)) return;
@@ -168,19 +203,35 @@ class EventBuffer {
   flush(useBeacon = false): void {
     if (!this.queue.length) return;
     const batch = this.queue.splice(0);
-    const body = JSON.stringify({ events: batch });
+    this.send(batch, useBeacon);
+  }
+
+  /**
+   * Bypass the 5s queue and ship events immediately — used by see() error
+   * reporting so occurrences land near-real-time and survive page unload.
+   * Beacon-first (fire-and-forget, unload-safe), keepalive fetch fallback.
+   */
+  sendNow(events: Array<RawEvent | SeeErrorEvent>): void {
+    this.send(events, true);
+  }
+
+  private send(batch: Array<RawEvent | SeeErrorEvent>, useBeacon: boolean): void {
     if (useBeacon && typeof navigator !== "undefined" && navigator.sendBeacon) {
       // text/plain avoids CORS preflight on mobile Safari. sendBeacon can't set
       // the X-SDK-Key header, so carry the key in the body as `k` — the
       // /collect endpoint reads it as a fallback when the header is absent.
       const beaconBody = JSON.stringify({ k: this.sdkKey, events: batch });
-      navigator.sendBeacon(this.collectUrl, new Blob([beaconBody], { type: "text/plain" }));
-      return;
+      try {
+        if (navigator.sendBeacon(this.collectUrl, new Blob([beaconBody], { type: "text/plain" })))
+          return;
+      } catch {
+        /* fall through to fetch */
+      }
     }
     fetch(this.collectUrl, {
       method: "POST",
       headers: { "X-SDK-Key": this.sdkKey, "Content-Type": "application/json" },
-      body,
+      body: JSON.stringify({ events: batch }),
       keepalive: true,
     }).catch(() => {});
   }
@@ -199,29 +250,43 @@ class EventBuffer {
 
 // ---- Auto-guardrails ----
 
-// Cap on errors recorded per session — prevents one bad page from spamming
-// /collect with thousands of events while still letting us see >1 distinct error.
-const MAX_ERRORS_PER_SESSION = 5;
-
 export interface AutoCollectGroups {
   vitals: boolean;
   errors: boolean;
   engagement: boolean;
 }
 
+/** Callback the auto-capture handlers report through — bound to the client's see() path. */
+type SeeReporter = (
+  problem: unknown,
+  consequence: Consequence,
+  extras: SeeExtras | undefined,
+  kind: SeeKind,
+) => void;
+
 function installAutoGuardrails(
   buffer: EventBuffer,
   userId: string,
   anonId: string,
   groups: AutoCollectGroups,
+  reportSee: SeeReporter,
+  ignoreUrlPrefixes: string[],
+  always = false,
 ): void {
   if (typeof window === "undefined" || typeof PerformanceObserver === "undefined") return;
+
+  // Cost gate (cost.md §auto-guardrails — mandatory): only emit `__auto_*`
+  // metric events for experiment participants. Non-participant vitals are
+  // never read by the analysis pipeline and at scale are ~60% of AE write
+  // cost. `autoCollect: { always: true }` opts into site-wide collection.
+  // EXCEPTION: `__auto_abandoned` stays unconditional — it fires precisely
+  // when the user leaves before exposures could be recorded; the analysis
+  // post-exposure filter attributes it correctly.
+  const shouldEmit = () => always || buffer.hasExposures();
 
   let lcp: number | null = null;
   let inp: number | null = null;
   let clsBad = false;
-  let jsErrorCount = 0;
-  let netErrorCount = 0;
   let navTimingFlushed = false;
 
   if (groups.vitals) {
@@ -258,72 +323,73 @@ function installAutoGuardrails(
     } catch {}
   }
 
-  // ---- Errors: split client (JS exception) vs request (HTTP failure). ----
+  // ---- Errors: report into the errors primitive via the see() path. ----
+  // Caps + 30s dedup live in the client's SeeLimiter; expected control-flow
+  // exceptions (see.expected(err, "because …")) are skipped.
   if (groups.errors) {
     const origOnError = window.onerror;
     window.onerror = (msg, source, lineno, _colno, err) => {
-      if (jsErrorCount < MAX_ERRORS_PER_SESSION) {
-        jsErrorCount += 1;
-        buffer.pushMetric("__auto_js_error", userId, anonId, {
-          value: 1,
-          kind: "exception",
-          message: typeof msg === "string" ? msg.slice(0, 200) : String(err ?? "").slice(0, 200),
-          source: typeof source === "string" ? source.slice(0, 200) : "",
-          line: lineno ?? 0,
-        });
+      if (!isExpected(err)) {
+        const problem =
+          err ?? (typeof msg === "string" && msg ? msg : "Unknown error");
+        reportSee(
+          problem,
+          causesThe("the page").to("hit an unhandled error"),
+          {
+            source: typeof source === "string" ? source : undefined,
+            line: lineno ?? undefined,
+          },
+          "uncaught",
+        );
       }
       if (typeof origOnError === "function") return origOnError(msg, source, lineno, _colno, err);
       return false;
     };
 
     window.addEventListener("unhandledrejection", (e: PromiseRejectionEvent) => {
-      if (jsErrorCount < MAX_ERRORS_PER_SESSION) {
-        jsErrorCount += 1;
-        const reason = (e as PromiseRejectionEvent).reason;
-        const message =
-          reason instanceof Error
-            ? reason.message
-            : typeof reason === "string"
-              ? reason
-              : String(reason);
-        buffer.pushMetric("__auto_js_error", userId, anonId, {
-          value: 1,
-          kind: "unhandled_rejection",
-          message: message.slice(0, 200),
-        });
-      }
+      const reason = (e as PromiseRejectionEvent).reason;
+      if (isExpected(reason)) return;
+      reportSee(
+        reason ?? "Unhandled promise rejection",
+        causesThe("the page").to("hit an unhandled promise rejection"),
+        undefined,
+        "unhandled_rejection",
+      );
     });
 
     const origFetch = window.fetch;
     window.fetch = async function (...args) {
       const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
       const url = typeof args[0] === "string" ? args[0] : (args[0] as Request | URL).toString();
+      // Never report the SDK's own collector/telemetry requests — a failing
+      // collector would otherwise feed errors back into itself.
+      const ignored = ignoreUrlPrefixes.some((p) => p && url.startsWith(p));
+      // Querystring-free URL for the message (it feeds the issue fingerprint);
+      // the full URL still travels in extras for debugging.
+      const bareUrl = url.split("?")[0].slice(0, 200);
       let res: Response;
       try {
         res = await origFetch.apply(this, args);
       } catch (err) {
         // Network-level failure (DNS, offline, CORS, abort) — never reaches a status.
-        if (netErrorCount < MAX_ERRORS_PER_SESSION) {
-          netErrorCount += 1;
-          buffer.pushMetric("__auto_network_error", userId, anonId, {
-            value: 1,
-            kind: "network",
-            status: 0,
-            url: url.slice(0, 200),
-          });
+        if (!ignored && !isExpected(err)) {
+          reportSee(
+            violation("NetworkError").message(`request to ${bareUrl} failed`),
+            causesThe("a network request").to("fail without a response"),
+            { status: 0, url: url.slice(0, 200) },
+            "network",
+          );
         }
         throw err;
       }
-      if (res.status >= 500 && netErrorCount < MAX_ERRORS_PER_SESSION) {
-        netErrorCount += 1;
+      if (!ignored && res.status >= 500) {
         const elapsed = typeof performance !== "undefined" ? performance.now() - startedAt : 0;
-        buffer.pushMetric("__auto_network_error", userId, anonId, {
-          value: 1,
-          kind: "5xx",
-          status: res.status,
-          url: url.slice(0, 200),
-          duration_ms: Math.round(elapsed),
-        });
+        reportSee(
+          violation("Http5xx").message(`request to ${bareUrl} returned ${res.status}`),
+          causesThe("a network request").to(`fail with HTTP ${res.status}`),
+          { status: res.status, url: url.slice(0, 200), duration_ms: Math.round(elapsed) },
+          "network",
+        );
       }
       return res;
     };
@@ -335,8 +401,15 @@ function installAutoGuardrails(
   // times — guarded.
   const flushNavTiming = () => {
     if (navTimingFlushed) return;
+    if (!groups.vitals) {
+      navTimingFlushed = true;
+      return;
+    }
+    // Not in an experiment (yet): don't mark flushed — exposure may land
+    // before the next flush point (route change / hide) and we still want
+    // one nav-timing emission for the page.
+    if (!shouldEmit()) return;
     navTimingFlushed = true;
-    if (!groups.vitals) return;
     try {
       const navList = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
       const nav = navList[0];
@@ -376,13 +449,14 @@ function installAutoGuardrails(
   // so even one emit per session is enough to mark the user active.
   if (groups.engagement) {
     try {
-      buffer.pushMetric("__auto_session_active", userId, anonId, { value: 1 });
+      if (shouldEmit()) buffer.pushMetric("__auto_session_active", userId, anonId, { value: 1 });
     } catch {}
     let lastEmit = Date.now();
     const SESSION_GAP_MS = 30 * 60 * 1000; // 30m of hidden → new session
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState !== "visible") return;
       if (Date.now() - lastEmit < SESSION_GAP_MS) return;
+      if (!shouldEmit()) return;
       try {
         buffer.pushMetric("__auto_session_active", userId, anonId, { value: 1 });
         lastEmit = Date.now();
@@ -408,12 +482,14 @@ function installAutoGuardrails(
 
     const flushOnHide = () => {
       flushNavTiming();
-      if (groups.vitals) {
+      if (groups.vitals && shouldEmit()) {
         if (lcp !== null) buffer.pushMetric("__auto_lcp", userId, anonId, { value: lcp });
         if (inp !== null) buffer.pushMetric("__auto_inp", userId, anonId, { value: inp });
         if (clsBad) buffer.pushMetric("__auto_cls_binary", userId, anonId, { value: 1 });
       }
       if (groups.engagement) {
+        // Unconditional by design — abandonment happens before exposures can
+        // land; the analysis-side post-exposure filter handles attribution.
         const abandoned = lcp === null ? 1 : 0;
         buffer.pushMetric("__auto_abandoned", userId, anonId, { value: abandoned });
       }
@@ -458,6 +534,13 @@ export interface FlagsClientBrowserOptions {
    * true when `autoGuardrails` is true).
    */
   autoGuardrailGroups?: Partial<AutoCollectGroups>;
+  /**
+   * Emit `__auto_*` metric events for ALL visitors, not just experiment
+   * participants. Default false: auto-metrics are gated on the visitor having
+   * seen ≥1 experiment exposure (the only data the analysis pipeline reads;
+   * ungated emission is pure AE write cost at scale — see cost.md).
+   */
+  autoCollectAlways?: boolean;
   /** Which published env to read values from. Defaults to "prod". */
   env?: FlagsClientBrowserEnv;
   /**
@@ -531,12 +614,14 @@ export class FlagsClientBrowser {
   private readonly baseUrl: string;
   private readonly autoGuardrails: boolean;
   private readonly autoGuardrailGroups: AutoCollectGroups;
+  private readonly autoCollectAlways: boolean;
   private readonly env: FlagsClientBrowserEnv;
   private evalResult: EvalResponse | null = null;
   private anonId: string;
   private userId = "";
   private buffer: EventBuffer;
   private telemetry: Telemetry;
+  private seeLimiter = new SeeLimiter();
   private guardrailsInstalled = false;
   private listeners = new Set<() => void>();
   private overrideListenerInstalled = false;
@@ -552,11 +637,13 @@ export class FlagsClientBrowser {
     this.sdkKey = opts.sdkKey;
     this.baseUrl = (opts.baseUrl ?? "https://edge.shipeasy.dev").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
-    // Auto web vitals + JS error capture defaults ON. The worker bypasses
-    // event-catalog validation for `__auto_*` names so this is safe out of
-    // the box. Callers opt out by passing `autoGuardrails: false` or by
+    // Auto web vitals + error capture defaults ON. Vitals/engagement emit
+    // `__auto_*` metric events (the worker bypasses event-catalog validation
+    // for those names); errors report into the errors primitive via the see()
+    // path. Callers opt out by passing `autoGuardrails: false` or by
     // narrowing per-group via `autoGuardrailGroups`.
     this.autoGuardrails = opts.autoGuardrails !== false;
+    this.autoCollectAlways = opts.autoCollectAlways === true;
     const g = opts.autoGuardrailGroups ?? {};
     this.autoGuardrailGroups = {
       vitals: g.vitals ?? this.autoGuardrails,
@@ -619,9 +706,45 @@ export class FlagsClientBrowser {
       this.autoGuardrailGroups.engagement;
     if (anyGroupOn && !this.guardrailsInstalled) {
       this.guardrailsInstalled = true;
-      installAutoGuardrails(this.buffer, this.userId, this.anonId, this.autoGuardrailGroups);
+      installAutoGuardrails(
+        this.buffer,
+        this.userId,
+        this.anonId,
+        this.autoGuardrailGroups,
+        (problem, consequence, extras, kind) =>
+          this.reportError(problem, consequence, extras, kind),
+        [`${this.baseUrl}/`, DEFAULT_TELEMETRY_URL],
+        this.autoCollectAlways,
+      );
     }
     this.notify();
+  }
+
+  /**
+   * Report a structured error into the errors primitive. Flushes immediately
+   * (beacon-first) — error occurrences are near-real-time, never queued behind
+   * the 5s metric batch. Spam-guarded by a 30s dedup window + per-session cap.
+   */
+  reportError(
+    problem: unknown,
+    consequence: Consequence,
+    extras?: SeeExtras,
+    kind?: SeeKind,
+  ): void {
+    try {
+      const ev = buildSeeEvent(problem, consequence, extras, {
+        side: "client",
+        sdkVersion: version,
+        env: this.env,
+        url: typeof window !== "undefined" && window.location ? window.location.href : undefined,
+        userId: this.userId || undefined,
+        anonId: this.anonId,
+      }, kind);
+      if (!this.seeLimiter.shouldSend(ev)) return;
+      this.buffer.sendNow([ev]);
+    } catch {
+      /* error reporting must never throw into product code */
+    }
   }
 
   get ready(): boolean {
@@ -986,10 +1109,11 @@ export interface ShipeasyClientConfig {
    */
   autoIdentify?: boolean;
   /**
-   * Capture web vitals (LCP, CLS, INP, TTFB, FCP, navigation timing), JS /
-   * network errors, and engagement signals (abandonment) as `__auto_*`
-   * metric events. Defaults to `true` — the worker bypasses event-catalog
-   * validation for `__auto_*` names so this is safe out of the box.
+   * Capture web vitals (LCP, CLS, INP, TTFB, FCP, navigation timing) and
+   * engagement signals (abandonment) as `__auto_*` metric events, plus JS /
+   * network errors as structured error events in the errors primitive (same
+   * pipeline as `see()` — grouped by fingerprint, near-real-time). Defaults
+   * to `true`.
    *
    * Pass `false` to disable everything, or a per-group object to narrow:
    *
@@ -998,8 +1122,21 @@ export interface ShipeasyClientConfig {
    * shipeasy({ clientKey, autoCollect: { errors: false } });   // vitals + engagement only
    * shipeasy({ clientKey });                                   // all groups on
    * ```
+   *
+   * Since 4.1.0, `__auto_*` metric events are only emitted for visitors who
+   * are in ≥1 active experiment (the analysis pipeline reads nothing else;
+   * gating cuts the dominant Analytics Engine write cost at scale). Pass
+   * `{ always: true }` to collect site-wide vitals regardless of experiment
+   * participation:
+   *
+   * ```ts
+   * shipeasy({ clientKey, autoCollect: { always: true } });    // site-wide vitals
+   * ```
+   *
+   * `__auto_abandoned` is always emitted (it fires when the user leaves
+   * before exposures could land) and error capture is unaffected.
    */
-  autoCollect?: boolean | Partial<AutoCollectGroups>;
+  autoCollect?: boolean | (Partial<AutoCollectGroups> & { always?: boolean });
   /**
    * Disable per-evaluation usage telemetry. Telemetry is ON by default — every
    * flag/config/experiment/killswitch read fires one fire-and-forget beacon
@@ -1021,14 +1158,17 @@ export interface ShipeasyClientConfig {
 export function shipeasy(opts: ShipeasyClientConfig): () => void {
   const ac = opts.autoCollect;
   const blanket = ac === false ? false : true;
-  const groups: Partial<AutoCollectGroups> | undefined =
-    ac && typeof ac === "object" ? ac : undefined;
+  const acObj = ac && typeof ac === "object" ? ac : undefined;
+  const groups: Partial<AutoCollectGroups> | undefined = acObj
+    ? { vitals: acObj.vitals, errors: acObj.errors, engagement: acObj.engagement }
+    : undefined;
   const baseUrl = opts.baseUrl ?? "https://cdn.shipeasy.ai";
   const client = configureShipeasy({
     sdkKey: opts.clientKey,
     baseUrl,
     autoGuardrails: blanket,
     autoGuardrailGroups: groups,
+    autoCollectAlways: acObj?.always === true,
     disableTelemetry: opts.disableTelemetry,
   });
   // Inject the runtime i18n loader with the client key. The server no longer
@@ -1257,6 +1397,81 @@ export const flags = {
     return _client?.ready ?? false;
   },
 };
+
+// ---- see (structured error reporting) ----
+
+export interface SeeApi {
+  /**
+   * Report a handled problem and its product consequence:
+   *
+   * ```ts
+   * import { see } from "@shipeasy/sdk/client";
+   *
+   * try {
+   *   await submitOrder(order);
+   * } catch (e) {
+   *   see(e).causes_the("checkout").to("use cached prices").extras({ order_id: order.id });
+   * }
+   * ```
+   *
+   * The chain dispatches on the next microtask, so the report ships
+   * immediately after the statement (no `.send()` needed) into the errors
+   * primitive — grouped by fingerprint, near-real-time timeseries. If you
+   * don't know the consequence of an exception, don't catch it.
+   */
+  (problem: unknown): SeeChain;
+  /**
+   * Report a non-exception problem. Prefer passing a caught Error to `see()`
+   * when one exists. The name is a stable identifier (it participates in the
+   * issue fingerprint) — variable data goes in `.message()` or `.extras()`.
+   *
+   * ```ts
+   * if (rows.length > LIMIT) {
+   *   see.Violation("large query").message(`got ${rows.length} rows`)
+   *      .causes_the("search results").to("be trimmed");
+   * }
+   * ```
+   */
+  Violation(name: string): SeeViolationChain;
+  /**
+   * Mark an exception as expected control flow — auto-capture skips it and
+   * nothing is reported. The reason must start with "because".
+   *
+   * ```ts
+   * } catch (e) {
+   *   see.ControlFlowException(e, "because the blob wasn't an encoded Foo");
+   *   return decodeAsBar(blob);
+   * }
+   * ```
+   */
+  ControlFlowException(err: unknown, because: string): void;
+}
+
+function dispatchSee(
+  problem: unknown,
+  consequence: Consequence,
+  extras: SeeExtras | undefined,
+  kind?: SeeKind,
+): void {
+  if (!_client) {
+    console.warn("[shipeasy] see() called before shipeasy({ clientKey }) — error dropped");
+    return;
+  }
+  _client.reportError(problem, consequence, extras, kind);
+}
+
+/**
+ * Structured error reporter — the whole grammar hangs off this one import.
+ * Safe to import anywhere; a call before `shipeasy({ clientKey })` warns and
+ * drops (never throws).
+ */
+export const see: SeeApi = Object.assign(
+  (problem: unknown): SeeChain => startSeeChain(() => problem, dispatchSee),
+  {
+    Violation: (name: string): SeeViolationChain => startSeeViolationChain(name, dispatchSee),
+    ControlFlowException: markExpected,
+  },
+);
 
 // ---- i18n label helpers (formerly @shipeasy/i18n-core) ----
 
