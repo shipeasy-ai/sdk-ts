@@ -591,6 +591,106 @@ function collectBrowserAttrs(): Record<string, unknown> {
 }
 
 /**
+ * Auto-collected debugging environment for see() error reports — a curated,
+ * non-PII snapshot of the browser/OS/device that ships under namespaced
+ * `env.*` keys in the report's extras (merged below the developer's own keys).
+ *
+ * Deliberately bounded: derived browser/OS *names*, device class, viewport,
+ * screen, language, timezone, connection class, online flag, and coarse
+ * hardware (cores, GB memory). NO raw UA string, canvas/font fingerprint,
+ * plugin list, or precise identifiers — enough to debug, not to track.
+ */
+function collectSeeEnv(): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  if (typeof navigator === "undefined") return out;
+  const nav = navigator as Navigator & {
+    deviceMemory?: number;
+    connection?: { effectiveType?: string };
+    userAgentData?: { mobile?: boolean; platform?: string };
+  };
+  const ua = typeof nav.userAgent === "string" ? nav.userAgent : "";
+
+  const browser = parseUaBrowser(ua);
+  if (browser) out["env.browser"] = browser;
+  const os = parseUaOs(ua) ?? nav.userAgentData?.platform;
+  if (os) out["env.os"] = os;
+  out["env.device"] =
+    typeof nav.userAgentData?.mobile === "boolean"
+      ? nav.userAgentData.mobile
+        ? "mobile"
+        : "desktop"
+      : /iPad|Tablet/.test(ua)
+        ? "tablet"
+        : /Mobi|iPhone|Android.*Mobile/.test(ua)
+          ? "mobile"
+          : "desktop";
+
+  try {
+    if (nav.language) out["env.lang"] = nav.language;
+  } catch {}
+  try {
+    if (typeof nav.onLine === "boolean") out["env.online"] = nav.onLine;
+  } catch {}
+  try {
+    if (typeof nav.hardwareConcurrency === "number") out["env.cores"] = nav.hardwareConcurrency;
+  } catch {}
+  try {
+    if (typeof nav.deviceMemory === "number") out["env.memory_gb"] = nav.deviceMemory;
+  } catch {}
+  try {
+    const et = nav.connection?.effectiveType;
+    if (et) out["env.connection"] = et;
+  } catch {}
+  try {
+    if (typeof window !== "undefined" && window.innerWidth && window.innerHeight) {
+      out["env.viewport"] = `${window.innerWidth}×${window.innerHeight}`;
+    }
+    if (typeof window !== "undefined" && typeof window.devicePixelRatio === "number") {
+      out["env.dpr"] = window.devicePixelRatio;
+    }
+    if (typeof screen !== "undefined" && screen.width && screen.height) {
+      out["env.screen"] = `${screen.width}×${screen.height}`;
+    }
+  } catch {}
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz) out["env.tz"] = tz;
+  } catch {}
+  return out;
+}
+
+/** Best-effort "<Name> <major>" from a UA string. Order matters (Edge before Chrome). */
+function parseUaBrowser(ua: string): string | undefined {
+  const tests: Array<[RegExp, string]> = [
+    [/Edg(?:A|iOS)?\/(\d+)/, "Edge"],
+    [/(?:OPR|Opera)\/(\d+)/, "Opera"],
+    [/(?:Firefox|FxiOS)\/(\d+)/, "Firefox"],
+    [/(?:Chrome|CriOS)\/(\d+)/, "Chrome"],
+    [/Version\/(\d+)[.\d]* (?:Mobile.*)?Safari/, "Safari"],
+  ];
+  for (const [re, name] of tests) {
+    const m = re.exec(ua);
+    if (m) return `${name} ${m[1]}`;
+  }
+  return undefined;
+}
+
+/** Best-effort OS name (+ major version where cheap) from a UA string. */
+function parseUaOs(ua: string): string | undefined {
+  if (/Windows NT 10/.test(ua)) return "Windows 10/11";
+  if (/Windows NT/.test(ua)) return "Windows";
+  let m = /Mac OS X (\d+)[._](\d+)/.exec(ua);
+  if (m) return `macOS ${m[1]}.${m[2]}`;
+  if (/Macintosh/.test(ua)) return "macOS";
+  m = /Android (\d+)/.exec(ua);
+  if (m) return `Android ${m[1]}`;
+  m = /(?:iPhone|iPad)[^)]* OS (\d+)/.exec(ua);
+  if (m) return `iOS ${m[1]}`;
+  if (/Linux/.test(ua)) return "Linux";
+  return undefined;
+}
+
+/**
  * Read `?se_exp_<name>=<group>` (and legacy `?se-exp-<name>=…`) URL params
  * and project them into the wire shape `/sdk/evaluate` expects. The worker
  * trusts these and bypasses normal allocation for the named experiments.
@@ -732,7 +832,10 @@ export class FlagsClientBrowser {
     kind?: SeeKind,
   ): void {
     try {
-      const ev = buildSeeEvent(problem, consequence, extras, {
+      // Auto-collected env (env.* keys) goes first; the developer's own
+      // .extras({…}) win on any collision and take priority in the key budget.
+      const enriched: SeeExtras = { ...collectSeeEnv(), ...extras };
+      const ev = buildSeeEvent(problem, consequence, enriched, {
         side: "client",
         sdkVersion: version,
         env: this.env,

@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   buildSeeEvent,
   causesThe,
+  findCausedBy,
   isExpected,
   isViolation,
   markExpected,
+  markReported,
   sanitizeExtras,
   SeeLimiter,
   SEE_MAX_EXTRA_KEYS,
@@ -146,6 +148,88 @@ describe("buildSeeEvent", () => {
     expect(ev.url).toBe("https://app.example.com/checkout");
     expect(ev.user_id).toBe("u1");
     expect(ev.anonymous_id).toBe("anon1");
+  });
+});
+
+describe("caused-by linkage (findCausedBy / markReported / buildSeeEvent)", () => {
+  const build = (problem: unknown) =>
+    buildSeeEvent(problem, causesThe("checkout").to("use cached prices"), undefined, CTX);
+
+  it("a first report has no caused_by", () => {
+    expect(build(new Error("boom")).caused_by).toBeUndefined();
+  });
+
+  it("re-throw: reporting the SAME error twice links the second to the first", () => {
+    const err = new TypeError("x is not a function");
+    const first = buildSeeEvent(err, causesThe("friend request").to("not be sent"), undefined, CTX);
+    expect(first.caused_by).toBeUndefined();
+    // Same object caught + reported again at an outer boundary, different consequence.
+    const second = buildSeeEvent(err, causesThe("checkout").to("fail to load"), undefined, CTX);
+    expect(second.caused_by).toEqual({
+      error_type: "TypeError",
+      message: "x is not a function",
+      stack: first.stack,
+      subject: "friend request",
+      outcome: "not be sent",
+    });
+  });
+
+  it("wrap: an outer error carrying { cause } links to the reported inner cause", () => {
+    const inner = new Error("db down");
+    build(inner); // inner boundary reports + stamps it
+    const outer = new Error("request failed", { cause: inner });
+    const ev = build(outer);
+    expect(ev.caused_by).toMatchObject({ error_type: "Error", message: "db down" });
+  });
+
+  it("does not link to an unreported inner cause (Example 4 wrap-without-see)", () => {
+    const inner = new Error("db down"); // never see()'d
+    const outer = new Error("request failed", { cause: inner });
+    expect(build(outer).caused_by).toBeUndefined();
+  });
+
+  it("walks a multi-level cause chain to the nearest reported ancestor", () => {
+    const root = new Error("root");
+    build(root);
+    const mid = new Error("mid", { cause: root });
+    const top = new Error("top", { cause: mid });
+    // mid was never reported; the link reaches root through it.
+    expect(build(top).caused_by).toMatchObject({ message: "root" });
+  });
+
+  it("last-write-wins: each layer links to its nearest cause", () => {
+    const err = new Error("e");
+    const a = buildSeeEvent(err, causesThe("layer-a").to("x"), undefined, CTX); // stamp = a
+    const b = buildSeeEvent(err, causesThe("layer-b").to("y"), undefined, CTX); // links a, stamp = b
+    const c = buildSeeEvent(err, causesThe("layer-c").to("z"), undefined, CTX); // links b
+    expect(a.caused_by).toBeUndefined();
+    expect(b.caused_by).toMatchObject({ subject: "layer-a" });
+    expect(c.caused_by).toMatchObject({ subject: "layer-b" });
+  });
+
+  it("tolerates a cyclic cause chain without hanging", () => {
+    const a = new Error("a") as Error & { cause?: unknown };
+    const b = new Error("b") as Error & { cause?: unknown };
+    a.cause = b;
+    b.cause = a;
+    expect(() => findCausedBy(a)).not.toThrow();
+    expect(findCausedBy(a)).toBeUndefined();
+  });
+
+  it("markReported stamps non-enumerably and skips non-Error problems", () => {
+    const err = new Error("e");
+    const ev = build(err);
+    expect(Object.keys(err)).toEqual([]);
+    expect(JSON.stringify(err)).toBe("{}");
+    expect(findCausedBy(err)).toMatchObject({ subject: "checkout" });
+    // non-Error problems leave no stamp (nothing to re-throw)
+    expect(() => markReported("a string", ev)).not.toThrow();
+    expect(findCausedBy("a string")).toBeUndefined();
+  });
+
+  it("does not link a violation to an unrelated reported error", () => {
+    const ev = buildSeeEvent(violation("large query"), causesThe("a").to("b"), undefined, CTX);
+    expect(ev.caused_by).toBeUndefined();
   });
 });
 
@@ -337,7 +421,11 @@ describe("client see() wiring", () => {
     expect(ev.error_type).toBe("TypeError");
     expect(ev.subject).toBe("checkout");
     expect(ev.outcome).toBe("use cached prices");
-    expect(ev.extras).toEqual({ order_id: "o1" });
+    // The developer's own extras survive...
+    expect(ev.extras).toMatchObject({ order_id: "o1" });
+    // ...alongside the auto-collected, namespaced environment context.
+    expect(ev.extras["env.device"]).toBe("desktop");
+    expect(ev.extras["env.lang"]).toBe("en-US");
     expect(ev.side).toBe("client");
   });
 

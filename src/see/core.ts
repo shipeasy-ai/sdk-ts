@@ -44,6 +44,21 @@ export interface Violation {
   message(msg: string): Violation;
 }
 
+/**
+ * Identity of a problem that see() already reported, carried on the wire as
+ * the `caused_by` of a later occurrence. Holds exactly the fields the worker's
+ * fingerprint function consumes (raw `message`/`stack` — the server normalizes
+ * them) so the backend can recompute the prior issue's fingerprint and link
+ * the two issues. See `findCausedBy` for how the link is discovered.
+ */
+export interface SeeCausedBy {
+  error_type: string;
+  message: string;
+  stack?: string;
+  subject: string;
+  outcome: string;
+}
+
 /** Wire shape — the `type:"error"` RawEvent variant accepted by POST /collect. */
 export interface SeeErrorEvent {
   type: "error";
@@ -63,6 +78,14 @@ export interface SeeErrorEvent {
   env?: string;
   sdk_version: string;
   ts: number;
+  /**
+   * The earlier reported problem this occurrence descends from — present when
+   * the same error was caught + reported at an inner boundary and then
+   * re-thrown (or wrapped via `{ cause }`) and reported again at an outer one.
+   * Lets the backend stitch the two issues into a cause chain instead of
+   * double-counting them as unrelated.
+   */
+  caused_by?: SeeCausedBy;
 }
 
 // ---- Builders ----
@@ -132,6 +155,72 @@ export function markExpected(err: unknown, because: string): void {
 export function isExpected(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
   return (err as Record<symbol, unknown>)[EXPECTED_SYM] !== undefined;
+}
+
+// ---- Caused-by linkage ----
+//
+// When see() reports an Error we stamp the object with this report's identity.
+// If that SAME error is later caught + reported again at an outer boundary
+// (re-throw), or an outer error rethrown with `{ cause }` wraps it, the next
+// report walks the `.cause` chain, finds the stamp, and ships it as
+// `caused_by` — so the backend links the two issues into a chain instead of
+// counting them as unrelated. The stamp is non-enumerable (no JSON/serialize
+// side effects) and last-write-wins so each layer links to its nearest cause.
+
+const REPORTED_SYM = Symbol.for("@shipeasy/sdk:see-reported");
+
+/** How far up the `.cause` chain we look for an already-reported ancestor. */
+const SEE_MAX_CAUSE_DEPTH = 8;
+
+function readReportStamp(err: unknown): SeeCausedBy | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  const v = (err as Record<symbol, unknown>)[REPORTED_SYM];
+  return v !== undefined && v !== null && typeof v === "object" ? (v as SeeCausedBy) : undefined;
+}
+
+/**
+ * Find the nearest problem in `problem` + its `.cause` chain that see()
+ * already reported, and return that prior report's identity (or undefined).
+ * Cycle-guarded and depth-bounded. Must run BEFORE the current problem is
+ * stamped, so the re-throw case reads the inner report rather than itself.
+ */
+export function findCausedBy(problem: unknown): SeeCausedBy | undefined {
+  let cur: unknown = problem;
+  const seen = new Set<unknown>();
+  for (let depth = 0; depth < SEE_MAX_CAUSE_DEPTH; depth++) {
+    if (typeof cur !== "object" || cur === null || seen.has(cur)) break;
+    seen.add(cur);
+    const stamp = readReportStamp(cur);
+    if (stamp) return stamp;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+/**
+ * Record this report's identity on the Error so a later, outer report can link
+ * to it. No-op for non-Error problems (violations, strings — nothing to
+ * re-throw) and for frozen/sealed objects (best effort, like markExpected).
+ */
+export function markReported(problem: unknown, ev: SeeErrorEvent): void {
+  if (!(problem instanceof Error)) return;
+  const stamp: SeeCausedBy = {
+    error_type: ev.error_type,
+    message: ev.message,
+    subject: ev.subject,
+    outcome: ev.outcome,
+  };
+  if (ev.stack !== undefined) stamp.stack = ev.stack;
+  try {
+    Object.defineProperty(problem, REPORTED_SYM, {
+      value: Object.freeze(stamp),
+      enumerable: false,
+      configurable: true,
+      writable: true,
+    });
+  } catch {
+    /* frozen/sealed error object — best effort */
+  }
 }
 
 // ---- Sanitization ----
@@ -227,12 +316,19 @@ export function buildSeeEvent(
     ts: Date.now(),
   };
   if (stack) ev.stack = truncate(stack, SEE_MAX_STACK);
+  // Discover the cause BEFORE stamping this problem — otherwise the re-throw
+  // case (same object reported twice) would read its own fresh stamp.
+  const causedBy = findCausedBy(problem);
+  if (causedBy) ev.caused_by = causedBy;
   const cleanExtras = sanitizeExtras(extras);
   if (cleanExtras) ev.extras = cleanExtras;
   if (ctx.url) ev.url = truncate(ctx.url, SEE_MAX_SUBJECT);
   if (ctx.userId) ev.user_id = ctx.userId;
   if (ctx.anonId) ev.anonymous_id = ctx.anonId;
   if (ctx.env) ev.env = ctx.env;
+  // Leave this report's identity on the error so the next, outer boundary that
+  // catches the re-thrown error links back to it as its caused_by.
+  markReported(problem, ev);
   return ev;
 }
 
