@@ -4,8 +4,16 @@ import { Telemetry } from "../telemetry";
 import { FlagsClient } from "../server/index";
 
 // Flush the microtask + macrotask queue so the fire-and-forget beacon (which
-// awaits the once-resolved keyHash promise before sending) has run.
+// awaits the once-resolved keyHash promise before sending) has run. Only safe
+// for asserting the ABSENCE of beacons; positive counts must use waitFor()
+// below — keyHash is a crypto.subtle.digest promise that resolves off-thread
+// in Node, so a single setTimeout(0) can lose the race on a slow CI runner
+// (and the late beacon then leaks into the next test's spy).
 const tick = () => new Promise((r) => setTimeout(r, 0));
+
+// Deterministically wait until the expected number of beacons has fired.
+const waitForBeacons = (beacon: ReturnType<typeof vi.fn>, n: number) =>
+  vi.waitFor(() => expect(beacon).toHaveBeenCalledTimes(n));
 
 const sha256Hex = (s: string) => createHash("sha256").update(s).digest("hex");
 
@@ -31,9 +39,8 @@ describe("Telemetry — per-evaluation beacons", () => {
       env: "prod",
     });
     t.emit("gate", "checkout_v2");
-    await tick();
+    await waitForBeacons(beacon, 1);
 
-    expect(beacon).toHaveBeenCalledTimes(1);
     const url = beacon.mock.calls[0][0] as string;
     expect(url).toBe(
       `https://t.example.com/t/${sha256Hex("sk_secret")}/server/prod/gate/checkout_v2`,
@@ -45,7 +52,7 @@ describe("Telemetry — per-evaluation beacons", () => {
   it("percent-encodes resource names with slashes / spaces", async () => {
     const t = new Telemetry({ endpoint: "https://e.x", sdkKey: "k", side: "client", env: "prod" });
     t.emit("config", "billing/plan name");
-    await tick();
+    await waitForBeacons(beacon, 1);
     const url = beacon.mock.calls[0][0] as string;
     expect(url.endsWith("/config/billing%2Fplan%20name")).toBe(true);
   });
@@ -75,8 +82,7 @@ describe("Telemetry — per-evaluation beacons", () => {
     const t = new Telemetry({ endpoint: "https://e.x", sdkKey: "k", side: "client", env: "prod" });
     for (let i = 0; i < 50; i++) t.emit("gate", "g"); // one render-storm
     t.emit("gate", "other"); // distinct key still fires
-    await tick();
-    expect(beacon).toHaveBeenCalledTimes(2);
+    await waitForBeacons(beacon, 2);
   });
 
   it("emits on every call when dedupeMs is 0", async () => {
@@ -89,8 +95,7 @@ describe("Telemetry — per-evaluation beacons", () => {
     });
     t.emit("gate", "g");
     t.emit("gate", "g");
-    await tick();
-    expect(beacon).toHaveBeenCalledTimes(2);
+    await waitForBeacons(beacon, 2);
   });
 });
 
@@ -129,8 +134,7 @@ describe("FlagsClient telemetry wiring", () => {
     c.getConfig("c");
     c.getExperiment("e", { user_id: "u" }, {});
     c.getKillswitch("k");
-    await tick();
-    expect(beacon).toHaveBeenCalledTimes(4);
+    await waitForBeacons(beacon, 4);
     const paths = beacon.mock.calls.map((c) => (c[0] as string).split("/t/")[1]);
     expect(paths.some((p) => p.endsWith("/gate/g"))).toBe(true);
     expect(paths.some((p) => p.endsWith("/config/c"))).toBe(true);
