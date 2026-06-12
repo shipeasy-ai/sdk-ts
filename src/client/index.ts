@@ -264,6 +264,35 @@ type SeeReporter = (
   kind: SeeKind,
 ) => void;
 
+/**
+ * Collapse a URL to a stable, low-cardinality endpoint template for network
+ * consequence subjects: drop query/hash, drop a same-origin host, and replace
+ * id-like path segments (numbers, uuids, hex runs) with ":id" — so the issue
+ * title names the endpoint ("request to /api/orders/:id") without minting one
+ * issue per id. The consequence feeds the issue fingerprint RAW (only the
+ * message is normalized server-side), so this must never embed variable data.
+ */
+function endpointTemplate(rawUrl: string): string {
+  const isIdSegment = (seg: string) =>
+    /^\d+$/.test(seg) ||
+    /^0x[0-9a-f]+$/i.test(seg) ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) ||
+    /^[0-9a-f]{8,}$/i.test(seg) ||
+    (seg.length >= 12 && /\d/.test(seg) && /[a-z]/i.test(seg));
+  let u: URL;
+  try {
+    u = new URL(rawUrl, typeof location !== "undefined" ? location.href : undefined);
+  } catch {
+    return (rawUrl.split(/[?#]/)[0] ?? "").slice(0, 120);
+  }
+  const path = u.pathname
+    .split("/")
+    .map((seg) => (seg && isIdSegment(seg) ? ":id" : seg))
+    .join("/");
+  const sameOrigin = typeof location !== "undefined" && u.origin === location.origin;
+  return ((sameOrigin ? "" : u.host) + path).slice(0, 120);
+}
+
 function installAutoGuardrails(
   buffer: EventBuffer,
   userId: string,
@@ -334,7 +363,7 @@ function installAutoGuardrails(
           err ?? (typeof msg === "string" && msg ? msg : "Unknown error");
         reportSee(
           problem,
-          causesThe("the page").to("hit an unhandled error"),
+          causesThe("page").to("hit an unhandled error"),
           {
             source: typeof source === "string" ? source : undefined,
             line: lineno ?? undefined,
@@ -351,7 +380,7 @@ function installAutoGuardrails(
       if (isExpected(reason)) return;
       reportSee(
         reason ?? "Unhandled promise rejection",
-        causesThe("the page").to("hit an unhandled promise rejection"),
+        causesThe("page").to("hit an unhandled promise rejection"),
         undefined,
         "unhandled_rejection",
       );
@@ -373,9 +402,13 @@ function installAutoGuardrails(
       } catch (err) {
         // Network-level failure (DNS, offline, CORS, abort) — never reaches a status.
         if (!ignored && !isExpected(err)) {
+          // Endpoint template in the subject (not the raw URL — the consequence
+          // is fingerprinted raw, so it must stay id-free): the issue title
+          // names what's broken ("request to /api/orders/:id") instead of the
+          // unactionable "a network request".
           reportSee(
             violation("NetworkError").message(`request to ${bareUrl} failed`),
-            causesThe("a network request").to("fail without a response"),
+            causesThe(`request to ${endpointTemplate(url)}`).to("get no response"),
             { status: 0, url: url.slice(0, 200) },
             "network",
           );
@@ -384,9 +417,11 @@ function installAutoGuardrails(
       }
       if (!ignored && res.status >= 500) {
         const elapsed = typeof performance !== "undefined" ? performance.now() - startedAt : 0;
+        // Status code stays OUT of the outcome (it's in message + extras):
+        // interpolating it minted a separate issue per status (500/502/503…).
         reportSee(
           violation("Http5xx").message(`request to ${bareUrl} returned ${res.status}`),
-          causesThe("a network request").to(`fail with HTTP ${res.status}`),
+          causesThe(`request to ${endpointTemplate(url)}`).to("fail with a server error"),
           { status: res.status, url: url.slice(0, 200), duration_ms: Math.round(elapsed) },
           "network",
         );

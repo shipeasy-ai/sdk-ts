@@ -280,7 +280,7 @@ describe("see chain (startSeeChain / startSeeViolationChain)", () => {
     startSeeChain(() => "p", dispatch);
     await tick();
     expect(calls).toHaveLength(1);
-    expect(calls[0].consequence.subject).toBe("the app");
+    expect(calls[0].consequence.subject).toBe("app");
     expect(calls[0].consequence.outcome).toBe("hit an error");
   });
 
@@ -484,7 +484,7 @@ describe("client see() wiring", () => {
     expect(ev.type).toBe("error");
     expect(ev.kind).toBe("uncaught");
     expect(ev.error_type).toBe("TypeError");
-    expect(ev.subject).toBe("the page");
+    expect(ev.subject).toBe("page");
     expect(ev.extras).toMatchObject({ source: "app.js", line: 42 });
   });
 
@@ -504,6 +504,10 @@ describe("client see() wiring", () => {
     expect(ev.error_type).toBe("Http5xx");
     expect(ev.message).toContain("https://api.test/orders"); // querystring stripped
     expect(ev.message).not.toContain("id=123");
+    // Consequence names the endpoint (cross-origin → host kept, query dropped)
+    // and never embeds the status code — it would mint one issue per status.
+    expect(ev.subject).toBe("request to api.test/orders");
+    expect(ev.outcome).toBe("fail with a server error");
     expect(ev.extras).toMatchObject({ status: 503 });
 
     // 5xx from the SDK's own collector → ignored
@@ -511,6 +515,22 @@ describe("client see() wiring", () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 500, headers: new Headers() });
     await w.fetch("https://edge.test/collect");
     expect(sendBeacon).not.toHaveBeenCalled();
+  });
+
+  it("auto-capture: network consequence templates id-like path segments", async () => {
+    const { client, sendBeacon, fetchMock } = await bootClient();
+    await client.identify({});
+    const w = globalThis.window as unknown as { fetch: typeof fetch };
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, headers: new Headers() });
+    await w.fetch("https://api.test/orders/123/items/0a1b2c3d-0000-4000-8000-000000000000");
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(await (sendBeacon.mock.calls[0][1] as Blob).text());
+    const ev = body.events[0];
+    // ids never reach the consequence — it feeds the fingerprint raw, so an
+    // embedded id would mint one issue per order.
+    expect(ev.subject).toBe("request to api.test/orders/:id/items/:id");
+    expect(ev.outcome).toBe("fail with a server error");
   });
 });
 
@@ -575,7 +595,7 @@ describe("server see() wiring", () => {
     expect(body.events[0]).toMatchObject({
       kind: "violation",
       error_type: "orphan rows",
-      subject: "the app",
+      subject: "app",
       outcome: "hit an error",
     });
     mod._resetShipeasyServerForTests();

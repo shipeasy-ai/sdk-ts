@@ -1,5 +1,30 @@
 # Changelog
 
+## 4.2.0
+
+### Changed (behavioral)
+
+- **Auto-capture consequences rewritten to be readable and actionable.** Issue
+  titles render as `{problem} causes the {subject} to {outcome}`, and the
+  consequence feeds the issue fingerprint raw — the old auto-capture wording
+  broke both rules:
+  - Network failures: `causes_the("a network request")` rendered the doubled
+    article "causes the **a** network request", and `` to(`fail with HTTP
+    ${status}`) `` minted a separate issue per status code (500/502/503…).
+    Both now report `causes_the("request to <endpoint>")` where `<endpoint>`
+    is a low-cardinality template (query/hash dropped, same-origin host
+    dropped, id-like path segments → `:id`), with outcomes
+    `"get no response"` (network-level) and `"fail with a server error"`
+    (5xx — the status stays in the message and `extras.status`).
+  - Uncaught/unhandled-rejection subjects `"the page"` and the missing-
+    consequence default `"the app"` dropped their articles (`"page"`,
+    `"app"`).
+
+  **Migration note:** the consequence participates in the fingerprint, so
+  existing open auto-capture issues stop growing and re-open under the new
+  titles — and network issues now group per endpoint instead of per status
+  code.
+
 ## 4.1.0
 
 ### Changed (behavioral)

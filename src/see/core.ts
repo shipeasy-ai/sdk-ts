@@ -402,7 +402,9 @@ export function startSeeChain(getProblem: () => unknown, dispatch: SeeDispatch):
     flushed = true;
     dispatch(
       getProblem(),
-      causesThe(subject ?? "the app").to(outcome ?? "hit an error"),
+      // Bare noun phrase — titles render as "… causes the {subject} …", so a
+      // leading article would double up ("causes the the app").
+      causesThe(subject ?? "app").to(outcome ?? "hit an error"),
       collected,
     );
   });
