@@ -1,5 +1,23 @@
 # Changelog
 
+## 4.5.0
+
+### Added
+
+- **`@shipeasy/sdk/next` — a drop-in Next.js middleware** that mints the shared
+  `__se_anon_id` bucketing cookie at the edge, so flags and experiments bucket
+  identically on SSR and in the browser from the **first** request (no flash,
+  even for fractional rollouts). A Server Component can't `Set-Cookie` during
+  render, so this edge step is what makes the first request correct; the
+  server/client SDK only read + client-persist the id.
+  - Zero-config: `export { middleware, config } from "@shipeasy/sdk/next";`
+  - Compose with an existing middleware: `export default withShipeasy(myMiddleware);`
+  - Primitives for full control inside your own middleware (preserves your
+    request-header forwarding): `readOrMintAnonId(req, requestHeaders)` +
+    `commitAnonId(res, result, req)`.
+  - `next` is an **optional** peer dependency — only resolved when you import
+    this subpath. Contract: `experiment-platform/18-identity-bucketing.md`.
+
 ## 4.4.0
 
 ### Fixed

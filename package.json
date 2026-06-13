@@ -1,6 +1,6 @@
 {
   "name": "@shipeasy/sdk",
-  "version": "4.4.0",
+  "version": "4.5.0",
   "description": "Shipeasy SDK — feature gates, runtime configs, experiments, and metrics for the Shipeasy hosted service.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://shipeasy.ai",
@@ -21,6 +21,9 @@
       ],
       "server": [
         "./dist/server/index.d.ts"
+      ],
+      "next": [
+        "./dist/next/index.d.ts"
       ]
     }
   },
@@ -39,11 +42,17 @@
       "types": "./dist/client/index.d.ts",
       "default": "./dist/client/index.js"
     },
+    "./next": {
+      "types": "./dist/next/index.d.ts",
+      "import": "./dist/next/index.mjs",
+      "default": "./dist/next/index.js"
+    },
     "./templates/*": "./templates/*.js"
   },
   "files": [
     "dist/server/",
     "dist/client/",
+    "dist/next/",
     "templates/",
     "LICENSE",
     "README.md"
@@ -58,9 +67,18 @@
   "dependencies": {
     "murmurhash-js": "^1.0.0"
   },
+  "peerDependencies": {
+    "next": ">=13"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/murmurhash-js": "^1.0.6",
     "@types/node": "^20.0.0",
+    "next": "^16.2.3",
     "tsup": "^8.3.0",
     "typescript": "^5.7.4",
     "vitest": "^2.1.0",

@@ -14,6 +14,16 @@ export default defineConfig([
     format: ["cjs", "esm"],
     dts: true,
   },
+  // Optional Next.js adapter: a drop-in middleware (+ primitives) that mints the
+  // shared `__se_anon_id` bucketing cookie at the edge. `next` is external (an
+  // optional peer) — only resolved in consumers that import this subpath.
+  {
+    entry: { index: "src/next/index.ts" },
+    outDir: "dist/next",
+    format: ["cjs", "esm"],
+    dts: true,
+    external: ["next", "next/server"],
+  },
   // Drop-in <script>-tag loader for non-React customers. Uploaded to the
   // public R2 bucket on every npm publish via the `publish-loader` script.
   // Not exported via the npm `files` list — it's a CDN artifact, not a
