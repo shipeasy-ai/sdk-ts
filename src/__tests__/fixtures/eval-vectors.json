@@ -1,0 +1,503 @@
+{
+  "$comment": "Cross-language eval-parity golden vectors. Canonical source: packages/core. Every Shipeasy SDK that reimplements bucketing MUST reproduce every vector. Regenerate with packages/core/src/eval/__fixtures__/generate.mjs; locked by eval-vectors.test.ts. Hashed key formats: gate=`{salt}:{uid}`, holdout=`{universe}:{uid}`, alloc=`{salt}:alloc:{uid}`, group=`{salt}:group:{uid}`; bucket = murmur3(key) % 10000.",
+  "hashVersion": 1,
+  "bucketModulo": 10000,
+  "hash": [
+    {
+      "input": "",
+      "hash": 0
+    },
+    {
+      "input": "a",
+      "hash": 1009084850
+    },
+    {
+      "input": "ab",
+      "hash": 2613040991
+    },
+    {
+      "input": "abc",
+      "hash": 3017643002
+    },
+    {
+      "input": "aaaa",
+      "hash": 2129582471
+    },
+    {
+      "input": "aaaaa",
+      "hash": 3922341931
+    },
+    {
+      "input": "The quick brown fox jumps over the lazy dog",
+      "hash": 776992547
+    },
+    {
+      "input": "exp_001:alloc:user_abc",
+      "hash": 1077072887
+    },
+    {
+      "input": "exp_001:group:user_abc",
+      "hash": 1238322926
+    },
+    {
+      "input": "café",
+      "hash": 605818632
+    },
+    {
+      "input": "日本語",
+      "hash": 2779017879
+    },
+    {
+      "input": "user_🚀_42",
+      "hash": 2477516858
+    }
+  ],
+  "gate": [
+    {
+      "note": "disabled gate never passes",
+      "gate": {
+        "enabled": false,
+        "rules": [],
+        "rolloutPct": 10000,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {
+        "user_id": "user_alpha"
+      },
+      "pass": false
+    },
+    {
+      "note": "no identity → cannot bucket → false",
+      "gate": {
+        "enabled": true,
+        "rules": [],
+        "rolloutPct": 10000,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {},
+      "pass": false
+    },
+    {
+      "note": "0% rollout never passes",
+      "gate": {
+        "enabled": true,
+        "rules": [],
+        "rolloutPct": 0,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {
+        "user_id": "user_alpha"
+      },
+      "pass": false
+    },
+    {
+      "note": "100% rollout always passes for a unit with identity",
+      "gate": {
+        "enabled": true,
+        "rules": [],
+        "rolloutPct": 10000,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {
+        "user_id": "user_alpha"
+      },
+      "pass": true
+    },
+    {
+      "note": "rollout boundary: rolloutPct == bucket (5466) → segment<rolloutPct is false",
+      "gate": {
+        "enabled": true,
+        "rules": [],
+        "rolloutPct": 5466,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {
+        "user_id": "user_alpha"
+      },
+      "pass": false
+    },
+    {
+      "note": "rollout boundary: rolloutPct == bucket+1 (5467) → passes",
+      "gate": {
+        "enabled": true,
+        "rules": [],
+        "rolloutPct": 5467,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {
+        "user_id": "user_alpha"
+      },
+      "pass": true
+    },
+    {
+      "note": "targeting rule matches → eligible, then rollout 100% → pass",
+      "gate": {
+        "enabled": true,
+        "rules": [
+          {
+            "attr": "country",
+            "op": "eq",
+            "value": "US"
+          }
+        ],
+        "rolloutPct": 10000,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {
+        "user_id": "user_alpha",
+        "country": "US"
+      },
+      "pass": true
+    },
+    {
+      "note": "targeting rule fails → false regardless of rollout",
+      "gate": {
+        "enabled": true,
+        "rules": [
+          {
+            "attr": "country",
+            "op": "eq",
+            "value": "US"
+          }
+        ],
+        "rolloutPct": 10000,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {
+        "user_id": "user_alpha",
+        "country": "CA"
+      },
+      "pass": false
+    },
+    {
+      "note": "user_id takes precedence over anonymous_id (rollout 2033 passes user_id)",
+      "gate": {
+        "enabled": true,
+        "rules": [],
+        "rolloutPct": 2033,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {
+        "user_id": "canonical_user",
+        "anonymous_id": "anon_tracking_id"
+      },
+      "pass": true
+    }
+  ],
+  "experiment": [
+    {
+      "note": "targeting gate present but false in flags map → null",
+      "experiment": {
+        "universe": "universe_pricing",
+        "targetingGate": "beta_users",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {
+        "beta_users": false
+      },
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "no identity → null",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {},
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "universe holdout covers the unit's segment (1069) → excluded from ALL experiments in universe",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": [
+        1069,
+        1069
+      ],
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "holdout range just past the unit's segment → not held out, gets assigned",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 9086,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 914,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": [
+        1070,
+        1071
+      ],
+      "result": {
+        "inExperiment": true,
+        "group": "control"
+      }
+    },
+    {
+      "note": "allocation boundary: allocationPct == allocBucket (1887) → allocHash>=pct → null",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 1887,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "allocation boundary: allocationPct == allocBucket+1 → allocated",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 1888,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 9086,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 914,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "control"
+      }
+    },
+    {
+      "note": "group boundary: control weight == groupBucket (9085) → groupHash<weight false → treatment",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 9085,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 915,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "treatment"
+      }
+    },
+    {
+      "note": "group boundary: control weight == groupBucket+1 → control",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 9086,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 914,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "control"
+      }
+    },
+    {
+      "note": "three-group cumulative-weight fallthrough to last group (groupBucket=9085)",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "a",
+            "weight": 9083,
+            "params": {}
+          },
+          {
+            "name": "b",
+            "weight": 1,
+            "params": {}
+          },
+          {
+            "name": "c",
+            "weight": 916,
+            "params": {}
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "c"
+      }
+    }
+  ]
+}

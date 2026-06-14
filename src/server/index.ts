@@ -38,6 +38,17 @@ export const version = "4.0.0";
 const C1 = 0xcc9e2d51;
 const C2 = 0x1b873593;
 
+/**
+ * @internal Exported ONLY so the cross-language eval-parity golden-vector test
+ * (src/__tests__/eval-vectors.test.ts) can assert the raw unsigned-32-bit hash
+ * against the canonical fixture. Not part of the public SDK surface — do not
+ * rely on it in product code; the bucketing contract lives behind getFlag /
+ * getExperiment. Name-prefixed with `_` to signal "test seam, not API".
+ */
+export function _murmur3ForTests(key: string): number {
+  return murmur3(key);
+}
+
 function murmur3(key: string): number {
   const bytes = new TextEncoder().encode(key);
   const len = bytes.length;
