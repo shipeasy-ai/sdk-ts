@@ -67,10 +67,38 @@
       "pass": false
     },
     {
-      "note": "no identity → cannot bucket → false",
+      "note": "no identity + 100% rollout → on (answerable without bucketing, doc 18)",
       "gate": {
         "enabled": true,
         "rules": [],
+        "rolloutPct": 10000,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {},
+      "pass": true
+    },
+    {
+      "note": "no identity + fractional rollout → off (needs a stable unit, doc 18)",
+      "gate": {
+        "enabled": true,
+        "rules": [],
+        "rolloutPct": 9999,
+        "salt": "gate_checkout_v2"
+      },
+      "user": {},
+      "pass": false
+    },
+    {
+      "note": "no identity + targeting rule that needs an attr → off (rules win before short-circuit)",
+      "gate": {
+        "enabled": true,
+        "rules": [
+          {
+            "attr": "country",
+            "op": "eq",
+            "value": "US"
+          }
+        ],
         "rolloutPct": 10000,
         "salt": "gate_checkout_v2"
       },

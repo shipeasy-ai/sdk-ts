@@ -113,35 +113,11 @@ describe("eval-parity golden vectors — gate evaluation", () => {
     expect(gateVectors.length).toBeGreaterThan(0);
   });
 
-  // KNOWN, DELIBERATE DIVERGENCE from the canonical platform eval.
-  //
-  // Canonical packages/core/src/eval/gate.ts denies ANY gate when there is no
-  // unit id (`if (!uid) return false`) — before the rollout check — so the
-  // fixture's "no identity → cannot bucket → false" vector expects `false`
-  // even at 100% rollout.
-  //
-  // This SDK INTENTIONALLY answers a fully-rolled gate `true` for an
-  // unidentified unit: `evalGateInternal` does `if (!uid) return rolloutPct >=
-  // 10000`. Shipped in @shipeasy/sdk 4.4.0 (commit d00cda9) so a 100%-rollout
-  // gate applies during SSR before an `__se_anon_id` is minted (rules are still
-  // checked first; fractional rollouts still need a unit). See
-  // experiment-platform/18-identity-bucketing.md and the matching assertion in
-  // sdk.test.ts ("no unit id + rollout=10000 → true").
-  //
-  // We do NOT fudge the parity assertion: for this one vector we assert the
-  // SDK's ACTUAL (divergent) output and pin the cause. If either side changes
-  // (core starts honouring 100% with no unit, OR this SDK drops the
-  // short-circuit) this test goes red and forces a deliberate reconciliation.
-  function isNoIdentityFullRollout(v: GateVector): boolean {
-    const u = v.user.user_id ?? v.user.anonymous_id;
-    return (
-      !u &&
-      v.gate.enabled === true &&
-      (v.gate.rules?.length ?? 0) === 0 &&
-      v.gate.rolloutPct >= MOD
-    );
-  }
-
+  // No-identity gate behavior (a fully-rolled gate answers `true` for an
+  // unidentified SSR unit, fractional needs a stable id) is the shared cross-SDK
+  // contract in experiment-platform/18-identity-bucketing.md — canonical
+  // packages/core/src/eval/gate.ts now implements the same rule, so these
+  // vectors assert plainly against the fixture with no special-casing.
   for (const v of gateVectors) {
     it(`gate: ${v.note}`, () => {
       // The fixture's `enabled` is a real boolean; the SDK Gate accepts boolean.
@@ -149,17 +125,7 @@ describe("eval-parity golden vectors — gate evaluation", () => {
         { gates: { g: v.gate } },
         { universes: {}, experiments: {} },
       );
-      const got = client.getFlag("g", v.user);
-
-      if (isNoIdentityFullRollout(v)) {
-        // DIVERGENCE: canonical fixture says false; this SDK says true (4.4.0
-        // SSR-anon behavior). Assert the SDK's real output, not the fixture's.
-        expect(v.pass).toBe(false); // fixture's canonical expectation
-        expect(got).toBe(true); // this SDK's deliberate divergence
-        return;
-      }
-
-      expect(got).toBe(v.pass);
+      expect(client.getFlag("g", v.user)).toBe(v.pass);
     });
   }
 });
