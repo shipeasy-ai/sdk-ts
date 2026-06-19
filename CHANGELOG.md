@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Multi-context bucketing (`bucketBy`).** Server experiment evaluation now
+  honors an experiment's `bucketBy` attribute (e.g. `company_id`) — the holdout,
+  allocation, and group hashes all key on that unit so a whole org stays on one
+  variant. Defaults to `user_id ?? anonymous_id`; an absent named attribute
+  falls back to the user (matches gate rollout). New golden vectors lock the
+  behaviour across every SDK.
+
 - **Private attributes** (LD/Statsig `privateAttributes`). New
   `privateAttributes?: string[]` option on both clients (and `shipeasy({…})`):
   usable for targeting, never persisted in analytics. The server evaluates

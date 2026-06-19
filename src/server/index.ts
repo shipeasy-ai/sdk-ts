@@ -165,6 +165,8 @@ interface Experiment {
   salt: string;
   groups: ExperimentGroup[];
   status: "draft" | "running" | "stopped" | "archived";
+  /** Attribute to bucket on (e.g. company_id); defaults to user_id/anonymous_id. */
+  bucketBy?: string | null;
 }
 
 interface Universe {
@@ -268,6 +270,21 @@ function mintAnonId(): string {
   return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `anon_${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Resolve the bucketing unit. With `bucketBy` set (e.g. company_id), hash on
+ * that attribute so a whole org buckets together; else fall back to
+ * user_id ?? anonymous_id. Mirrors the canonical `pickIdentifier` in
+ * @shipeasy/core (doc 20 §4) — keep in sync across every SDK.
+ */
+function pickIdentifier(user: User, bucketBy?: string | null): string | undefined {
+  if (bucketBy) {
+    const v = user[bucketBy];
+    if (typeof v === "string" && v.length > 0) return v;
+    if (typeof v === "number") return String(v);
+  }
+  return user.user_id ?? user.anonymous_id;
 }
 
 function evalGateInternal(gate: Gate, user: User): boolean {
@@ -698,7 +715,9 @@ export class FlagsClient {
       if (!gate || !evalGateInternal(gate, user)) return notIn;
     }
 
-    const uid = user.user_id ?? user.anonymous_id;
+    // Bucket on exp.bucketBy (e.g. company_id) when set, else user_id/anon —
+    // holdout, allocation, and group all hash on the same unit (doc 20 §4).
+    const uid = pickIdentifier(user, exp.bucketBy);
     if (!uid) return notIn;
 
     const universe = this.expsBlob.universes[exp.universe];

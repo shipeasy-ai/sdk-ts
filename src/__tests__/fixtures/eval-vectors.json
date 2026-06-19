@@ -493,6 +493,188 @@
       }
     },
     {
+      "note": "bucketBy company_id: user alice in acme_corp → control (hashes on company, groupBucket=8680)",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "bucketBy": "company_id",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 8681,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 1319,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "alice",
+        "company_id": "acme_corp"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "control"
+      }
+    },
+    {
+      "note": "bucketBy company_id: a DIFFERENT user bob in the same company → SAME group (whole-org)",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "bucketBy": "company_id",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 8681,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 1319,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "bob",
+        "company_id": "acme_corp"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "control"
+      }
+    },
+    {
+      "note": "bucketBy company_id holdout hashes on company (segment 8638) → held out",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "bucketBy": "company_id",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "carol",
+        "company_id": "acme_corp"
+      },
+      "flags": {},
+      "holdoutRange": [
+        8638,
+        8638
+      ],
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "bucketBy company_id allocation boundary: allocationPct == 9182 → out",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 9182,
+        "salt": "exp_pricing_42",
+        "bucketBy": "company_id",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "dave",
+        "company_id": "acme_corp"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "bucketBy company_id but attribute absent → falls back to user_id (matches gates)",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "bucketBy": "company_id",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 9086,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 914,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running"
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "control"
+      }
+    },
+    {
       "note": "three-group cumulative-weight fallthrough to last group (groupBucket=9085)",
       "experiment": {
         "universe": "universe_pricing",
