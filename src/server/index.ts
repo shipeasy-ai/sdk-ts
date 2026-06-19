@@ -169,6 +169,39 @@ interface Experiment {
   bucketBy?: string | null;
 }
 
+/** One persisted sticky assignment: group + 8-char salt prefix (reshuffle key). */
+export interface StickyEntry {
+  g: string;
+  s: string;
+}
+
+/**
+ * Pluggable sticky-bucketing store for the server (doc 20 §2). Keyed by the
+ * bucketing unit; the value is that unit's per-experiment assignments. Absent
+ * from {@link FlagsClientOptions} ⇒ today's deterministic behaviour. Use
+ * {@link createInMemoryStickyStore} or a cookie-bridge built from request
+ * cookies.
+ */
+export interface StickyBucketStore {
+  get(unit: string): Record<string, StickyEntry> | undefined;
+  set(unit: string, exp: string, entry: StickyEntry): void;
+}
+
+/** A process-local sticky store (Map-backed). Handy for tests + single-process servers. */
+export function createInMemoryStickyStore(
+  seed?: Record<string, Record<string, StickyEntry>>,
+): StickyBucketStore {
+  const m = new Map<string, Record<string, StickyEntry>>(Object.entries(seed ?? {}));
+  return {
+    get: (unit) => m.get(unit),
+    set: (unit, exp, entry) => {
+      const cur = m.get(unit) ?? {};
+      cur[exp] = entry;
+      m.set(unit, cur);
+    },
+  };
+}
+
 interface Universe {
   holdout_range: [number, number] | null;
 }
@@ -389,6 +422,14 @@ export interface FlagsClientOptions {
    */
   privateAttributes?: string[];
   /**
+   * Sticky-bucketing store (doc 20 §2). When provided, `getExperiment` locks a
+   * unit to its first-assigned variant — changing allocation % or weights won't
+   * re-bucket enrolled units (changing the experiment salt is the reshuffle
+   * lever). Absent ⇒ deterministic (fully backward compatible). Built-ins:
+   * {@link createInMemoryStickyStore}, or a cookie-bridge over `__se_sticky`.
+   */
+  stickyStore?: StickyBucketStore;
+  /**
    * Test mode — no network at all. init()/initOnce() are no-ops (never fetch),
    * track() is a no-op, telemetry is forced off, and the client starts
    * "initialized" with an empty blob. Prefer the {@link FlagsClient.forTesting}
@@ -402,6 +443,7 @@ export class FlagsClient {
   private readonly baseUrl: string;
   private readonly env: FlagsClientEnv;
   private readonly privateAttributes: readonly string[];
+  private readonly stickyStore: StickyBucketStore | undefined;
   private readonly telemetry: Telemetry;
   private readonly seeLimiter = new SeeLimiter();
   private flagsBlob: FlagsBlob | null = null;
@@ -433,6 +475,7 @@ export class FlagsClient {
     this.baseUrl = (opts.baseUrl ?? "https://cdn.shipeasy.ai").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
     this.privateAttributes = opts.privateAttributes ?? [];
+    this.stickyStore = opts.stickyStore;
     this.testMode = opts.testMode === true;
     this.telemetry = new Telemetry({
       endpoint: opts.telemetryUrl ?? DEFAULT_TELEMETRY_URL,
@@ -729,6 +772,30 @@ export class FlagsClient {
       if (seg >= lo && seg <= hi) return notIn;
     }
 
+    // Project a chosen group's params (with optional decode) into the result.
+    const asResult = (g: ExperimentGroup): ExperimentResult<P> => {
+      if (!decode) return { inExperiment: true, group: g.name, params: g.params as P };
+      try {
+        return { inExperiment: true, group: g.name, params: decode(g.params) };
+      } catch (err) {
+        console.warn(`[shipeasy] getExperiment('${name}') decode failed:`, String(err));
+        return notIn;
+      }
+    };
+
+    // Sticky short-circuit (doc 20 §2): an enrolled unit whose stored salt
+    // prefix still matches skips the allocation gate (so a shrinking allocation
+    // keeps it in) and returns the stored group without re-running the pick.
+    const salt8 = exp.salt.slice(0, 8);
+    if (this.stickyStore) {
+      const entry = this.stickyStore.get(uid)?.[name];
+      if (entry && entry.s === salt8) {
+        const g = exp.groups.find((x) => x.name === entry.g);
+        if (g) return asResult(g);
+        // Stored group gone — fall through to re-bucket + overwrite.
+      }
+    }
+
     if (murmur3(`${exp.salt}:alloc:${uid}`) % 10000 >= exp.allocationPct) return notIn;
 
     const groupHash = murmur3(`${exp.salt}:group:${uid}`) % 10000;
@@ -737,15 +804,8 @@ export class FlagsClient {
       const g = exp.groups[i];
       cumulative += g.weight;
       if (groupHash < cumulative || i === exp.groups.length - 1) {
-        if (!decode) {
-          return { inExperiment: true, group: g.name, params: g.params as P };
-        }
-        try {
-          return { inExperiment: true, group: g.name, params: decode(g.params) };
-        } catch (err) {
-          console.warn(`[shipeasy] getExperiment('${name}') decode failed:`, String(err));
-          return notIn;
-        }
+        this.stickyStore?.set(uid, name, { g: g.name, s: salt8 });
+        return asResult(g);
       }
     }
 

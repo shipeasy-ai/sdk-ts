@@ -125,6 +125,18 @@ interface EvalResponse {
    * switch booleans.
    */
   killswitches?: Record<string, boolean | Record<string, boolean>>;
+  /**
+   * Newly-assigned sticky entries (doc 20 §2). The worker returns these so the
+   * browser can merge them into the `__se_sticky` cookie. Present only when
+   * sticky bucketing is on and at least one assignment was made/refreshed.
+   */
+  sticky?: Record<string, StickyCookieEntry>;
+}
+
+/** One persisted sticky assignment: group + 8-char salt prefix (reshuffle key). */
+interface StickyCookieEntry {
+  g: string;
+  s: string;
 }
 
 // ---- EventBuffer ----
@@ -635,6 +647,50 @@ function writeAnonCookie(id: string): void {
   } catch {}
 }
 
+// ---- Sticky bucketing cookie (doc 20 §2) ----
+// First-party cookie so SSR server eval and the browser agree on one sticky
+// state (same rationale as __se_anon_id). Value is compact JSON
+// { "<exp>": { "g": "<group>", "s": "<salt8>" } }; 1y, Lax, Secure on HTTPS,
+// NOT HttpOnly (the browser SDK reads it). ~4 KB ceiling ⇒ ≈50-experiment soft
+// cap; over-cap we keep what we have (the server simply sees fewer entries).
+const STICKY_COOKIE = "__se_sticky";
+const STICKY_MAX_BYTES = 3800;
+
+function readStickyCookie(): Record<string, StickyCookieEntry> {
+  try {
+    const m = ("; " + document.cookie).match(/; __se_sticky=([^;]+)/);
+    if (!m) return {};
+    const parsed = JSON.parse(decodeURIComponent(m[1]!)) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, StickyCookieEntry> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (v && typeof v === "object" && typeof (v as StickyCookieEntry).g === "string") {
+        out[k] = { g: (v as StickyCookieEntry).g, s: String((v as StickyCookieEntry).s ?? "") };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeStickyCookie(map: Record<string, StickyCookieEntry>): void {
+  try {
+    let json = JSON.stringify(map);
+    // Stay under the byte ceiling: drop entries until it fits (oldest-insertion
+    // first via key order). Over-cap the server reads fewer entries — accepted.
+    if (json.length > STICKY_MAX_BYTES) {
+      const entries = Object.entries(map);
+      while (entries.length > 0 && JSON.stringify(Object.fromEntries(entries)).length > STICKY_MAX_BYTES) {
+        entries.shift();
+      }
+      json = JSON.stringify(Object.fromEntries(entries));
+    }
+    const secure = location.protocol === "https:" ? ";secure" : "";
+    document.cookie = `${STICKY_COOKIE}=${encodeURIComponent(json)};path=/;max-age=31536000;samesite=lax${secure}`;
+  } catch {}
+}
+
 function getOrCreateAnonId(): string {
   // Precedence is deliberate. The cookie is the id the SERVER bucketed against
   // this request (set by edge middleware or the SSR bootstrap script), so
@@ -714,6 +770,14 @@ export interface FlagsClientBrowserOptions {
    * are stripped from any `track(props)` payload.
    */
   privateAttributes?: string[];
+  /**
+   * Sticky bucketing (doc 20 §2). ON by default in the browser: a unit's
+   * first-assigned variant is locked in the `__se_sticky` cookie so changing an
+   * experiment's allocation % or group weights never silently re-buckets
+   * enrolled users. Changing the experiment salt is the deliberate reshuffle
+   * lever. Pass `false` to opt out (pure deterministic eval).
+   */
+  stickyBucketing?: boolean;
   /**
    * Test mode — no network at all. identify()/init are no-ops (never call
    * /sdk/evaluate), track() is a no-op, telemetry is forced off, and the client
@@ -886,6 +950,7 @@ export class FlagsClientBrowser {
   private readonly autoCollectAlways: boolean;
   private readonly disableAutoExposure: boolean;
   private readonly privateAttributes: readonly string[];
+  private readonly stickyBucketing: boolean;
   private readonly env: FlagsClientBrowserEnv;
   private evalResult: EvalResponse | null = null;
   private anonId: string;
@@ -931,6 +996,7 @@ export class FlagsClientBrowser {
     this.autoCollectAlways = opts.autoCollectAlways === true;
     this.disableAutoExposure = opts.disableAutoExposure === true;
     this.privateAttributes = opts.privateAttributes ?? [];
+    this.stickyBucketing = opts.stickyBucketing !== false;
     const g = opts.autoGuardrailGroups ?? {};
     this.autoGuardrailGroups = {
       vitals: g.vitals ?? this.autoGuardrails,
@@ -1018,6 +1084,9 @@ export class FlagsClientBrowser {
         ...(this.privateAttributes.length > 0
           ? { private_attributes: [...this.privateAttributes] }
           : {}),
+        // Sticky state round-trip: send the current cookie map; the worker
+        // applies the sticky short-circuit and returns any new assignments.
+        ...(this.stickyBucketing ? { sticky: readStickyCookie() } : {}),
       }),
     });
     if (!res.ok) throw new Error(`/sdk/evaluate returned ${res.status}`);
@@ -1027,6 +1096,12 @@ export class FlagsClientBrowser {
     // so a single later identify never gets shadowed.
     if (seq !== this.identifySeq) return;
     this.evalResult = data;
+
+    // Persist any new sticky assignments the worker made back to the cookie so
+    // the next request (and SSR server eval) sees the same locked variants.
+    if (this.stickyBucketing && data.sticky && Object.keys(data.sticky).length > 0) {
+      writeStickyCookie({ ...readStickyCookie(), ...data.sticky });
+    }
 
     const anyGroupOn =
       this.autoGuardrailGroups.vitals ||
@@ -1620,6 +1695,12 @@ export interface ShipeasyClientConfig {
    * {@link FlagsClientBrowserOptions.privateAttributes}.
    */
   privateAttributes?: string[];
+  /**
+   * Sticky bucketing (doc 20 §2). ON by default — locks each enrolled unit to
+   * its first-assigned variant via the `__se_sticky` cookie. Pass `false` to
+   * opt out. See {@link FlagsClientBrowserOptions.stickyBucketing}.
+   */
+  stickyBucketing?: boolean;
 }
 
 /**
@@ -1649,6 +1730,7 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
     disableTelemetry: opts.disableTelemetry,
     disableAutoExposure: opts.disableAutoExposure,
     privateAttributes: opts.privateAttributes,
+    stickyBucketing: opts.stickyBucketing,
   });
   // Inject the runtime i18n loader with the client key. The server no longer
   // does this (it doesn't hold the client key); the SSR shim in __SE_BOOTSTRAP

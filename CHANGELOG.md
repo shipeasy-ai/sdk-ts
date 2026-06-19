@@ -4,6 +4,22 @@
 
 ### Added
 
+- **Sticky bucketing (persistent assignment).** A unit's first-assigned variant
+  is locked so changing an experiment's allocation % or group weights never
+  silently re-buckets enrolled users (changing the experiment salt is the
+  deliberate reshuffle lever). Targeting, holdout, and (for new units)
+  allocation stay live; only the group pick is short-circuited.
+
+  - **Browser:** ON by default. The assignment round-trips through a first-party
+    `__se_sticky` cookie (so SSR server eval and the browser agree) — the client
+    sends its current map to `/sdk/evaluate` and persists any new assignments
+    the edge returns. Opt out with `shipeasy({ clientKey, stickyBucketing: false })`.
+  - **Server:** `new FlagsClient({ stickyStore })` — absent ⇒ today's
+    deterministic behaviour. Built-in `createInMemoryStickyStore()`; bring your
+    own (e.g. a cookie-bridge over `__se_sticky`). `getExperiment` skips the
+    allocation gate for an already-enrolled unit so a shrinking allocation keeps
+    it in.
+
 - **Multi-context bucketing (`bucketBy`).** Server experiment evaluation now
   honors an experiment's `bucketBy` attribute (e.g. `company_id`) — the holdout,
   allocation, and group hashes all key on that unit so a whole org stays on one
