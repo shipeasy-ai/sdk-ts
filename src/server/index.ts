@@ -1559,16 +1559,13 @@ export function getBootstrapHtml(
   // i18n shim above already populates window.i18n for first paint, so there is
   // no untranslated flash before the client loader takes over.
 
-  // Load devtools overlay when ?se (or ?se_devtools) is present in the URL.
-  parts.push(
-    `(function(){` +
-      `var p=new URLSearchParams(location.search);` +
-      `if(p.has('se')||p.has('se_devtools')){` +
-      `var d=document.createElement('script');` +
-      `d.src='https://shipeasy.ai/se-devtools.js';` +
-      `document.head.appendChild(d);}` +
-      `})();`,
-  );
+  // NOTE: the devtools overlay loader is NO LONGER injected here.
+  // Devtools are now self-bootstrapping via a standalone <script> tag:
+  //   <script src="https://cdn.shipeasy.ai/se-devtools.js"
+  //           data-client-api-key="<CLIENT_KEY>"
+  //           data-project-id="<PROJECT_ID>"></script>
+  // This works on any platform (not just TypeScript) and needs no server-side
+  // rendering. Place the tag in your HTML <head> directly — no SDK call required.
 
   return parts.join("");
 }
