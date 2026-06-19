@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **OpenFeature providers.** Two new entrypoints let apps standardized on the
+  CNCF OpenFeature API plug Shipeasy in as the backing provider — a pure adapter
+  over the existing clients, no change to evaluation:
+
+  - `@shipeasy/sdk/openfeature-server` — `ShipeasyProvider` wrapping `FlagsClient`
+    (peer-deps `@openfeature/server-sdk`).
+  - `@shipeasy/sdk/openfeature-web` — `ShipeasyProvider` wrapping
+    `FlagsClientBrowser` (peer-deps `@openfeature/web-sdk`).
+
+  ```ts
+  import { OpenFeature } from "@openfeature/server-sdk";
+  import { FlagsClient } from "@shipeasy/sdk/server";
+  import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-server";
+
+  await OpenFeature.setProviderAndWait(
+    new ShipeasyProvider(new FlagsClient({ apiKey: process.env.SHIPEASY_SERVER_KEY! })),
+  );
+  const on = await OpenFeature.getClient().getBooleanValue("new_checkout", false, {
+    targetingKey: "u1",
+  });
+  ```
+
+  Reason mapping: `RULE_MATCH→TARGETING_MATCH`, `DEFAULT→DEFAULT`, `OFF→DISABLED`,
+  `OVERRIDE→STATIC`, `FLAG_NOT_FOUND→ERROR`/`FLAG_NOT_FOUND`,
+  `CLIENT_NOT_READY→ERROR`/`PROVIDER_NOT_READY`. `EvaluationContext.targetingKey`
+  maps to `user_id`; string/number/object flags route to `getConfig` with the
+  caller default (type mismatch → `TYPE_MISMATCH`). The web provider reconciles
+  `setContext` into `identify()`. Both providers are optional peers — install the
+  matching `@openfeature/*` package in your app.
+
 ## 5.1.0 (2026-06-18)
 
 ### Added

@@ -47,12 +47,24 @@
       "import": "./dist/next/index.mjs",
       "default": "./dist/next/index.js"
     },
+    "./openfeature-server": {
+      "types": "./dist/openfeature-server/index.d.ts",
+      "import": "./dist/openfeature-server/index.mjs",
+      "default": "./dist/openfeature-server/index.js"
+    },
+    "./openfeature-web": {
+      "types": "./dist/openfeature-web/index.d.ts",
+      "import": "./dist/openfeature-web/index.mjs",
+      "default": "./dist/openfeature-web/index.js"
+    },
     "./templates/*": "./templates/*.js"
   },
   "files": [
     "dist/server/",
     "dist/client/",
     "dist/next/",
+    "dist/openfeature-server/",
+    "dist/openfeature-web/",
     "templates/",
     "LICENSE",
     "README.md"
@@ -68,14 +80,24 @@
     "murmurhash-js": "^1.0.0"
   },
   "peerDependencies": {
+    "@openfeature/server-sdk": ">=1.13.0",
+    "@openfeature/web-sdk": ">=1.2.0",
     "next": ">=13"
   },
   "peerDependenciesMeta": {
+    "@openfeature/server-sdk": {
+      "optional": true
+    },
+    "@openfeature/web-sdk": {
+      "optional": true
+    },
     "next": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@openfeature/server-sdk": "^1.22.0",
+    "@openfeature/web-sdk": "^1.9.0",
     "@types/murmurhash-js": "^1.0.6",
     "@types/node": "^20.0.0",
     "next": "^16.2.3",

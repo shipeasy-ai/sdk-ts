@@ -24,6 +24,22 @@ export default defineConfig([
     dts: true,
     external: ["next", "next/server"],
   },
+  // OpenFeature providers. The `@openfeature/*` packages are optional peers —
+  // external so they resolve from the consumer's install, not bundled here.
+  {
+    entry: { index: "src/openfeature-server/index.ts" },
+    outDir: "dist/openfeature-server",
+    format: ["cjs", "esm"],
+    dts: true,
+    external: ["@openfeature/server-sdk", "@openfeature/web-sdk"],
+  },
+  {
+    entry: { index: "src/openfeature-web/index.ts" },
+    outDir: "dist/openfeature-web",
+    format: ["cjs", "esm"],
+    dts: true,
+    external: ["@openfeature/server-sdk", "@openfeature/web-sdk"],
+  },
   // Drop-in <script>-tag loader for non-React customers. Uploaded to the
   // public R2 bucket on every npm publish via the `publish-loader` script.
   // Not exported via the npm `files` list — it's a CDN artifact, not a
