@@ -178,7 +178,7 @@ export interface StickyEntry {
 /**
  * Pluggable sticky-bucketing store for the server (doc 20 §2). Keyed by the
  * bucketing unit; the value is that unit's per-experiment assignments. Absent
- * from {@link FlagsClientOptions} ⇒ today's deterministic behaviour. Use
+ * from {@link EngineOptions} ⇒ today's deterministic behaviour. Use
  * {@link createInMemoryStickyStore} or a cookie-bridge built from request
  * cookies.
  */
@@ -211,7 +211,7 @@ interface Killswitch {
   switches?: Record<string, 0 | 1 | boolean>;
 }
 
-/** Body of `GET /sdk/flags` — the snapshot's `flags` field. See {@link FlagsClient.fromSnapshot}. */
+/** Body of `GET /sdk/flags` — the snapshot's `flags` field. See {@link Engine.fromSnapshot}. */
 export interface FlagsBlob {
   version: string;
   plan: string;
@@ -220,7 +220,7 @@ export interface FlagsBlob {
   killswitches: Record<string, Killswitch>;
 }
 
-/** Body of `GET /sdk/experiments` — the snapshot's `experiments` field. See {@link FlagsClient.fromSnapshot}. */
+/** Body of `GET /sdk/experiments` — the snapshot's `experiments` field. See {@link Engine.fromSnapshot}. */
 export interface ExpsBlob {
   version: string;
   universes: Record<string, Universe>;
@@ -389,15 +389,15 @@ function parseOverrides(rawUrl: string): {
   return { gates, configs, experiments };
 }
 
-// ---- FlagsClient ----
+// ---- Engine ----
 
-export type FlagsClientEnv = "dev" | "staging" | "prod";
+export type EngineEnv = "dev" | "staging" | "prod";
 
-export interface FlagsClientOptions {
+export interface EngineOptions {
   apiKey: string;
   baseUrl?: string;
   /** Which published env to read values from. Defaults to "prod". */
-  env?: FlagsClientEnv;
+  env?: EngineEnv;
   /**
    * Preload the flags blob synchronously without a network fetch. Primarily
    * for tests; production callers should rely on init()/initOnce().
@@ -432,16 +432,16 @@ export interface FlagsClientOptions {
   /**
    * Test mode — no network at all. init()/initOnce() are no-ops (never fetch),
    * track() is a no-op, telemetry is forced off, and the client starts
-   * "initialized" with an empty blob. Prefer the {@link FlagsClient.forTesting}
+   * "initialized" with an empty blob. Prefer the {@link Engine.forTesting}
    * factory over passing this directly.
    */
   testMode?: boolean;
 }
 
-export class FlagsClient {
+export class Engine {
   private readonly apiKey: string;
   private readonly baseUrl: string;
-  private readonly env: FlagsClientEnv;
+  private readonly env: EngineEnv;
   private readonly privateAttributes: readonly string[];
   private readonly stickyStore: StickyBucketStore | undefined;
   private readonly telemetry: Telemetry;
@@ -453,7 +453,7 @@ export class FlagsClient {
   private pollInterval = 30;
   private timer: ReturnType<typeof setInterval> | null = null;
   private initialized = false;
-  // Test mode: built by `FlagsClient.forTesting()`. When set, init()/initOnce()
+  // Test mode: built by `Engine.forTesting()`. When set, init()/initOnce()
   // never fetch, track() is a no-op, and telemetry is off — the client is a
   // fully self-contained, network-free seam for unit tests.
   private readonly testMode: boolean;
@@ -470,7 +470,7 @@ export class FlagsClient {
   // 304). Never fired in testMode/offline (no polling happens there).
   private readonly changeListeners = new Set<() => void>();
 
-  constructor(opts: FlagsClientOptions) {
+  constructor(opts: EngineOptions) {
     this.apiKey = opts.apiKey;
     this.baseUrl = (opts.baseUrl ?? "https://cdn.shipeasy.ai").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
@@ -502,13 +502,13 @@ export class FlagsClient {
    * with overrideFlag/overrideConfig/overrideExperiment. No SDK key required.
    *
    * ```ts
-   * const client = FlagsClient.forTesting();
+   * const client = Engine.forTesting();
    * client.overrideFlag("new_checkout", true);
    * client.getFlag("new_checkout", { user_id: "u1" }); // true
    * ```
    */
-  static forTesting(opts?: Partial<FlagsClientOptions>): FlagsClient {
-    return new FlagsClient({ apiKey: "", ...opts, testMode: true });
+  static forTesting(opts?: Partial<EngineOptions>): Engine {
+    return new Engine({ apiKey: "", ...opts, testMode: true });
   }
 
   /**
@@ -521,8 +521,8 @@ export class FlagsClient {
    * Snapshot shape mirrors the wire bodies:
    * `{ flags: <GET /sdk/flags body>, experiments: <GET /sdk/experiments body> }`.
    */
-  static fromSnapshot(snapshot: { flags: FlagsBlob; experiments: ExpsBlob }): FlagsClient {
-    const client = new FlagsClient({ apiKey: "", testMode: true });
+  static fromSnapshot(snapshot: { flags: FlagsBlob; experiments: ExpsBlob }): Engine {
+    const client = new Engine({ apiKey: "", testMode: true });
     client.flagsBlob = snapshot.flags;
     client.expsBlob = snapshot.experiments;
     client.initialized = true;
@@ -533,16 +533,16 @@ export class FlagsClient {
    * Build a fully OFFLINE client from a snapshot JSON file on disk (Node only —
    * not available in the browser entrypoint). The file must contain
    * `{ "flags": <GET /sdk/flags body>, "experiments": <GET /sdk/experiments body> }`.
-   * See {@link FlagsClient.fromSnapshot}.
+   * See {@link Engine.fromSnapshot}.
    */
-  static fromFile(path: string): FlagsClient {
+  static fromFile(path: string): Engine {
     // require() so the Node-only fs dependency never ends up in a browser bundle
     // of the server entry (this static is documented as Node/server-only).
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require("node:fs") as typeof import("node:fs");
     const raw = fs.readFileSync(path, "utf8");
     const snapshot = JSON.parse(raw) as { flags: FlagsBlob; experiments: ExpsBlob };
-    return FlagsClient.fromSnapshot(snapshot);
+    return Engine.fromSnapshot(snapshot);
   }
 
   async init(): Promise<void> {
@@ -1241,20 +1241,20 @@ export async function fetchLabelsForSSR(opts: FetchLabelsOptions): Promise<Label
 // ---- Module-scope singleton ----
 //
 // Mirrors the client SDK pattern: configure once at app boot, then call
-// the `flags` facade from any module without passing the FlagsClient
+// the `flags` facade from any module without passing the Engine
 // around. Methods return safe defaults when the singleton hasn't been
 // configured (or after destroy()), so importing `flags` into a module
 // that loads before the configure() call is harmless.
 
-let _server: FlagsClient | null = null;
+let _server: Engine | null = null;
 
-export function configureShipeasyServer(opts: FlagsClientOptions): FlagsClient {
+export function configureShipeasyServer(opts: EngineOptions): Engine {
   if (_server) return _server;
-  _server = new FlagsClient(opts);
+  _server = new Engine(opts);
   return _server;
 }
 
-export function getShipeasyServerClient(): FlagsClient | null {
+export function getShipeasyServerClient(): Engine | null {
   return _server;
 }
 
@@ -1285,13 +1285,13 @@ export interface ShipeasyServerConfig {
   /**
    * Disable per-evaluation usage telemetry. ON by default. On Cloudflare
    * Workers each beacon is an outbound subrequest, so disable on hot SSR paths
-   * that evaluate many flags per request. See {@link FlagsClientOptions.disableTelemetry}.
+   * that evaluate many flags per request. See {@link EngineOptions.disableTelemetry}.
    */
   disableTelemetry?: boolean;
   /**
    * Attribute names usable for targeting but never persisted in analytics
    * (LD/Statsig `privateAttributes`). Stripped from every outbound `track()`
-   * payload. See {@link FlagsClientOptions.privateAttributes}.
+   * payload. See {@link EngineOptions.privateAttributes}.
    */
   privateAttributes?: string[];
 }
@@ -1578,7 +1578,7 @@ export function getBootstrapTags(
 }
 
 export const flags = {
-  configure(opts: FlagsClientOptions): void {
+  configure(opts: EngineOptions): void {
     configureShipeasyServer(opts);
   },
   /**
@@ -1638,7 +1638,7 @@ export const flags = {
     _server?.track(userId, eventName, props);
   },
   /** Emit an exposure for an enrolled experiment at the decision point. See
-   *  {@link FlagsClient.logExposure}. No-op before configure(). */
+   *  {@link Engine.logExposure}. No-op before configure(). */
   logExposure(user: string | User, name: string): void {
     _server?.logExposure(user, name);
   },
@@ -1658,6 +1658,129 @@ export const flags = {
     );
   },
 };
+
+// ---- Top-level user-bound API (configure once, then `new Client(user)`) ----
+//
+// The ergonomic front door: configure the SDK ONCE with the api key and an
+// optional transform from your own user object to targeting attributes, then
+// evaluate per user with `new Client(user)`. The Client is a cheap, user-bound
+// handle over the single configured Engine — it never opens its own connection
+// or poller.
+
+/** Transform YOUR application's user object into Shipeasy targeting attributes. */
+export type AttributesFn<U = unknown> = (user: U) => User;
+
+const _identityAttributes: AttributesFn = (user) =>
+  user && typeof user === "object" ? (user as User) : {};
+
+let _attributes: AttributesFn = _identityAttributes;
+
+export interface ConfigureOptions<U = unknown> extends Omit<EngineOptions, "apiKey"> {
+  /** Server key — the single key the server side accepts (SHIPEASY_SERVER_KEY). */
+  apiKey: string;
+  /**
+   * Map your own user object into the attribute bag every flag/experiment
+   * evaluation sees. Runs once per `new Client(user)`. Omit when you already
+   * pass a plain attribute object (identity transform — the object is used
+   * verbatim, so it should carry `user_id`/`anonymous_id` + any targeting attrs).
+   */
+  attributes?: AttributesFn<U>;
+}
+
+/**
+ * Configure the SDK once at app boot, then evaluate per user with
+ * `new Client(user)`. Builds the process-wide {@link Engine} (polling + blob
+ * cache + HTTP) and registers the `attributes` transform. The first call wins;
+ * later calls return the existing engine (mirrors {@link configureShipeasyServer}).
+ *
+ * ```ts
+ * import { configure, Client } from "@shipeasy/sdk/server";
+ *
+ * configure({
+ *   apiKey: process.env.SHIPEASY_SERVER_KEY!,
+ *   attributes: (u: MyUser) => ({ user_id: u.id, plan: u.plan, country: u.geo.country }),
+ * });
+ *
+ * const flags = new Client(currentUser);
+ * if (flags.getFlag("new_checkout")) { ... }
+ * ```
+ */
+export function configure<U = unknown>(opts: ConfigureOptions<U>): Engine {
+  const { attributes, ...engineOpts } = opts;
+  _attributes = (attributes as AttributesFn) ?? _identityAttributes;
+  const engine = configureShipeasyServer(engineOpts);
+  // Kick off the one-shot fetch so `new Client(user).getFlag(...)` resolves
+  // against real rules without an explicit init() (mirrors the browser SDK's
+  // auto-fetch on configure). Long-running servers can `await configure(...).init()`
+  // instead to also start the background poll.
+  void engine.initOnce().catch(() => {});
+  return engine;
+}
+
+/** Test seam: reset the registered attribute transform. */
+export function _resetConfigureForTests(): void {
+  _attributes = _identityAttributes;
+}
+
+/**
+ * A user-bound evaluation handle. Construct one per user/request — it's cheap
+ * (it delegates to the {@link Engine} built by {@link configure}); it does NOT
+ * open its own connection or poll. The configured `attributes` transform runs
+ * once here, so every getFlag/getConfig/getExperiment reads the same bag.
+ *
+ * ```ts
+ * const flags = new Client(req.user);
+ * flags.getFlag("new_checkout");                  // no user arg — bound at construction
+ * flags.getExperiment("price_test", { price: 9 });
+ * ```
+ */
+export class Client<U = unknown> {
+  private readonly engine: Engine;
+  /** The resolved attribute bag this handle evaluates against. */
+  readonly attributes: User;
+
+  constructor(user: U) {
+    const engine = getShipeasyServerClient();
+    if (!engine) {
+      throw new Error(
+        "[shipeasy] new Client(user) called before configure({ apiKey }). " +
+          "Call configure() once at app boot from @shipeasy/sdk/server.",
+      );
+    }
+    this.engine = engine;
+    this.attributes = _attributes(user);
+  }
+
+  getFlag(name: string, defaultValue = false): boolean {
+    return this.engine.getFlag(name, this.attributes, defaultValue);
+  }
+
+  getFlagDetail(name: string): FlagDetail {
+    return this.engine.getFlagDetail(name, this.attributes);
+  }
+
+  getConfig<T = unknown>(name: string, decode?: (raw: unknown) => T): T | undefined;
+  getConfig<T = unknown>(name: string, opts: GetConfigOptions<T>): T;
+  getConfig<T = unknown>(
+    name: string,
+    decodeOrOpts?: ((raw: unknown) => T) | GetConfigOptions<T>,
+  ): T | undefined {
+    return this.engine.getConfig(name, decodeOrOpts as GetConfigOptions<T>);
+  }
+
+  getExperiment<P extends Record<string, unknown>>(
+    name: string,
+    defaultParams: P,
+    decode?: (raw: unknown) => P,
+  ): ExperimentResult<P> {
+    return this.engine.getExperiment(name, this.attributes, defaultParams, decode);
+  }
+
+  /** Read a killswitch (not user-bound; mirrors {@link Engine.getKillswitch}). */
+  getKillswitch(name: string, switchKey?: string): boolean {
+    return this.engine.getKillswitch(name, switchKey);
+  }
+}
 
 // ---- see (structured error reporting) ----
 

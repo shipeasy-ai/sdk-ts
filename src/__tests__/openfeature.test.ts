@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { OpenFeature as ServerOF } from "@openfeature/server-sdk";
 import { OpenFeature as WebOF } from "@openfeature/web-sdk";
 
-import { FlagsClient } from "../server/index";
-import { FlagsClientBrowser } from "../client/index";
+import { Engine } from "../server/index";
+import { Engine as BrowserEngine } from "../client/index";
 import { ShipeasyProvider as ServerProvider } from "../openfeature-server/index";
 import { ShipeasyProvider as WebProvider } from "../openfeature-web/index";
 import { mapFlagReason, resolveConfigValue, toUser } from "../openfeature/shared";
@@ -66,7 +66,7 @@ describe("ShipeasyProvider — server (OpenFeature server-sdk)", () => {
   });
 
   it("resolves booleans with the mapped reason for each gate state", async () => {
-    const client = FlagsClient.fromSnapshot(SNAPSHOT as never);
+    const client = Engine.fromSnapshot(SNAPSHOT as never);
     await ServerOF.setProviderAndWait(new ServerProvider(client));
     const of = ServerOF.getClient();
     const ctx = { targetingKey: "u1" };
@@ -85,7 +85,7 @@ describe("ShipeasyProvider — server (OpenFeature server-sdk)", () => {
   });
 
   it("returns FLAG_NOT_FOUND + default for an unknown flag", async () => {
-    const client = FlagsClient.fromSnapshot(SNAPSHOT as never);
+    const client = Engine.fromSnapshot(SNAPSHOT as never);
     await ServerOF.setProviderAndWait(new ServerProvider(client));
     const d = await ServerOF.getClient().getBooleanDetails("missing", false, {});
     expect(d.value).toBe(false);
@@ -94,7 +94,7 @@ describe("ShipeasyProvider — server (OpenFeature server-sdk)", () => {
   });
 
   it("reports OVERRIDE as STATIC", async () => {
-    const client = FlagsClient.fromSnapshot(SNAPSHOT as never);
+    const client = Engine.fromSnapshot(SNAPSHOT as never);
     client.overrideFlag("on", false);
     await ServerOF.setProviderAndWait(new ServerProvider(client));
     const d = await ServerOF.getClient().getBooleanDetails("on", true, { targetingKey: "u1" });
@@ -103,7 +103,7 @@ describe("ShipeasyProvider — server (OpenFeature server-sdk)", () => {
   });
 
   it("resolves string/number/object configs and flags type mismatches", async () => {
-    const client = FlagsClient.fromSnapshot(SNAPSHOT as never);
+    const client = Engine.fromSnapshot(SNAPSHOT as never);
     await ServerOF.setProviderAndWait(new ServerProvider(client));
     const of = ServerOF.getClient();
 
@@ -125,7 +125,7 @@ describe("ShipeasyProvider — web (OpenFeature web-sdk)", () => {
   });
 
   it("resolves overrides as STATIC and reads sync", async () => {
-    const client = FlagsClientBrowser.forTesting();
+    const client = BrowserEngine.forTesting();
     client.overrideFlag("new_checkout", true);
     client.overrideConfig("theme", "dark");
     await WebOF.setContext({ targetingKey: "u1" });
@@ -139,7 +139,7 @@ describe("ShipeasyProvider — web (OpenFeature web-sdk)", () => {
   });
 
   it("maps a ready-but-missing flag to FLAG_NOT_FOUND", async () => {
-    const client = FlagsClientBrowser.forTesting();
+    const client = BrowserEngine.forTesting();
     await WebOF.setProviderAndWait(new WebProvider(client));
     const d = WebOF.getClient().getBooleanDetails("anything", false);
     expect(d.value).toBe(false);
@@ -151,7 +151,7 @@ describe("ShipeasyProvider — web (OpenFeature web-sdk)", () => {
     // A client whose eval result hasn't loaded yet returns CLIENT_NOT_READY.
     const notReady = {
       getFlagDetail: () => ({ value: false, reason: "CLIENT_NOT_READY" as const }),
-    } as unknown as FlagsClientBrowser;
+    } as unknown as BrowserEngine;
     const d = new WebProvider(notReady).resolveBooleanEvaluation("x", false, {});
     expect(d.value).toBe(false);
     expect(d.reason).toBe("ERROR");
@@ -159,14 +159,14 @@ describe("ShipeasyProvider — web (OpenFeature web-sdk)", () => {
   });
 
   it("reconciles a context change into identify()", async () => {
-    const client = FlagsClientBrowser.forTesting();
+    const client = BrowserEngine.forTesting();
     await WebOF.setProviderAndWait(new WebProvider(client));
     await WebOF.setContext({ targetingKey: "u2" });
     expect((client as unknown as { userId?: string }).userId).toBe("u2");
   });
 
   it("flags a config type mismatch", async () => {
-    const client = FlagsClientBrowser.forTesting();
+    const client = BrowserEngine.forTesting();
     client.overrideConfig("theme", "dark");
     await WebOF.setProviderAndWait(new WebProvider(client));
     const tm = WebOF.getClient().getNumberDetails("theme", 9);

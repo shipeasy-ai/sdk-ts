@@ -6,17 +6,17 @@
  *
  * ```ts
  * import { OpenFeature } from "@openfeature/server-sdk";
- * import { FlagsClient } from "@shipeasy/sdk/server";
+ * import { Engine } from "@shipeasy/sdk/server";
  * import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-server";
  *
- * const client = new FlagsClient({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
+ * const client = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
  * await OpenFeature.setProviderAndWait(new ShipeasyProvider(client));
  *
  * const ofClient = OpenFeature.getClient();
  * const on = await ofClient.getBooleanValue("new_checkout", false, { targetingKey: "u1" });
  * ```
  *
- * Pure adapter over `FlagsClient` — no change to evaluation. `@openfeature/server-sdk`
+ * Pure adapter over `Engine` — no change to evaluation. `@openfeature/server-sdk`
  * is an optional peer dependency; install it in the consuming app.
  */
 import type {
@@ -28,7 +28,7 @@ import type {
 } from "@openfeature/server-sdk";
 import { ErrorCode } from "@openfeature/server-sdk";
 
-import { FlagsClient } from "../server/index";
+import { Engine } from "../server/index";
 import {
   mapFlagReason,
   resolveConfigValue,
@@ -62,7 +62,7 @@ function resolveConfig<T extends JsonValue>(
 }
 
 /**
- * Shipeasy OpenFeature provider (server paradigm). Wraps a `FlagsClient`;
+ * Shipeasy OpenFeature provider (server paradigm). Wraps an `Engine`;
  * evaluation is local against the cached blob, so resolution is effectively
  * synchronous (the methods are `async` only to satisfy the server contract).
  */
@@ -70,7 +70,7 @@ export class ShipeasyProvider implements Provider {
   readonly metadata = { name: "shipeasy" } as const;
   readonly runsOn = "server" as const;
 
-  constructor(private readonly client: FlagsClient) {}
+  constructor(private readonly client: Engine) {}
 
   /** Fetch the rules blob once. The SDK fires `Ready` when this resolves. */
   async initialize(): Promise<void> {

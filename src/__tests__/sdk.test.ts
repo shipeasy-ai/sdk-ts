@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { FlagsClient } from "../server/index";
+import { Engine } from "../server/index";
 import type { User } from "../server/index";
 
 // ---- murmur3 test vectors (MurmurHash3_x86_32, seed 0, UTF-8 encoding) ----
@@ -8,8 +8,8 @@ import type { User } from "../server/index";
 // We exercise the hash via the public gate/experiment API at known boundary values.
 
 // To expose murmur3 for testing we create a minimal gate harness.
-function makeClient(flags: object, exps: object): FlagsClient {
-  const client = new FlagsClient({ apiKey: "test", baseUrl: "http://localhost" });
+function makeClient(flags: object, exps: object): Engine {
+  const client = new Engine({ apiKey: "test", baseUrl: "http://localhost" });
   // Inject blobs directly (bypassing network)
   (client as any).flagsBlob = { version: "v1", plan: "free", ...flags };
   (client as any).expsBlob = { version: "v1", ...exps };
@@ -215,7 +215,7 @@ describe("getExperiment", () => {
   };
 
   it("returns notIn defaults when blobs not loaded", () => {
-    const client = new FlagsClient({ apiKey: "k", baseUrl: "http://x" });
+    const client = new Engine({ apiKey: "k", baseUrl: "http://x" });
     const r = client.getExperiment("exp", { user_id: "u1" }, { color: "default" });
     expect(r.inExperiment).toBe(false);
     expect(r.params.color).toBe("default");
@@ -287,7 +287,7 @@ describe("track", () => {
   });
 });
 
-describe("FlagsClient lifecycle", () => {
+describe("Engine lifecycle", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -300,7 +300,7 @@ describe("FlagsClient lifecycle", () => {
       json: async () => ({ version: "v1", plan: "free", gates: {}, configs: {} }),
     });
     vi.stubGlobal("fetch", fetchMock);
-    const client = new FlagsClient({ apiKey: "k", baseUrl: "http://x" });
+    const client = new Engine({ apiKey: "k", baseUrl: "http://x" });
     await client.initOnce();
     await client.initOnce(); // second call should not fetch again
     // Each initOnce calls fetchFlags + fetchExps = 2 calls total, not 4
@@ -323,7 +323,7 @@ describe("FlagsClient lifecycle", () => {
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
-    const client = new FlagsClient({ apiKey: "k", baseUrl: "http://x" });
+    const client = new Engine({ apiKey: "k", baseUrl: "http://x" });
     await client.init();
     client.destroy();
     expect((client as any).timer).toBeNull();
@@ -331,7 +331,7 @@ describe("FlagsClient lifecycle", () => {
   });
 });
 
-describe("FlagsClientBrowser", () => {
+describe("BrowserEngine", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", {
       getItem: vi.fn().mockReturnValue(null),
@@ -366,15 +366,15 @@ describe("FlagsClientBrowser", () => {
   });
 
   it("getFlag returns false before identify", async () => {
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     vi.stubGlobal("setInterval", () => 1);
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     expect(client.getFlag("my_flag")).toBe(false);
   });
 
   it("identify calls /sdk/evaluate and getFlag returns result", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const evalResult = {
       flags: { my_flag: true },
       configs: {},
@@ -387,7 +387,7 @@ describe("FlagsClientBrowser", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
     vi.stubGlobal("setInterval", () => 1);
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
     expect(client.getFlag("my_flag")).toBe(true);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -398,11 +398,11 @@ describe("FlagsClientBrowser", () => {
 
   it("initFromBootstrap sets eval result without network call", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
     vi.stubGlobal("setInterval", () => 1);
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     client.initFromBootstrap({
       flags: { bootstrap_flag: true },
       configs: {},
@@ -414,9 +414,9 @@ describe("FlagsClientBrowser", () => {
 
   it("getExperiment returns notIn before identify", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     vi.stubGlobal("setInterval", () => 1);
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     const r = client.getExperiment("exp", { color: "gray" });
     expect(r.inExperiment).toBe(false);
     expect(r.params).toEqual({ color: "gray" });
@@ -424,7 +424,7 @@ describe("FlagsClientBrowser", () => {
 
   it("getExperiment returns params after identify and logs exposure", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -436,7 +436,7 @@ describe("FlagsClientBrowser", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
     vi.stubGlobal("setInterval", () => 1);
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
     const r = client.getExperiment("btn_exp", { color: "gray" });
     expect(r.inExperiment).toBe(true);
@@ -446,7 +446,7 @@ describe("FlagsClientBrowser", () => {
 
   it("late-arriving stale identify does not overwrite a newer result", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     // First /sdk/evaluate resolves slowly with the OLD payload. Second resolves
     // immediately with the NEW payload. /collect calls (alias, etc.) resolve
     // unconditionally — they're not what we're asserting on.
@@ -474,7 +474,7 @@ describe("FlagsClientBrowser", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
     vi.stubGlobal("setInterval", () => 1);
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     const firstP = client.identify({});
     const secondP = client.identify({ user_id: "u1" });
     await secondP;
@@ -491,7 +491,7 @@ describe("FlagsClientBrowser", () => {
 
   it("anonId is stable across successive identify() calls", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const calls: { anonymous_id?: string; user_id?: string }[] = [];
     const mockFetch = vi.fn().mockImplementation((url: string, init: RequestInit) => {
       if (url.includes("/sdk/evaluate")) {
@@ -508,7 +508,7 @@ describe("FlagsClientBrowser", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
     vi.stubGlobal("setInterval", () => 1);
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({});
     await client.identify({ user_id: "u1" });
     await client.identify({ user_id: "u2" });

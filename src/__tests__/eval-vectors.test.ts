@@ -10,7 +10,7 @@
 // into ./fixtures/eval-vectors.json — never edit the copy; re-vendor it.
 //
 // Gate + experiment eval are reached the same way sdk.test.ts reaches them:
-// construct a FlagsClient and inject the flags/experiments blobs directly (no
+// construct a Engine and inject the flags/experiments blobs directly (no
 // network), then drive the public getFlag/getExperiment surface. The inline
 // murmur3 has no public seam (the existing test only probes it at two
 // allocation boundaries), so a narrow test-only export `_murmur3ForTests` is
@@ -18,7 +18,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { FlagsClient, _murmur3ForTests, type User } from "../server/index";
+import { Engine, _murmur3ForTests, type User } from "../server/index";
 import vectors from "./fixtures/eval-vectors.json";
 
 const MOD = vectors.bucketModulo; // 10000
@@ -59,10 +59,10 @@ interface ExperimentVector {
   result: { inExperiment: boolean; group: string | null };
 }
 
-// ---- Construct a FlagsClient with directly-injected blobs (no network) ----
+// ---- Construct a Engine with directly-injected blobs (no network) ----
 // Mirrors sdk.test.ts makeClient(): bypass fetch by setting the private fields.
-function makeClient(flagsBlob: object, expsBlob: object): FlagsClient {
-  const client = new FlagsClient({ apiKey: "test", baseUrl: "http://localhost" });
+function makeClient(flagsBlob: object, expsBlob: object): Engine {
+  const client = new Engine({ apiKey: "test", baseUrl: "http://localhost" });
   (client as unknown as { flagsBlob: unknown }).flagsBlob = {
     version: "v1",
     plan: "free",

@@ -13,7 +13,7 @@
 //     defer
 //   ></script>
 //
-// The loader reads its own dataset, instantiates FlagsClientBrowser,
+// The loader reads its own dataset, instantiates Engine,
 // auto-identifies, and exposes a small global API on `window.shipeasy`:
 //
 //   window.shipeasy.getFlag("my_gate")
@@ -26,7 +26,7 @@
 // instead — this loader is the easy onboarding path for vanilla HTML,
 // Vue, Svelte, Rails ERB, etc.
 
-import { FlagsClientBrowser, type ExperimentResult, type User } from "./client";
+import { Engine, type ExperimentResult, type User } from "./client";
 
 interface ShipeasyGlobal {
   getFlag(name: string): boolean;
@@ -91,7 +91,7 @@ function readScriptDataset(): {
     return;
   }
 
-  const client = new FlagsClientBrowser({ sdkKey, baseUrl });
+  const client = new Engine({ sdkKey, baseUrl });
 
   // Kick off the first identify immediately so flags are warm by the
   // time customer code calls getFlag / getExperiment. The promise is

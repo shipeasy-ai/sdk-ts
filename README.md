@@ -17,40 +17,78 @@ pnpm add @shipeasy/sdk
 For React projects use [`@shipeasy/sdk-react`](https://github.com/shipeasy-ai/sdk-react)
 which wraps this package with a `<ShipeasyProvider>` and hooks.
 
-## Quickstart — browser
+## Quickstart — `configure()` once, then `new Client(user)`
+
+The ergonomic front door: **configure once** with your key and an optional
+`attributes` transform from *your own user object* to Shipeasy targeting
+attributes, then evaluate per user with `new Client(user)`. The bound
+`Client` takes **no user argument** on its methods — the user is bound at
+construction.
+
+### Browser
 
 ```ts
-import { FlagsClientBrowser } from "@shipeasy/sdk/client";
+import { configure, Client } from "@shipeasy/sdk/client";
 
-const client = new FlagsClientBrowser({
-  sdkKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY!,
+// Once, at app startup:
+configure({
+  clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY!,
+  // Optional — omit when you already pass a plain attribute object.
+  attributes: (u: MyUser) => ({ user_id: u.id, plan: u.plan }),
 });
 
-await client.identify({ user_id: "user-123", plan: "pro" });
+// Per visitor:
+const flags = new Client(currentUser);
+await flags.ready(); // optional — await the first /sdk/evaluate round-trip
 
-if (client.getFlag("new_checkout")) {
+if (flags.getFlag("new_checkout")) {
   // ship it
 }
 
-const cfg = client.getConfig<{ max_uploads: number }>("upload_limits");
-const { params } = client.getExperiment("hero_cta", {
-  primary_label: "Sign up",
-});
+const cfg = flags.getConfig<{ max_uploads: number }>("upload_limits");
+const { params } = flags.getExperiment("hero_cta", { primary_label: "Sign up" });
 ```
 
-`identify()` automatically merges browser context (`locale`, `timezone`,
-`path`, `referrer`, `screen_*`, `user_agent`) and a persisted
-`anonymous_id` into the payload — so gate rules can target by locale or
-holdouts can hash anonymous visitors out of the box.
+The browser is single-user: `new Client(user)` runs the transform and
+`identify()`s the result under the hood (merging browser context — `locale`,
+`timezone`, `path`, `referrer`, `screen_*`, `user_agent` — and a persisted
+`anonymous_id`). `getFlag` reflects the latest identify; `await client.ready()`
+when you need the first evaluation to have resolved.
 
-## Quickstart — server (Node, Cloudflare Worker, Deno)
+### Server (Node, Cloudflare Worker, Deno)
 
 ```ts
-import { FlagsClient } from "@shipeasy/sdk/server";
+import { configure, Client } from "@shipeasy/sdk/server";
 
-const client = new FlagsClient({ sdkKey: process.env.SHIPEASY_SERVER_KEY! });
+// Once, at app boot:
+configure({
+  apiKey: process.env.SHIPEASY_SERVER_KEY!,
+  attributes: (u: MyUser) => ({ user_id: u.id, plan: u.plan, country: u.geo.country }),
+});
 
-const cfg = await client.getConfig("plan_limits", { user_id: "u-1" });
+// Per request:
+const flags = new Client(req.user);
+if (flags.getFlag("new_checkout")) { /* ... */ }
+const cfg = flags.getConfig("plan_limits");
+```
+
+When you don't pass `attributes`, the transform is the **identity** function —
+the user object you pass is used verbatim, so it should already be the
+attribute bag (`{ user_id, anonymous_id, ...targeting }`).
+
+### Low-level: the `Engine` directly
+
+`Client` is a cheap, user-bound handle over a single shared `Engine` (the
+heavyweight class that owns the key, HTTP, the blob cache, and the poll timer —
+**renamed from `FlagsClient` / `FlagsClientBrowser` in 6.0.0**). You can still
+construct and drive an `Engine` yourself:
+
+```ts
+import { Engine } from "@shipeasy/sdk/server";
+
+const engine = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
+await engine.initOnce();
+const on = engine.getFlag("new_checkout", { user_id: "u-1", plan: "pro" });
 ```
 
 ## SSR bootstrap (flags on first paint)
@@ -181,9 +219,9 @@ so your tests never touch the network.
 
 ```ts
 // Server (Node / Cloudflare Worker / Deno)
-import { FlagsClient } from "@shipeasy/sdk/server";
+import { Engine } from "@shipeasy/sdk/server";
 
-const client = FlagsClient.forTesting();
+const client = Engine.forTesting();
 
 client.overrideFlag("new_checkout", true);
 client.overrideConfig("upload_limits", { max_uploads: 50 });
@@ -200,9 +238,9 @@ client.clearOverrides(); // reset every override back to default
 
 ```ts
 // Browser (vanilla JS — no React required)
-import { FlagsClientBrowser } from "@shipeasy/sdk/client";
+import { Engine } from "@shipeasy/sdk/client";
 
-const client = FlagsClientBrowser.forTesting();
+const client = Engine.forTesting();
 
 client.overrideFlag("new_checkout", true);
 client.overrideConfig("upload_limits", { max_uploads: 50 });
@@ -283,13 +321,13 @@ enabled/killed state into a boolean, so `OFF` folds into `DEFAULT` there.
 
 ## Change listeners
 
-The server `FlagsClient` fires registered listeners after a **background poll
+The server `Engine` fires registered listeners after a **background poll
 returns new data** (HTTP 200, not 304) — handy for invalidating a cache or
 re-rendering when a flag flips. Returns an unsubscribe function. Never fires in
 test/offline mode (no polling happens):
 
 ```ts
-const client = new FlagsClient({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
+const client = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
 await client.init();
 const unsubscribe = client.onChange(() => {
   console.log("flag rules changed — re-evaluating");
@@ -298,7 +336,7 @@ const unsubscribe = client.onChange(() => {
 unsubscribe();
 ```
 
-The browser `FlagsClientBrowser` already exposes the equivalent `subscribe()`
+The browser `Engine` already exposes the equivalent `subscribe()`
 (fires after each `identify()` / override change).
 
 ## Offline snapshot
@@ -317,11 +355,11 @@ two SDK wire bodies:
 ```
 
 ```ts
-import { FlagsClient } from "@shipeasy/sdk/server";
+import { Engine } from "@shipeasy/sdk/server";
 
-const client = FlagsClient.fromFile("./snapshot.json");
+const client = Engine.fromFile("./snapshot.json");
 // or, if you already hold the parsed object:
-const client = FlagsClient.fromSnapshot({ flags, experiments });
+const client = Engine.fromSnapshot({ flags, experiments });
 
 client.getFlag("new_checkout", { user_id: "u1" });
 ```

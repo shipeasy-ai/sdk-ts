@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHash } from "node:crypto";
 import { Telemetry } from "../telemetry";
-import { FlagsClient } from "../server/index";
+import { Engine } from "../server/index";
 
 // Flush the microtask + macrotask queue so the fire-and-forget beacon (which
 // awaits the once-resolved keyHash promise before sending) has run. Only safe
@@ -99,7 +99,7 @@ describe("Telemetry — per-evaluation beacons", () => {
   });
 });
 
-describe("FlagsClient telemetry wiring", () => {
+describe("Engine telemetry wiring", () => {
   let beacon: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -119,8 +119,8 @@ describe("FlagsClient telemetry wiring", () => {
     killswitches: {},
   };
 
-  function make(disableTelemetry?: boolean): FlagsClient {
-    const c = new FlagsClient({ apiKey: "srv", baseUrl: "https://e.x", disableTelemetry });
+  function make(disableTelemetry?: boolean): Engine {
+    const c = new Engine({ apiKey: "srv", baseUrl: "https://e.x", disableTelemetry });
     (c as any).flagsBlob = blob;
     (c as any).expsBlob = { version: "v1", universes: {}, experiments: {} };
     (c as any).initialized = true;

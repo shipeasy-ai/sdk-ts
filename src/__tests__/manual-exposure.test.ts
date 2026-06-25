@@ -57,10 +57,10 @@ describe("manual / suppressible exposure — browser", () => {
 
   it("auto-logs exactly one exposure by default", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
     client.getExperiment("exp", { color: "gray" });
     await client.flush();
@@ -70,10 +70,10 @@ describe("manual / suppressible exposure — browser", () => {
 
   it("logExposure:false suppresses the exposure", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
     const r = client.getExperiment("exp", { color: "gray" }, { logExposure: false });
     expect(r.inExperiment).toBe(true);
@@ -84,10 +84,10 @@ describe("manual / suppressible exposure — browser", () => {
 
   it("manual logExposure emits exactly once after a suppressed read", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
     client.getExperiment("exp", { color: "gray" }, { logExposure: false });
     client.logExposure("exp");
@@ -97,10 +97,10 @@ describe("manual / suppressible exposure — browser", () => {
 
   it("auto + manual never double-count (session dedup)", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
     client.getExperiment("exp", { color: "gray" }); // auto
     client.logExposure("exp"); // manual — deduped
@@ -110,10 +110,10 @@ describe("manual / suppressible exposure — browser", () => {
 
   it("disableAutoExposure flips the default; per-call logExposure:true re-enables", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
-    const client = new FlagsClientBrowser({
+    const client = new BrowserEngine({
       sdkKey: "k",
       baseUrl: "http://x",
       disableAutoExposure: true,
@@ -130,10 +130,10 @@ describe("manual / suppressible exposure — browser", () => {
 
   it("logExposure is a no-op when the visitor isn't enrolled", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
     client.logExposure("not_enrolled");
     await client.flush();
@@ -144,7 +144,7 @@ describe("manual / suppressible exposure — browser", () => {
 describe("server logExposure", () => {
   it("emits an exposure for an enrolled user, no-op otherwise", async () => {
     vi.resetModules();
-    const { FlagsClient } = await import("../server/index");
+    const { Engine } = await import("../server/index");
     const collectBodies: string[] = [];
     const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes("/collect") && init?.body) collectBodies.push(init.body as string);
@@ -153,7 +153,7 @@ describe("server logExposure", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     // A snapshot with one fully-allocated running experiment, single group.
-    const client = FlagsClient.fromSnapshot({
+    const client = Engine.fromSnapshot({
       flags: { version: "t", plan: "free", gates: {}, configs: {}, killswitches: {} },
       experiments: {
         version: "t",
@@ -171,7 +171,7 @@ describe("server logExposure", () => {
     } as never);
     // fromSnapshot is testMode → logExposure no-ops; rebuild as a live client
     // with the same blob so the /collect POST actually fires.
-    const live = new FlagsClient({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
+    const live = new Engine({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
     (live as unknown as { flagsBlob: unknown }).flagsBlob = (
       client as unknown as { flagsBlob: unknown }
     ).flagsBlob;

@@ -95,8 +95,8 @@ async function makeClient(evalResult: unknown, opts: { always?: boolean } = {}) 
     .fn()
     .mockResolvedValue({ ok: true, status: 200, json: async () => evalResult });
   vi.stubGlobal("fetch", mockFetch);
-  const { FlagsClientBrowser } = await import("../client/index");
-  const client = new FlagsClientBrowser({
+  const { Engine } = await import("../client/index");
+  const client = new Engine({
     sdkKey: "k",
     baseUrl: "http://x",
     autoCollectAlways: opts.always,

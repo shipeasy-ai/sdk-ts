@@ -3,9 +3,9 @@
 // additive + backward-compatible; these specs make NO network calls.
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { FlagsClient } from "../server/index";
+import { Engine } from "../server/index";
 import type { FlagsBlob, ExpsBlob } from "../server/index";
-import { FlagsClientBrowser } from "../client/index";
+import { Engine as BrowserEngine } from "../client/index";
 
 // Any accidental network call should fail loudly.
 const failingFetch = vi.fn(() => {
@@ -39,20 +39,20 @@ function snapshot(): { flags: FlagsBlob; experiments: ExpsBlob } {
 describe("Feature A — getFlag/getConfig default value (server)", () => {
   it("returns default when client not ready", () => {
     vi.stubGlobal("fetch", failingFetch);
-    const client = new FlagsClient({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
+    const client = new Engine({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
     // No blob loaded → CLIENT_NOT_READY.
     expect(client.getFlag("anything", { user_id: "u1" })).toBe(false); // plain default
     expect(client.getFlag("anything", { user_id: "u1" }, true)).toBe(true);
   });
 
   it("returns default when flag not found", () => {
-    const client = FlagsClient.fromSnapshot(snapshot());
+    const client = Engine.fromSnapshot(snapshot());
     expect(client.getFlag("missing", { user_id: "u1" }, true)).toBe(true);
     expect(client.getFlag("missing", { user_id: "u1" })).toBe(false); // plain default
   });
 
   it("does NOT return default on a real false (denied/disabled gate)", () => {
-    const client = FlagsClient.fromSnapshot(snapshot());
+    const client = Engine.fromSnapshot(snapshot());
     // denied_gate evaluates to false (rollout 0%) — default must NOT kick in.
     expect(client.getFlag("denied_gate", { user_id: "u1" }, true)).toBe(false);
     // off_gate is disabled → reason OFF, value false — default must NOT kick in.
@@ -60,7 +60,7 @@ describe("Feature A — getFlag/getConfig default value (server)", () => {
   });
 
   it("getConfig returns defaultValue only when the key is absent", () => {
-    const client = FlagsClient.fromSnapshot(snapshot());
+    const client = Engine.fromSnapshot(snapshot());
     expect(client.getConfig("limits")).toEqual({ max: 5 });
     expect(client.getConfig("missing", { defaultValue: { max: 99 } })).toEqual({ max: 99 });
     // Present key → never the default.
@@ -75,10 +75,10 @@ describe("Feature A — getFlag/getConfig default value (server)", () => {
 describe("Feature A — getFlag/getConfig default value (browser)", () => {
   it("returns default when not ready / not found, not on a real false", () => {
     vi.stubGlobal("fetch", failingFetch);
-    const notReady = new FlagsClientBrowser({ sdkKey: "", autoGuardrails: false });
+    const notReady = new BrowserEngine({ sdkKey: "", autoGuardrails: false });
     expect(notReady.getFlag("x", true)).toBe(true); // CLIENT_NOT_READY
 
-    const client = FlagsClientBrowser.forTesting();
+    const client = BrowserEngine.forTesting();
     client.initFromBootstrap({
       flags: { real_false: false, real_true: true },
       configs: { c: 1 },
@@ -91,7 +91,7 @@ describe("Feature A — getFlag/getConfig default value (browser)", () => {
   });
 
   it("getConfig returns defaultValue only when the key is absent", () => {
-    const client = FlagsClientBrowser.forTesting();
+    const client = BrowserEngine.forTesting();
     client.initFromBootstrap({ flags: {}, configs: { c: 1 }, experiments: {}, killswitches: {} });
     expect(client.getConfig("c")).toBe(1);
     expect(client.getConfig("missing", { defaultValue: 42 })).toBe(42);
@@ -103,7 +103,7 @@ describe("Feature A — getFlag/getConfig default value (browser)", () => {
 
 describe("Feature B — getFlagDetail reasons (server)", () => {
   it("OVERRIDE short-circuits before telemetry", () => {
-    const client = FlagsClient.fromSnapshot(snapshot());
+    const client = Engine.fromSnapshot(snapshot());
     client.overrideFlag("on_gate", false);
     expect(client.getFlagDetail("on_gate", { user_id: "u1" })).toEqual({
       value: false,
@@ -113,7 +113,7 @@ describe("Feature B — getFlagDetail reasons (server)", () => {
 
   it("CLIENT_NOT_READY when no blob is loaded", () => {
     vi.stubGlobal("fetch", failingFetch);
-    const client = new FlagsClient({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
+    const client = new Engine({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
     expect(client.getFlagDetail("g", { user_id: "u1" })).toEqual({
       value: false,
       reason: "CLIENT_NOT_READY",
@@ -121,7 +121,7 @@ describe("Feature B — getFlagDetail reasons (server)", () => {
   });
 
   it("FLAG_NOT_FOUND / OFF / RULE_MATCH / DEFAULT", () => {
-    const client = FlagsClient.fromSnapshot(snapshot());
+    const client = Engine.fromSnapshot(snapshot());
     expect(client.getFlagDetail("missing", { user_id: "u1" }).reason).toBe("FLAG_NOT_FOUND");
     expect(client.getFlagDetail("off_gate", { user_id: "u1" }).reason).toBe("OFF");
     expect(client.getFlagDetail("on_gate", { user_id: "u1" })).toEqual({
@@ -135,7 +135,7 @@ describe("Feature B — getFlagDetail reasons (server)", () => {
   });
 
   it("getFlag delegates to getFlagDetail (single emit, no drift)", () => {
-    const client = FlagsClient.fromSnapshot(snapshot());
+    const client = Engine.fromSnapshot(snapshot());
     expect(client.getFlag("on_gate", { user_id: "u1" })).toBe(true);
     expect(client.getFlag("denied_gate", { user_id: "u1" })).toBe(false);
   });
@@ -144,10 +144,10 @@ describe("Feature B — getFlagDetail reasons (server)", () => {
 describe("Feature B — getFlagDetail reasons (browser)", () => {
   it("OVERRIDE / CLIENT_NOT_READY / FLAG_NOT_FOUND / RULE_MATCH / DEFAULT", () => {
     vi.stubGlobal("fetch", failingFetch);
-    const notReady = new FlagsClientBrowser({ sdkKey: "", autoGuardrails: false });
+    const notReady = new BrowserEngine({ sdkKey: "", autoGuardrails: false });
     expect(notReady.getFlagDetail("g").reason).toBe("CLIENT_NOT_READY");
 
-    const client = FlagsClientBrowser.forTesting();
+    const client = BrowserEngine.forTesting();
     client.initFromBootstrap({
       flags: { on: true, off: false },
       configs: {},
@@ -207,7 +207,7 @@ describe("Feature C — onChange (server)", () => {
     vi.useFakeTimers();
     try {
       vi.stubGlobal("fetch", makeMockFetch());
-      const client = new FlagsClient({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
+      const client = new Engine({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
       const calls: number[] = [];
       const unsub = client.onChange(() => calls.push(1));
       await client.init(); // initial fetch — NOT a change
@@ -229,7 +229,7 @@ describe("Feature C — onChange (server)", () => {
   });
 
   it("never fires in offline/snapshot mode", () => {
-    const client = FlagsClient.fromSnapshot(snapshot());
+    const client = Engine.fromSnapshot(snapshot());
     const seen: number[] = [];
     client.onChange(() => seen.push(1));
     // No poll happens offline; nothing fires.
@@ -242,7 +242,7 @@ describe("Feature C — onChange (server)", () => {
 describe("Feature D — fromSnapshot / fromFile (server)", () => {
   it("evaluates against the snapshot with no network", async () => {
     vi.stubGlobal("fetch", failingFetch);
-    const client = FlagsClient.fromSnapshot(snapshot());
+    const client = Engine.fromSnapshot(snapshot());
     // init/initOnce/track are no-ops (test-mode plumbing reused).
     await client.init();
     await client.initOnce();
@@ -266,7 +266,7 @@ describe("Feature D — fromSnapshot / fromFile (server)", () => {
     const file = path.join(os.tmpdir(), `se-snapshot-${Date.now()}.json`);
     fs.writeFileSync(file, JSON.stringify(snapshot()), "utf8");
     try {
-      const client = FlagsClient.fromFile(file);
+      const client = Engine.fromFile(file);
       expect(client.getFlag("on_gate", { user_id: "u1" })).toBe(true);
       expect(client.getConfig("limits")).toEqual({ max: 5 });
     } finally {

@@ -1,5 +1,54 @@
 # Changelog
 
+## 6.0.0 (2026-06-25)
+
+### BREAKING
+
+- **`FlagsClient` → `Engine` (server) and `FlagsClientBrowser` → `Engine`
+  (browser).** The heavyweight class that owns the key, HTTP, the blob cache,
+  and the poll timer is now named `Engine` on both entrypoints. The name
+  `Client` is now the new lightweight, user-bound handle (see below). Update
+  every `new FlagsClient(...)` / `new FlagsClientBrowser(...)`,
+  `FlagsClient.forTesting()` / `.fromSnapshot()` / `.fromFile()`, and any type
+  imports (`FlagsClientBrowserOptions` → `EngineOptions`,
+  `FlagsClientBrowserEnv` → `EngineEnv`). The OpenFeature providers
+  (`@shipeasy/sdk/openfeature-server`, `@shipeasy/sdk/openfeature-web`) and the
+  `<script>` loader now take an `Engine`. No behavior changed — only the name.
+
+### Added
+
+- **`configure()` + user-bound `new Client(user)` front door** on both
+  entrypoints. Configure once at app boot with your key and an optional
+  `attributes` transform (a function from *your own user object* to the
+  Shipeasy targeting attribute map), then evaluate per user with
+  `new Client(user)`:
+
+  ```ts
+  // server
+  import { configure, Client } from "@shipeasy/sdk/server";
+  configure({ apiKey: process.env.SHIPEASY_SERVER_KEY!, attributes: (u) => ({ user_id: u.id, plan: u.plan }) });
+  if (new Client(req.user).getFlag("new_checkout")) { /* ... */ }
+
+  // browser
+  import { configure, Client } from "@shipeasy/sdk/client";
+  configure({ clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY!, attributes: (u) => ({ user_id: u.id, plan: u.plan }) });
+  const flags = new Client(currentUser);
+  await flags.ready();
+  flags.getFlag("new_checkout");
+  ```
+
+  The bound `Client` methods (`getFlag` / `getFlagDetail` / `getConfig` /
+  `getExperiment` / `getKillswitch`) take **no user argument** — the user is
+  bound at construction (the `attributes` transform runs once there; default is
+  identity). `Client` is cheap: it delegates to the single configured `Engine`
+  and never opens its own connection or poll timer. The browser is single-user,
+  so `new Client(user)` `identify()`s the transformed attributes under the hood
+  (fire-and-forget); `await client.ready()` to await the first `/sdk/evaluate`.
+  Constructing a `Client` before `configure()` throws loudly. New public
+  symbols: `configure`, `Client`, `AttributesFn`, `ConfigureOptions`,
+  `_resetConfigureForTests` (and on the server, `configure` returns the
+  `Engine`).
+
 ## 5.4.0 (2026-06-20)
 
 ### Added

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FlagsClient, createInMemoryStickyStore, type FlagsBlob, type ExpsBlob } from "../server/index";
+import { Engine, createInMemoryStickyStore, type FlagsBlob, type ExpsBlob } from "../server/index";
 
 // Sticky bucketing (doc 20 §2): server store + browser __se_sticky cookie.
 
@@ -23,8 +23,8 @@ const expsBlob = (over: Partial<Record<string, unknown>> = {}): ExpsBlob => ({
   },
 });
 
-function seededClient(store = createInMemoryStickyStore(), exps: ExpsBlob = expsBlob()): FlagsClient {
-  const c = new FlagsClient({ apiKey: "", testMode: true, stickyStore: store });
+function seededClient(store = createInMemoryStickyStore(), exps: ExpsBlob = expsBlob()): Engine {
+  const c = new Engine({ apiKey: "", testMode: true, stickyStore: store });
   (c as unknown as { flagsBlob: FlagsBlob }).flagsBlob = FLAGS;
   (c as unknown as { expsBlob: ExpsBlob }).expsBlob = exps;
   (c as unknown as { initialized: boolean }).initialized = true;
@@ -33,7 +33,7 @@ function seededClient(store = createInMemoryStickyStore(), exps: ExpsBlob = exps
 
 describe("server sticky store", () => {
   it("no store ⇒ deterministic (unchanged)", () => {
-    const c = new FlagsClient({ apiKey: "", testMode: true });
+    const c = new Engine({ apiKey: "", testMode: true });
     (c as unknown as { flagsBlob: FlagsBlob }).flagsBlob = FLAGS;
     (c as unknown as { expsBlob: ExpsBlob }).expsBlob = expsBlob();
     (c as unknown as { initialized: boolean }).initialized = true;
@@ -133,7 +133,7 @@ describe("browser __se_sticky cookie round-trip", () => {
 
   it("sends the cookie map and persists returned assignments", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const evalBodies: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -152,7 +152,7 @@ describe("browser __se_sticky cookie round-trip", () => {
       }),
     );
 
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x" });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
 
     // First request sent an (empty) sticky map.
@@ -172,7 +172,7 @@ describe("browser __se_sticky cookie round-trip", () => {
 
   it("stickyBucketing:false sends no sticky map", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const evalBodies: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -185,7 +185,7 @@ describe("browser __se_sticky cookie round-trip", () => {
         } as Response);
       }),
     );
-    const client = new FlagsClientBrowser({ sdkKey: "k", baseUrl: "http://x", stickyBucketing: false });
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x", stickyBucketing: false });
     await client.identify({ user_id: "u1" });
     const body = JSON.parse(evalBodies[0]) as { sticky?: unknown };
     expect(body.sticky).toBeUndefined();

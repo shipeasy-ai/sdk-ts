@@ -724,11 +724,11 @@ function getOrCreateAnonId(): string {
   return id;
 }
 
-// ---- FlagsClientBrowser ----
+// ---- Engine ----
 
-export type FlagsClientBrowserEnv = "dev" | "staging" | "prod";
+export type EngineEnv = "dev" | "staging" | "prod";
 
-export interface FlagsClientBrowserOptions {
+export interface EngineOptions {
   sdkKey: string;
   baseUrl?: string;
   autoGuardrails?: boolean;
@@ -747,7 +747,7 @@ export interface FlagsClientBrowserOptions {
    */
   autoCollectAlways?: boolean;
   /** Which published env to read values from. Defaults to "prod". */
-  env?: FlagsClientBrowserEnv;
+  env?: EngineEnv;
   /**
    * Per-evaluation usage telemetry. ON by default — each getFlag/getConfig/
    * getExperiment/getKillswitch call fires one fire-and-forget sendBeacon so
@@ -784,7 +784,7 @@ export interface FlagsClientBrowserOptions {
    * Test mode — no network at all. identify()/init are no-ops (never call
    * /sdk/evaluate), track() is a no-op, telemetry is forced off, and the client
    * starts "ready" with an empty eval result. Prefer the
-   * {@link FlagsClientBrowser.forTesting} factory over passing this directly.
+   * {@link Engine.forTesting} factory over passing this directly.
    */
   testMode?: boolean;
 }
@@ -944,7 +944,7 @@ function readExperimentOverridesFromUrl(): Record<string, string> {
   return out;
 }
 
-export class FlagsClientBrowser {
+export class Engine {
   private readonly sdkKey: string;
   private readonly baseUrl: string;
   private readonly autoGuardrails: boolean;
@@ -953,7 +953,7 @@ export class FlagsClientBrowser {
   private readonly disableAutoExposure: boolean;
   private readonly privateAttributes: readonly string[];
   private readonly stickyBucketing: boolean;
-  private readonly env: FlagsClientBrowserEnv;
+  private readonly env: EngineEnv;
   private evalResult: EvalResponse | null = null;
   private anonId: string;
   private userId = "";
@@ -966,7 +966,7 @@ export class FlagsClientBrowser {
   // Monotonic counter so a later identify() always wins even if its /sdk/evaluate
   // response races and lands before an earlier in-flight call's response.
   private identifySeq = 0;
-  // Test mode: built by `FlagsClientBrowser.forTesting()`. When set, identify()
+  // Test mode: built by `Engine.forTesting()`. When set, identify()
   // never fetches, track() is a no-op, telemetry is off, and the client is
   // already ready with an empty eval result.
   private readonly testMode: boolean;
@@ -984,7 +984,7 @@ export class FlagsClientBrowser {
     this.notify();
   };
 
-  constructor(opts: FlagsClientBrowserOptions) {
+  constructor(opts: EngineOptions) {
     this.sdkKey = opts.sdkKey;
     this.baseUrl = (opts.baseUrl ?? "https://edge.shipeasy.dev").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
@@ -1032,13 +1032,13 @@ export class FlagsClientBrowser {
    * key required.
    *
    * ```ts
-   * const client = FlagsClientBrowser.forTesting();
+   * const client = Engine.forTesting();
    * client.overrideFlag("new_checkout", true);
    * client.getFlag("new_checkout"); // true
    * ```
    */
-  static forTesting(opts?: Partial<FlagsClientBrowserOptions>): FlagsClientBrowser {
-    return new FlagsClientBrowser({
+  static forTesting(opts?: Partial<EngineOptions>): Engine {
+    return new Engine({
       sdkKey: "",
       autoGuardrails: false,
       ...opts,
@@ -1559,7 +1559,7 @@ interface AttachDevtoolsOptions {
  * cleanup (e.g. React effect teardown).
  */
 export function attachDevtools(
-  client: FlagsClientBrowser,
+  client: Engine,
   opts: AttachDevtoolsOptions = {},
 ): () => void {
   if (typeof window === "undefined") return () => {};
@@ -1606,7 +1606,7 @@ export function attachDevtools(
 // ---- Module-scope singletons ----
 //
 // Most apps want one client per page. Rather than ask every callsite to
-// pass a `FlagsClientBrowser` instance around, expose a configurable
+// pass a `Engine` instance around, expose a configurable
 // singleton plus two facade objects (`flags`, `i18n`) that any module —
 // React component, event handler, util fn, plain JS — can import directly:
 //
@@ -1620,7 +1620,7 @@ export function attachDevtools(
 // subscription — it does not re-export them, so customers consistently
 // reach for the central import.
 
-let _client: FlagsClientBrowser | null = null;
+let _client: Engine | null = null;
 
 /** Configure the singleton. Idempotent — re-calling with the same opts is a no-op. */
 // ---- Unified top-level configure API ----
@@ -1694,13 +1694,13 @@ export interface ShipeasyClientConfig {
    * Attribute names usable for targeting but never persisted in analytics
    * (LD/Statsig `privateAttributes`). Sent to the edge for evaluation, never
    * stored, and stripped from `flags.track(props)`. See
-   * {@link FlagsClientBrowserOptions.privateAttributes}.
+   * {@link EngineOptions.privateAttributes}.
    */
   privateAttributes?: string[];
   /**
    * Sticky bucketing (doc 20 §2). ON by default — locks each enrolled unit to
    * its first-assigned variant via the `__se_sticky` cookie. Pass `false` to
-   * opt out. See {@link FlagsClientBrowserOptions.stickyBucketing}.
+   * opt out. See {@link EngineOptions.stickyBucketing}.
    */
   stickyBucketing?: boolean;
 }
@@ -1747,14 +1747,14 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
   return attachDevtools(client, { adminUrl: opts.adminUrl });
 }
 
-export function configureShipeasy(opts: FlagsClientBrowserOptions): FlagsClientBrowser {
+export function configureShipeasy(opts: EngineOptions): Engine {
   if (_client) return _client;
-  _client = new FlagsClientBrowser(opts);
+  _client = new Engine(opts);
   return _client;
 }
 
 /** Returns the configured singleton, or null if configureShipeasy() hasn't run yet. */
-export function getShipeasyClient(): FlagsClientBrowser | null {
+export function getShipeasyClient(): Engine | null {
   return _client;
 }
 
@@ -1894,7 +1894,7 @@ function wireStandaloneOverride(): void {
  * importing this in a module that loads before app boot is harmless.
  */
 export const flags = {
-  configure(opts: FlagsClientBrowserOptions): void {
+  configure(opts: EngineOptions): void {
     configureShipeasy(opts);
   },
   identify(user: User): Promise<void> {
@@ -1964,7 +1964,7 @@ export const flags = {
       : _client.getExperiment(name, defaultParams, decodeOrOpts ?? {});
   },
   /** Manually log an exposure for an enrolled experiment. See
-   *  {@link FlagsClientBrowser.logExposure}. No-op before configure(). */
+   *  {@link Engine.logExposure}. No-op before configure(). */
   logExposure(name: string): void {
     _client?.logExposure(name);
   },
@@ -2022,6 +2022,153 @@ export const flags = {
     return _client?.ready ?? false;
   },
 };
+
+// ---- Top-level user-bound API (configure once, then `new Client(user)`) ----
+//
+// The ergonomic front door, mirroring the server entry. Configure the SDK ONCE
+// with the public client key and an optional transform from YOUR user object to
+// targeting attributes, then evaluate per user with `new Client(user)`.
+//
+// The browser is single-user: there is one configured Engine and one identified
+// visitor at a time. `new Client(user)` therefore runs the configured
+// `attributes` transform and calls `engine.identify()` under the hood
+// (fire-and-forget — identify is async). getFlag/getConfig/etc. then read the
+// engine's latest eval result. Await `client.ready()` (or `flags.ready`) when
+// you need the first /sdk/evaluate round-trip to have resolved.
+
+/** Transform YOUR application's user object into Shipeasy targeting attributes. */
+export type AttributesFn<U = unknown> = (user: U) => User;
+
+const _identityAttributes: AttributesFn = (user) =>
+  user && typeof user === "object" ? (user as User) : {};
+
+let _attributes: AttributesFn = _identityAttributes;
+
+export interface ConfigureOptions<U = unknown> extends Omit<ShipeasyClientConfig, "clientKey"> {
+  /** Public client key — the single key the browser side accepts (NEXT_PUBLIC_SHIPEASY_CLIENT_KEY). */
+  clientKey: string;
+  /**
+   * Map your own user object into the attribute bag every flag/experiment
+   * evaluation sees. Runs once per `new Client(user)`. Omit when you already
+   * pass a plain attribute object (identity transform — the object is used
+   * verbatim, so it should carry `user_id` + any targeting attrs).
+   */
+  attributes?: AttributesFn<U>;
+}
+
+/**
+ * Configure the SDK once at app boot, then evaluate per user with
+ * `new Client(user)`. Builds the process-wide {@link Engine} (the
+ * /sdk/evaluate-backed browser client) and registers the `attributes`
+ * transform. The first call wins; later calls reuse the existing engine
+ * (mirrors {@link shipeasy}).
+ *
+ * ```ts
+ * import { configure, Client } from "@shipeasy/sdk/client";
+ *
+ * configure({
+ *   clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY!,
+ *   attributes: (u: MyUser) => ({ user_id: u.id, plan: u.plan }),
+ * });
+ *
+ * const flags = new Client(currentUser);
+ * await flags.ready();
+ * if (flags.getFlag("new_checkout")) { ... }
+ * ```
+ *
+ * Returns a cleanup function (same as {@link shipeasy}) that removes the
+ * devtools listeners — call it on teardown.
+ */
+export function configure<U = unknown>(opts: ConfigureOptions<U>): () => void {
+  const { attributes, ...clientConfig } = opts;
+  _attributes = (attributes as AttributesFn) ?? _identityAttributes;
+  // Don't auto-identify the anonymous visitor here — `new Client(user)` drives
+  // identify with the bound, transformed attributes. (autoIdentify can still be
+  // forced on via opts for the bare anon case.)
+  return shipeasy({ autoIdentify: false, ...clientConfig });
+}
+
+/** Test seam: reset the registered attribute transform. */
+export function _resetConfigureForTests(): void {
+  _attributes = _identityAttributes;
+}
+
+/**
+ * A user-bound evaluation handle for the browser. Construct one for the current
+ * visitor — it's cheap (it delegates to the single {@link Engine} built by
+ * {@link configure}); it does NOT open its own connection. The configured
+ * `attributes` transform runs once here and the result is `identify()`-ed into
+ * the engine (fire-and-forget, since identify is async).
+ *
+ * Because the browser is single-user, all bound handles share the engine's
+ * latest eval result. Use {@link Client.ready} to await the first evaluation.
+ *
+ * ```ts
+ * const flags = new Client(currentUser);
+ * await flags.ready();
+ * flags.getFlag("new_checkout");                  // no user arg — bound at construction
+ * flags.getExperiment("price_test", { price: 9 });
+ * ```
+ */
+export class Client<U = unknown> {
+  private readonly engine: Engine;
+  /** The resolved attribute bag this handle evaluates against. */
+  readonly attributes: User;
+  private readonly _identify: Promise<void>;
+
+  constructor(user: U) {
+    const engine = getShipeasyClient();
+    if (!engine) {
+      throw new Error(
+        "[shipeasy] new Client(user) called before configure({ clientKey }). " +
+          "Call configure() once at app boot from @shipeasy/sdk/client.",
+      );
+    }
+    this.engine = engine;
+    this.attributes = _attributes(user);
+    // Kick off identify with the bound attributes (fire-and-forget — identify
+    // is async, getFlag reflects the latest resolved eval). Callers who need the
+    // first round-trip can `await client.ready()`.
+    this._identify = this.engine.identify(this.attributes).catch((err) => {
+      console.warn("[shipeasy] Client identify failed:", String(err));
+    });
+  }
+
+  /** Resolves once the engine's identify() for this user has completed. */
+  ready(): Promise<void> {
+    return this._identify;
+  }
+
+  getFlag(name: string, defaultValue = false): boolean {
+    return this.engine.getFlag(name, defaultValue);
+  }
+
+  getFlagDetail(name: string): FlagDetail {
+    return this.engine.getFlagDetail(name);
+  }
+
+  getConfig<T = unknown>(name: string, decode?: (raw: unknown) => T): T | undefined;
+  getConfig<T = unknown>(name: string, opts: GetConfigOptions<T>): T;
+  getConfig<T = unknown>(
+    name: string,
+    decodeOrOpts?: ((raw: unknown) => T) | GetConfigOptions<T>,
+  ): T | undefined {
+    return this.engine.getConfig(name, decodeOrOpts as GetConfigOptions<T>);
+  }
+
+  getExperiment<P extends Record<string, unknown>>(
+    name: string,
+    defaultParams: P,
+    decode?: (raw: unknown) => P,
+  ): ExperimentResult<P> {
+    return this.engine.getExperiment(name, defaultParams, decode);
+  }
+
+  /** Read a killswitch (not user-bound; mirrors {@link Engine.getKillswitch}). */
+  getKillswitch(name: string, switchKey?: string): boolean {
+    return this.engine.getKillswitch(name, switchKey);
+  }
+}
 
 // ---- see (structured error reporting) ----
 

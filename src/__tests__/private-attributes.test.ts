@@ -12,7 +12,7 @@ describe("private attributes — server", () => {
 
   it("strips private keys from track() props but keeps the rest", async () => {
     vi.resetModules();
-    const { FlagsClient } = await import("../server/index");
+    const { Engine } = await import("../server/index");
     const bodies: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -21,7 +21,7 @@ describe("private attributes — server", () => {
         return Promise.resolve({ ok: true, status: 200, json: async () => ({}) } as Response);
       }),
     );
-    const client = new FlagsClient({
+    const client = new Engine({
       apiKey: "k",
       baseUrl: "http://x",
       disableTelemetry: true,
@@ -59,7 +59,7 @@ describe("private attributes — browser", () => {
 
   it("sends private_attributes to /sdk/evaluate", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const evalBodies: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -72,7 +72,7 @@ describe("private attributes — browser", () => {
         } as Response);
       }),
     );
-    const client = new FlagsClientBrowser({
+    const client = new BrowserEngine({
       sdkKey: "k",
       baseUrl: "http://x",
       privateAttributes: ["plan", "email"],
@@ -91,7 +91,7 @@ describe("private attributes — browser", () => {
 
   it("strips private keys from track() props", async () => {
     vi.resetModules();
-    const { FlagsClientBrowser } = await import("../client/index");
+    const { Engine: BrowserEngine } = await import("../client/index");
     const collectBodies: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -104,7 +104,7 @@ describe("private attributes — browser", () => {
         } as Response);
       }),
     );
-    const client = new FlagsClientBrowser({
+    const client = new BrowserEngine({
       sdkKey: "k",
       baseUrl: "http://x",
       privateAttributes: ["email"],

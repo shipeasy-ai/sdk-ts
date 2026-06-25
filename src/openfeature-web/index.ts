@@ -3,10 +3,10 @@
  *
  * ```ts
  * import { OpenFeature } from "@openfeature/web-sdk";
- * import { FlagsClientBrowser } from "@shipeasy/sdk/client";
+ * import { Engine } from "@shipeasy/sdk/client";
  * import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-web";
  *
- * const client = new FlagsClientBrowser({ sdkKey: NEXT_PUBLIC_SHIPEASY_CLIENT_KEY });
+ * const client = new Engine({ sdkKey: NEXT_PUBLIC_SHIPEASY_CLIENT_KEY });
  * await OpenFeature.setContext({ targetingKey: "u1", plan: "pro" });
  * await OpenFeature.setProviderAndWait(new ShipeasyProvider(client));
  *
@@ -27,7 +27,7 @@ import type {
 } from "@openfeature/web-sdk";
 import { ErrorCode } from "@openfeature/web-sdk";
 
-import { FlagsClientBrowser } from "../client/index";
+import { Engine } from "../client/index";
 import {
   mapFlagReason,
   resolveConfigValue,
@@ -62,14 +62,14 @@ function resolveConfig<T extends JsonValue>(
 
 /**
  * Shipeasy OpenFeature provider (client/web paradigm). Wraps a
- * `FlagsClientBrowser`. Context changes are reconciled through `identify()`;
+ * `Engine`. Context changes are reconciled through `identify()`;
  * flag reads come from the cached eval result.
  */
 export class ShipeasyProvider implements Provider {
   readonly metadata = { name: "shipeasy" } as const;
   readonly runsOn = "client" as const;
 
-  constructor(private readonly client: FlagsClientBrowser) {}
+  constructor(private readonly client: Engine) {}
 
   /** Identify with the initial static context so the first read is warm. */
   async initialize(context?: EvaluationContext): Promise<void> {
