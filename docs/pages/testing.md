@@ -1,81 +1,141 @@
 # Testing
 
-For unit tests, build a **no-network** client with `Engine.forTesting()` and
-seed every entity with local overrides (Statsig-style). In test mode the client
-is already "initialized" / "ready": `init()` / `initOnce()` / `identify()` are
-no-ops (they never fetch), `track()` is a no-op, telemetry is disabled, and **no
-SDK key is required** — so your tests never touch the network.
-
-## Server
+For unit tests, swap the live `configure()` for **`configureForTesting()`** —
+a drop-in sibling with **no network, ever** (no SDK key required). It replaces
+the active configuration with a network-free engine, seeds the values your code
+should see, and is read through the ordinary `new Client(user)`. In this mode
+the rules never fetch, `track()` / `logExposure()` are no-ops, and telemetry is
+off — your tests never touch the network.
 
 ```ts
-import { Engine } from "@shipeasy/sdk/server";
+import { configureForTesting, Client, clearOverrides } from "@shipeasy/sdk/server"; // or /client
 
-const client = Engine.forTesting();
+// Seed everything the code under test should see (no key, no network):
+configureForTesting({
+  flags: { new_checkout: true },
+  configs: { upload_limits: { max_uploads: 50 } },
+  experiments: { hero_cta: ["treatment", { primary_label: "Buy now" }] },
+});
 
-client.overrideFlag("new_checkout", true);
-client.overrideConfig("upload_limits", { max_uploads: 50 });
-client.overrideExperiment("hero_cta", "treatment", { primary_label: "Buy now" });
-
-client.getFlag("new_checkout", { user_id: "u1" });  // true
-client.getConfig("upload_limits");                  // { max_uploads: 50 }
-client.getExperiment("hero_cta", { user_id: "u1" }, { primary_label: "Sign up" });
+const flags = new Client({ user_id: "u_1" }); // construct once per callsite
+flags.getFlag("new_checkout");                 // true
+flags.getConfig("upload_limits");              // { max_uploads: 50 }
+flags.getExperiment("hero_cta", { primary_label: "Sign up" });
 // → { inExperiment: true, group: "treatment", params: { primary_label: "Buy now" } }
 
-client.track("u1", "purchase"); // no-op — never hits the network
-client.clearOverrides();        // reset every override back to default
+clearOverrides(); // reset every seeded override back to the empty-blob default
 ```
 
-## Browser (vanilla JS — no React required)
+`configureForTesting()` / `configureForOffline()` **replace** the active
+configuration (unlike `configure()`, which is first-config-wins), so a suite can
+reconfigure freely between cases.
+
+## Seed shapes
+
+`configureForTesting({ flags?, configs?, experiments?, attributes? })`:
+
+| Field | Shape | Effect |
+| --- | --- | --- |
+| `flags` | `{ [name]: boolean }` | forced `getFlag` results |
+| `configs` | `{ [name]: value }` | forced `getConfig` results |
+| `experiments` | `{ [name]: [group, params] }` | forced enrolments |
+| `attributes` | `(yourUser) => User` | same transform as `configure()` (default identity) |
+
+## Package-level overrides (on the spot)
+
+Layer a quick override on top of whatever `configureForTesting()` /
+`configureForOffline()` (or even a live `configure()`) set up. These are
+package-level — no object to hold:
 
 ```ts
-import { Engine } from "@shipeasy/sdk/client";
+import {
+  overrideFlag,
+  overrideConfig,
+  overrideExperiment,
+  clearOverrides,
+} from "@shipeasy/sdk/server"; // or /client
 
-const client = Engine.forTesting();
-
-client.overrideFlag("new_checkout", true);
-client.overrideConfig("upload_limits", { max_uploads: 50 });
-client.overrideExperiment("hero_cta", "treatment", { primary_label: "Buy now" });
-
-client.getFlag("new_checkout");          // true
-client.getConfig("upload_limits");       // { max_uploads: 50 }
-client.getExperiment("hero_cta", { primary_label: "Sign up" });
-
-client.track("purchase"); // no-op
-client.clearOverrides();
+overrideFlag("new_checkout", true);
+overrideConfig("upload_limits", { max_uploads: 50 });
+overrideExperiment("hero_cta", "treatment", { primary_label: "Buy now" });
+// …read through `new Client(user)` …
+clearOverrides(); // drop every on-the-spot override
 ```
 
-## Override API
-
-```ts
-overrideFlag(name: string, value: boolean): void;
-overrideConfig(name: string, value: unknown): void;
-overrideExperiment(name: string, group: string, params: Record<string, unknown>): void;
-clearOverrides(): void;
-```
-
-The `override*` setters also work on a **normal** (non-test) client — a
-programmatic override always wins over the fetched values. In the browser the
-precedence is: programmatic override > URL/devtools override
-(`?se_gate_…` / `?se_config_…` / `?se_exp_…`) > the server's evaluation.
+A programmatic override always **wins** over the fetched/seeded value. In the
+browser the precedence is: programmatic override > URL/devtools override
+(`?se_ks_…` / `?se_cf_…` / `?se_exp_…`) > the server's evaluation.
 
 ## Offline snapshot (server)
 
-Build a fully offline server client from a captured snapshot — zero network.
-Evaluations run the real eval against the snapshot; `init()` / `initOnce()` /
-`track()` are no-ops and overrides still apply on top.
-
-```jsonc
-// snapshot.json — the two SDK wire bodies
-{ "flags": /* GET /sdk/flags body */, "experiments": /* GET /sdk/experiments body */ }
-```
+`configureForOffline()` evaluates the **real** rules from a captured snapshot
+with no network — `init` is a no-op and overrides still layer on top. Pass an
+in-memory `snapshot` object, or a `path` to a JSON file (Node-only — read with
+`node:fs`):
 
 ```ts
-import { Engine } from "@shipeasy/sdk/server";
+import { configureForOffline, Client } from "@shipeasy/sdk/server";
 
-const client = Engine.fromFile("./snapshot.json"); // Node-only (reads with node:fs)
-// or, if you already hold the parsed object (works anywhere):
-const client = Engine.fromSnapshot({ flags, experiments });
+// From a JSON file on disk (Node only):
+configureForOffline({ path: "./snapshot.json" });
 
-client.getFlag("new_checkout", { user_id: "u1" });
+// …or from an object you already hold (works anywhere):
+configureForOffline({ snapshot: { flags, experiments } });
+
+const flags = new Client({ user_id: "u1" }); // construct once per callsite
+flags.getFlag("new_checkout");
+```
+
+### Snapshot file shape
+
+The snapshot is the two SDK wire bodies verbatim —
+`{ flags: <GET /sdk/flags body>, experiments: <GET /sdk/experiments body> }`. A
+gate's `rolloutPct` is **basis points** (`10000` = 100%); `enabled` is `1`/`0`.
+
+```json
+{
+  "flags": {
+    "version": "test-1",
+    "plan": "free",
+    "gates": {
+      "new_checkout": {
+        "rules": [],
+        "rolloutPct": 10000,
+        "salt": "s",
+        "enabled": 1
+      },
+      "beta_banner": {
+        "rules": [{ "attr": "plan", "op": "eq", "value": "pro" }],
+        "rolloutPct": 5000,
+        "salt": "s2",
+        "enabled": 1
+      }
+    },
+    "configs": {
+      "upload_limits": { "value": { "max_uploads": 50 } }
+    },
+    "killswitches": {
+      "payments": { "killed": 0 }
+    }
+  },
+  "experiments": {
+    "version": "test-1",
+    "universes": {
+      "default": { "holdout_range": null }
+    },
+    "experiments": {
+      "hero_cta": {
+        "universe": "default",
+        "targetingGate": null,
+        "allocationPct": 10000,
+        "salt": "exp-salt",
+        "status": "running",
+        "groups": [
+          { "name": "control", "weight": 5000, "params": { "primary_label": "Sign up" } },
+          { "name": "treatment", "weight": 5000, "params": { "primary_label": "Buy now" } }
+        ]
+      }
+    }
+  }
+}
 ```

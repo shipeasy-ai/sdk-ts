@@ -10,7 +10,7 @@ const flags = new Client(currentUser);
 //   name         — the flag/gate name
 //   defaultValue — returned ONLY when the flag can't be evaluated
 //                  (client not ready / flag not found); defaults to false
-if (flags.getFlag("{{RESOURCE_NAME}}", false)) {
+if (flags.getFlag("{{FLAG_KEY}}", false)) {
   // ship it
 }
 ```

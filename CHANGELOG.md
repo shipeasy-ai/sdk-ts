@@ -1,5 +1,44 @@
 # Changelog
 
+## 6.2.0 (2026-06-27)
+
+The uniform SDK DX standard (experiment-platform doc 23). The documented surface
+is now exactly `configure()` (+ the test/offline siblings) and the bound
+`new Client(user)`; the `Engine` stays public but undocumented.
+
+### Added
+
+- **`configureForTesting({ attributes, flags, configs, experiments })`** — no api
+  key, zero network; seeds overrides and registers the global engine so the bound
+  `new Client(user)` reads them. **Replaces** any prior config (unlike
+  `configure`'s first-config-wins) so a test suite can reconfigure between cases.
+- **`configureForOffline({ snapshot | path, attributes, flags, configs, experiments })`**
+  — evaluates the **real** rules from an in-memory snapshot or a JSON file, with
+  overrides layered on top; also replaces prior config.
+- **`configure({ poll })`** — `poll: true` starts the background poll internally
+  (you never call `engine.init()` yourself); `init` (default `true`) is the
+  one-shot fire-and-forget fetch. The advanced options (`baseUrl`, `env`,
+  `disableTelemetry`, `privateAttributes`, `stickyStore`) are documented as
+  **configure() options**.
+- **Package-level helpers** so the docs never name the `Engine`: `overrideFlag`,
+  `overrideConfig`, `overrideExperiment`, `clearOverrides`, and `onChange` —
+  delegating to the configured global engine.
+- **`ShipeasyProvider` global form** — `new ShipeasyProvider()` (no argument)
+  resolves the engine built by `configure()`, so OpenFeature is wired without an
+  `Engine` handle. Passing an explicit `Engine` stays supported.
+- **`shipeasy-skill` CLI** (`npx shipeasy-skill install` / `print`) — the opt-in
+  installer that copies the bundled agent skill into a consumer's project.
+
+### Changed
+
+- `getKillswitch(name, switchKey)` named-switch semantics: an **unconfigured**
+  switch key now falls back to the kill switch's top-level value (cross-SDK
+  contract), instead of returning the un-set default.
+- `README.md` is now **generated** from `docs/` by `scripts/gen-readme.mjs`
+  (CI enforces it's in sync); the docs were rewritten to be Engine-free around
+  `configure()` + `Client`, with new `metrics/track` + `ops/see` snippet groups
+  and specific placeholders.
+
 ## 6.1.0 (2026-06-27)
 
 ### Added

@@ -12,7 +12,7 @@ const flags = new Client(currentUser);
 //                   defines the param shape P
 //   decode        — optional (raw) => P to validate/shape the group's params
 const { inExperiment, group, params } = flags.getExperiment(
-  "{{RESOURCE_NAME}}",
+  "{{EXPERIMENT_KEY}}",
   { primary_label: "Sign up" }, // defaultParams (used when not enrolled)
 );
 

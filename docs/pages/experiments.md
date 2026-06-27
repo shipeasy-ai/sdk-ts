@@ -78,28 +78,19 @@ attributes and emits the exposure; in the browser it forwards for the identified
 visitor (no-op when the user isn't enrolled). See
 [Advanced → manual exposure](./advanced.md) for the read-side flag.
 
-## Low-level `Engine` form
+## Iterating over many users
 
-The `Engine` forms remain for advanced use — when you don't have a bound
-`Client` (e.g. a batch job iterating over many users):
+When you don't have a single bound user — e.g. a batch job scoring many users —
+construct a fresh `Client` per user inside the loop. It's cheap (it delegates to
+the configuration built once at startup; it opens no connection):
 
 ```ts
-import { Engine } from "@shipeasy/sdk/server";
-const engine = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-await engine.initOnce();
-
-const { group, params } = engine.getExperiment(
-  "hero_cta",
-  { user_id: "u1" },              // user/attribute bag
-  { primary_label: "Sign up" },   // default params
-);
-engine.track("u1", "{{SUCCESS_EVENT}}");  // server Engine.track takes the user id
-engine.logExposure("u1", "hero_cta");
+for (const user of users) {
+  const flags = new Client(user); // construct once per user (cheap)
+  const { group } = flags.getExperiment("hero_cta", { primary_label: "Sign up" });
+  flags.track("{{SUCCESS_EVENT}}", { group });
+}
 ```
-
-(The top-level `track` facade — `import { track } from "@shipeasy/sdk/server"`,
-`track(userId, event, props?)` on the server / `track(event, props?)` in the
-browser — also still works for code that isn't holding a `Client`.)
 
 ## Exposure logging
 

@@ -1,29 +1,28 @@
 # Advanced
 
-LaunchDarkly / Statsig parity features. All are configured on the `Engine` (or
-on `configure()` / `shipeasy()`, which forward Engine options).
+LaunchDarkly / Statsig parity features. All are set as options on `configure()`
+(or on `shipeasy()` for SSR), or read through the bound `Client`.
 
 ## Manual exposure
 
 By default reading an experiment fires one exposure beacon. To control exactly
-when the exposure is logged (e.g. only when the treatment actually renders),
-suppress auto-exposure and call `logExposure(name)` yourself.
+when the exposure is logged (e.g. only when the treatment actually renders), read
+without auto-exposure and call `logExposure(name)` on the bound `Client`:
 
 ```ts
-// Read without logging an exposure…
-const { params } = flags.getExperiment("hero_cta", { primary_label: "Sign up" }, {
-  logExposure: false, // per-call opt-out (Engine form)
-});
-// …then log it at render time:
-flags.logExposure("hero_cta"); // Engine / top-level facade
+const flags = new Client(req.user); // construct once per callsite
+
+// Read the params, then…
+const { params } = flags.getExperiment("hero_cta", { primary_label: "Sign up" });
+
+// …log the exposure at the moment you actually render the treatment:
+flags.logExposure("hero_cta");
 ```
 
-Set `disableAutoExposure: true` on the Engine to make manual exposure the
-default for every read. The bound `Client` exposes `logExposure(name)` directly
-(it forwards to the Engine for the bound user), so the snippet above works on the
-same `Client` handle you read with — `flags.logExposure("hero_cta")`. The
-`Engine` / top-level facade `logExposure` remains for code without a bound
-`Client`.
+On the server `logExposure(name)` re-evaluates enrolment for the bound user and
+emits the exposure (no-op when the user isn't enrolled). In the browser, set
+`autoExposure: false` on `configure()` to make manual exposure the default for
+every read.
 
 ## Private attributes
 
@@ -45,30 +44,39 @@ tracked event props.
 
 Bucketing hashes on `user_id` (falling back to `anonymous_id`) by default. An
 experiment can carry its own `bucketBy` (e.g. `company_id`) so all users in a
-company get the same variant. You can also force a default bucketing key at the
-Engine level:
+company get the same variant — set on the experiment in the dashboard, no SDK
+change needed. When `bucketBy` is set, the value of that attribute is the hash
+unit; if it's missing on the user, evaluation falls back to the standard
+identifier. Make sure your `attributes` transform surfaces the bucketing
+attribute:
 
 ```ts
-const engine = new Engine({ apiKey: KEY, bucketBy: "company_id" });
-// now getFlag/getExperiment hash on user.company_id
+configure({
+  apiKey: process.env.SHIPEASY_SERVER_KEY!,
+  attributes: (u: MyUser) => ({ user_id: u.id, company_id: u.orgId }),
+});
 ```
-
-When `bucketBy` is set, the value of that attribute is the hash unit; if it's
-missing on the user, evaluation falls back to the standard identifier.
 
 ## Sticky bucketing
 
-Lock a user into the **first variant they were assigned** even if the
-experiment's allocation later changes. On by default in the browser (persisted
-in the `__se_sticky` cookie so SSR server eval and the browser agree). Opt out
-with `stickyBucketing: false`:
+Lock a unit into the **first variant it was assigned** even if the experiment's
+allocation later changes. On the server, pass a `stickyStore` to `configure()`
+to persist assignments across requests:
 
 ```ts
-const engine = new Engine({ sdkKey: CLIENT_KEY, stickyBucketing: false });
+import { configure, createInMemoryStickyStore } from "@shipeasy/sdk/server";
+
+configure({
+  apiKey: process.env.SHIPEASY_SERVER_KEY!,
+  stickyStore: createInMemoryStickyStore(), // or a cookie-bridge over __se_sticky
+});
 ```
 
-On the server, provide a sticky store via the Engine options to persist
-assignments across requests.
+`createInMemoryStickyStore()` is process-local (good for a single-process server
+or tests); for a multi-process deployment back the `StickyBucketStore` interface
+(`get(unit)` / `set(unit, exp, entry)`) with shared storage or a request-cookie
+bridge. In the browser, sticky bucketing is on by default (persisted in the
+`__se_sticky` cookie so SSR server eval and the browser agree).
 
 ## Anonymous-id bucketing
 
@@ -78,17 +86,20 @@ and after the server pre-evaluation — no flag flicker on first paint.
 
 ## Change listeners
 
-The server `Engine` fires listeners after a background poll returns **new** data
-(HTTP 200, not 304). Returns an unsubscribe. Never fires in test/offline mode:
+The package-level `onChange()` fires after a background poll returns **new** data
+(HTTP 200, not 304) and returns an unsubscribe callable. It requires
+`configure({ poll: true })` (no poll thread runs otherwise) and never fires in
+test/offline mode:
 
 ```ts
-const engine = new Engine({ apiKey: KEY });
-await engine.init();
-const unsubscribe = engine.onChange(() => { /* re-evaluate / invalidate cache */ });
+import { configure, onChange } from "@shipeasy/sdk/server";
+
+configure({ apiKey: process.env.SHIPEASY_SERVER_KEY!, poll: true });
+
+const unsubscribe = onChange(() => { /* re-evaluate / invalidate cache */ });
 ```
 
-The browser `Engine` exposes the equivalent `subscribe()` (fires after each
-`identify()` / override change).
+In the browser, `onChange()` fires after each `identify()` / override change.
 
 ## Devtools overlay
 

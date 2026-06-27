@@ -1,7 +1,15 @@
 {
   "schemaVersion": 2,
   "sdk": "typescript",
-  "placeholders": ["RESOURCE_NAME", "PROFILE", "SUCCESS_EVENT"],
+  "placeholders": [
+    "FLAG_KEY",
+    "CONFIG_KEY",
+    "KILLSWITCH_KEY",
+    "EXPERIMENT_KEY",
+    "EVENT_NAME",
+    "SUCCESS_EVENT",
+    "PROFILE"
+  ],
   "skill": "skill/SKILL.md",
   "pages": {
     "overview": "pages/overview.md",
@@ -24,9 +32,15 @@
       "killswitches": "snippets/release/killswitches.md",
       "experiments": "snippets/release/experiments.md"
     },
+    "metrics": {
+      "track": "snippets/metrics/track.md"
+    },
     "i18n": {
       "setup": "snippets/i18n/setup.md",
       "render": "snippets/i18n/render.md"
+    },
+    "ops": {
+      "see": "snippets/ops/see.md"
     }
   }
 }

@@ -971,7 +971,15 @@ export class Engine {
     const ks = this.flagsBlob?.killswitches?.[name];
     if (!ks) return false;
     if (switchKey === undefined) return isEnabled(ks.killed);
-    return isEnabled(ks.switches?.[switchKey]);
+    // Named-switch semantics (cross-SDK contract): a configured switch key wins;
+    // an UNCONFIGURED key falls back to the kill switch's top-level `killed`
+    // value (so `getKillswitch(name, variable)` is safe before any per-key
+    // override is published).
+    const switches = ks.switches ?? {};
+    if (Object.prototype.hasOwnProperty.call(switches, switchKey)) {
+      return isEnabled(switches[switchKey]);
+    }
+    return isEnabled(ks.killed);
   }
 }
 
@@ -1685,6 +1693,20 @@ export interface ConfigureOptions<U = unknown> extends Omit<EngineOptions, "apiK
    * verbatim, so it should carry `user_id`/`anonymous_id` + any targeting attrs).
    */
   attributes?: AttributesFn<U>;
+  /**
+   * Long-running server: start the **background poll** internally (initial fetch
+   * + periodic refresh) so flags stay fresh without a redeploy. Default `false`.
+   * With `poll: false` (default) a one-shot fetch is kicked off fire-and-forget
+   * (serverless-friendly). You never need to call `engine.init()` yourself —
+   * configuration owns the lifecycle.
+   */
+  poll?: boolean;
+  /**
+   * One-shot fetch on configure (fire-and-forget). Default `true`. Ignored when
+   * `poll: true` (the poll does the initial fetch). Set `false` only if you want
+   * to control the first fetch yourself.
+   */
+  init?: boolean;
 }
 
 /**
@@ -1706,20 +1728,163 @@ export interface ConfigureOptions<U = unknown> extends Omit<EngineOptions, "apiK
  * ```
  */
 export function configure<U = unknown>(opts: ConfigureOptions<U>): Engine {
-  const { attributes, ...engineOpts } = opts;
+  const { attributes, poll = false, init = true, ...engineOpts } = opts;
   _attributes = (attributes as AttributesFn) ?? _identityAttributes;
   const engine = configureShipeasyServer(engineOpts);
-  // Kick off the one-shot fetch so `new Client(user).getFlag(...)` resolves
-  // against real rules without an explicit init() (mirrors the browser SDK's
-  // auto-fetch on configure). Long-running servers can `await configure(...).init()`
-  // instead to also start the background poll.
-  void engine.initOnce().catch(() => {});
+  if (poll) {
+    // Long-running server: initial fetch + periodic background refresh. The
+    // poll lifecycle lives inside the engine — the docs never tell a user to
+    // call engine.init() themselves.
+    void engine.init().catch(() => {});
+  } else if (init) {
+    // Default: one-shot fire-and-forget fetch so the first
+    // `new Client(user).getFlag(...)` resolves against real rules
+    // (serverless-friendly). Mirrors the browser SDK's auto-fetch on configure.
+    void engine.initOnce().catch(() => {});
+  }
   return engine;
 }
 
 /** Test seam: reset the registered attribute transform. */
 export function _resetConfigureForTests(): void {
   _attributes = _identityAttributes;
+}
+
+/**
+ * Replace the process-wide engine + attribute transform. Unlike
+ * {@link configure} (first-config-wins), the `configureFor*` siblings REPLACE so
+ * a test suite can reconfigure between cases. Destroys any previous engine's
+ * poll timer first.
+ */
+function _installGlobalEngine<U>(engine: Engine, attributes?: AttributesFn<U>): Engine {
+  _server?.destroy();
+  _server = engine;
+  _attributes = (attributes as AttributesFn) ?? _identityAttributes;
+  return engine;
+}
+
+function _applyOverrides(
+  engine: Engine,
+  flags?: Record<string, boolean>,
+  configs?: Record<string, unknown>,
+  experiments?: Record<string, [string, Record<string, unknown>]>,
+): void {
+  for (const [name, value] of Object.entries(flags ?? {})) engine.overrideFlag(name, value);
+  for (const [name, value] of Object.entries(configs ?? {})) engine.overrideConfig(name, value);
+  for (const [name, [group, params]] of Object.entries(experiments ?? {}))
+    engine.overrideExperiment(name, group, params);
+}
+
+/** Seed shapes shared by {@link configureForTesting} / {@link configureForOffline}. */
+export interface ConfigureTestOptions<U = unknown> {
+  /** Same transform as {@link configure} (default identity). */
+  attributes?: AttributesFn<U>;
+  /** `{ name: bool }` — forced `getFlag` results. */
+  flags?: Record<string, boolean>;
+  /** `{ name: value }` — forced `getConfig` results. */
+  configs?: Record<string, unknown>;
+  /** `{ name: [group, params] }` — forced enrolments. */
+  experiments?: Record<string, [string, Record<string, unknown>]>;
+}
+
+/**
+ * Configure the SDK in **test mode** — a drop-in sibling of {@link configure}
+ * with no network, ever (no api key needed). Seed what your code under test
+ * should see, then read through the ordinary `new Client(user)`:
+ *
+ * ```ts
+ * configureForTesting({ flags: { new_checkout: true } });
+ * const flags = new Client({ user_id: "u_1" });
+ * flags.getFlag("new_checkout"); // true
+ * ```
+ *
+ * Replaces any previously-configured engine, so tests can reconfigure freely.
+ */
+export function configureForTesting<U = unknown>(opts: ConfigureTestOptions<U> = {}): Engine {
+  const engine = Engine.forTesting();
+  _applyOverrides(engine, opts.flags, opts.configs, opts.experiments);
+  return _installGlobalEngine(engine, opts.attributes);
+}
+
+/** Options for {@link configureForOffline} — exactly one of `snapshot` / `path`. */
+export interface ConfigureOfflineOptions<U = unknown> extends ConfigureTestOptions<U> {
+  /** In-memory `{ flags: <body of /sdk/flags>, experiments: <body of /sdk/experiments> }`. */
+  snapshot?: { flags: FlagsBlob; experiments: ExpsBlob };
+  /** Path to a JSON file `{ flags, experiments }`. */
+  path?: string;
+}
+
+/**
+ * Configure the SDK **offline** — evaluate the REAL rules from an in-memory
+ * snapshot or a JSON file, with no network. A drop-in sibling of
+ * {@link configure} (no api key needed). Optional `flags`/`configs`/`experiments`
+ * overrides are layered on top (same shapes as {@link configureForTesting}).
+ * Replaces any previously-configured engine.
+ */
+export function configureForOffline<U = unknown>(opts: ConfigureOfflineOptions<U>): Engine {
+  let engine: Engine;
+  if (opts.path !== undefined) {
+    engine = Engine.fromFile(opts.path);
+  } else if (opts.snapshot !== undefined) {
+    engine = Engine.fromSnapshot(opts.snapshot);
+  } else {
+    throw new Error("[shipeasy] configureForOffline requires either { snapshot } or { path }");
+  }
+  _applyOverrides(engine, opts.flags, opts.configs, opts.experiments);
+  return _installGlobalEngine(engine, opts.attributes);
+}
+
+function _requireGlobal(fn: string): Engine {
+  const engine = getShipeasyServerClient();
+  if (!engine) {
+    throw new Error(
+      `[shipeasy] ${fn}(...) called before configure({ apiKey }) (or a configureFor* sibling).`,
+    );
+  }
+  return engine;
+}
+
+/**
+ * Force `getFlag(name)` → `value` on the spot, for the current config. A quick
+ * in-test override layered on top of whatever {@link configureForTesting} /
+ * {@link configureForOffline} (or {@link configure}) set up — wins over the blob
+ * until {@link clearOverrides}.
+ */
+export function overrideFlag(name: string, value: boolean): void {
+  _requireGlobal("overrideFlag").overrideFlag(name, value);
+}
+
+/** Force `getConfig(name)` → `value` on the spot (see {@link overrideFlag}). */
+export function overrideConfig(name: string, value: unknown): void {
+  _requireGlobal("overrideConfig").overrideConfig(name, value);
+}
+
+/**
+ * Force `getExperiment(name)` to report enrolment in `group` with `params` on
+ * the spot (see {@link overrideFlag}).
+ */
+export function overrideExperiment(name: string, group: string, params: Record<string, unknown>): void {
+  _requireGlobal("overrideExperiment").overrideExperiment(name, group, params);
+}
+
+/**
+ * Drop every on-the-spot flag/config/experiment override — INCLUDING the seed
+ * from {@link configureForTesting} (test mode has no blob beneath, so everything
+ * reverts to the empty-blob defaults). Under {@link configureForOffline} the
+ * snapshot remains and evaluations revert to it.
+ */
+export function clearOverrides(): void {
+  _requireGlobal("clearOverrides").clearOverrides();
+}
+
+/**
+ * Register a listener fired after a background poll fetches NEW data (a 200, not
+ * a 304). Returns an unsubscribe callable. Requires `configure({ poll: true })`
+ * (no poll thread runs otherwise). Configuration owns the engine; you never
+ * touch it.
+ */
+export function onChange(listener: () => void): () => void {
+  return _requireGlobal("onChange").onChange(listener);
 }
 
 /**

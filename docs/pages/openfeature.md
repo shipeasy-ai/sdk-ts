@@ -1,50 +1,40 @@
 # OpenFeature
 
-This SDK ships **two** OpenFeature providers (CNCF OpenFeature parity) so apps
+This SDK ships an OpenFeature provider (CNCF OpenFeature parity) so apps
 standardized on the OpenFeature API can plug Shipeasy in as the backing
-provider. Both are pure adapters over `Engine` — no change to evaluation.
+provider. The provider is a pure adapter over the SDK's local evaluation — no
+change to how flags resolve.
 
 | Entrypoint | Pair with | Peer dep (optional) |
 | --- | --- | --- |
 | `@shipeasy/sdk/openfeature-server` | `@openfeature/server-sdk` | `@openfeature/server-sdk` |
-| `@shipeasy/sdk/openfeature-web` | `@openfeature/web-sdk` | `@openfeature/web-sdk` |
 
-The provider class is named `ShipeasyProvider` in both modules.
+The provider class is named `ShipeasyProvider`.
 
 ## Server provider
 
+Construct `new ShipeasyProvider()` with **no argument** — the global form
+resolves the engine that `configure({ apiKey })` already built. Always
+`configure()` first:
+
 ```ts
 import { OpenFeature } from "@openfeature/server-sdk";
-import { Engine } from "@shipeasy/sdk/server";
+import { configure } from "@shipeasy/sdk/server";
 import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-server";
 
-const client = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-await OpenFeature.setProviderAndWait(new ShipeasyProvider(client));
+// 1. Configure the SDK once at app boot (server key).
+configure({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
 
+// 2. Register the provider — no-arg form resolves the configured engine.
+await OpenFeature.setProviderAndWait(new ShipeasyProvider());
+
+// 3. Read through the OpenFeature client.
 const ofClient = OpenFeature.getClient();
 const on = await ofClient.getBooleanValue("new_checkout", false, { targetingKey: "u1" });
 ```
 
-The provider's `initialize()` calls `client.initOnce()` (the SDK fires `Ready`
-when the rules blob resolves) and `onClose()` calls `client.destroy()`.
-
-## Web provider
-
-```ts
-import { OpenFeature } from "@openfeature/web-sdk";
-import { Engine } from "@shipeasy/sdk/client";
-import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-web";
-
-const client = new Engine({ sdkKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY! });
-await OpenFeature.setContext({ targetingKey: "u1", plan: "pro" });
-await OpenFeature.setProviderAndWait(new ShipeasyProvider(client));
-
-const on = OpenFeature.getClient().getBooleanValue("new_checkout", false);
-```
-
-The browser evaluates at the edge, so the web provider maps OpenFeature's static
-context onto `client.identify()` (via `initialize` + `onContextChange`) and
-reads the cached eval result synchronously in the resolve methods.
+The provider's `initialize()` runs the SDK's one-shot rules fetch (the SDK fires
+`Ready` when the blob resolves) and `onClose()` tears the configuration down.
 
 ## Type / reason mapping
 
@@ -57,3 +47,9 @@ reads the cached eval result synchronously in the resolve methods.
   requested type.
 
 The `EvaluationContext.targetingKey` becomes the bucketing `user_id`.
+
+## Tracking
+
+The provider's OpenFeature `track()` forwards to the SDK's `track()` (no-op
+without a `targetingKey`), so conversions for experiment analysis flow through
+the same pipeline.

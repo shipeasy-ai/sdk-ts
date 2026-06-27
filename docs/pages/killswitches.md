@@ -23,27 +23,23 @@ if (flags.getKillswitch("payments")) {
 
 ## Named switches
 
-A kill switch can carry per-key override **switches**. Pass a `switchKey` to
-read one specific switch:
+A kill switch can carry per-key override **switches** — each named switch is
+configured on the kill switch in the dashboard and holds its own boolean. Pass
+the variable you want to gate as the `switchKey` to read that one switch:
 
 ```ts
-flags.getKillswitch("checkout", "apple_pay"); // true when that switch is on
+flags.getKillswitch("checkout", "apple_pay"); // reads the "apple_pay" switch
 ```
 
-With a `switchKey`, the result is `true` only when that specific named switch is
-on; unknown kill switches or unknown switch keys return `false`.
-
-## Engine form
-
-`getKillswitch` lives on the `Engine` too (same signature — it is not
-user-scoped):
+The fallback contract (shared across every Shipeasy SDK): a **configured** switch
+key returns that switch's own value; an **unconfigured** switch key falls back to
+the kill switch's top-level `killed` value. So calling
+`getKillswitch(name, variable)` is always safe — before anyone publishes a
+per-key override for `variable`, it simply tracks the whole kill switch.
 
 ```ts
-import { Engine } from "@shipeasy/sdk/server";
-const engine = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-await engine.initOnce();
-engine.getKillswitch("payments");            // whole-switch
-engine.getKillswitch("checkout", "apple_pay"); // one named switch
+// "apple_pay" not yet configured on the "checkout" kill switch:
+flags.getKillswitch("checkout", "apple_pay"); // === flags.getKillswitch("checkout")
 ```
 
 ## Browser facade

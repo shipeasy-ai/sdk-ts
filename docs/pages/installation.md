@@ -29,10 +29,10 @@ dependency (only needed if you decode configs/experiments with a Zod schema).
 
 ```ts
 // Server (Node / Cloudflare Worker / Deno) — uses the SERVER key
-import { configure, Client, Engine, see } from "@shipeasy/sdk/server";
+import { configure, Client, see } from "@shipeasy/sdk/server";
 
 // Browser — uses the public CLIENT key
-import { configure, Client, Engine, see, i18n } from "@shipeasy/sdk/client";
+import { configure, Client, see, i18n } from "@shipeasy/sdk/client";
 
 // Next.js App Router SSR bootstrap handle (server entry)
 import { shipeasy } from "@shipeasy/sdk/server";
@@ -50,17 +50,27 @@ import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-web";
 ## `configure()` — the front door
 
 Call `configure()` **once at app boot**, then evaluate per user with
-`new Client(user)`. `configure()` builds the process-wide `Engine` (HTTP + blob
-cache + poll timer) and registers your `attributes` transform; it returns the
-`Engine`. The first call wins (later calls return the existing engine).
+`new Client(user)`. `configure()` builds the process-wide machinery (HTTP + blob
+cache + poll lifecycle) and registers your `attributes` transform. The first
+call wins (later calls are no-ops).
 
-| Option | Side | Purpose |
-| --- | --- | --- |
-| `apiKey` | server | **server** key (required on `@shipeasy/sdk/server`) |
-| `clientKey` | browser | public **client** key (required on `@shipeasy/sdk/client`) |
-| `attributes` | both | `(yourUser) => ({ user_id, anonymous_id?, ...targeting })` — runs once per `new Client(user)`. Omit ⇒ **identity** transform (you must pass the attribute bag verbatim). |
-| `baseUrl` | both | override the CDN/edge base (default `https://cdn.shipeasy.ai`) |
-| `env` | server | which published env to read (`dev`/`staging`/`prod`, default `prod`) |
+| Option | Side | Default | Purpose |
+| --- | --- | --- | --- |
+| `apiKey` | server | — | **server** key (required on `@shipeasy/sdk/server`) |
+| `clientKey` | browser | — | public **client** key (required on `@shipeasy/sdk/client`) |
+| `attributes` | both | identity | `(yourUser) => ({ user_id, anonymous_id?, ...targeting })` — runs once per `new Client(user)`. Omit ⇒ **identity** transform (you must pass the attribute bag verbatim). |
+| `poll` | server | `false` | `true` ⇒ start the **background poll** (initial fetch + periodic refresh) so rules stay fresh on a long-running server. The poll lifecycle lives inside the SDK — you never call an init method yourself. |
+| `init` | server | `true` | One-shot fire-and-forget fetch on `configure()` (serverless-friendly). Ignored when `poll: true` (the poll does the initial fetch). Set `false` only to control the first fetch yourself. |
+| `baseUrl` | both | `https://cdn.shipeasy.ai` | override the CDN/edge base |
+| `env` | server | `prod` | which published env to read (`dev` / `staging` / `prod`) |
+| `disableTelemetry` | both | `false` | turn off per-evaluation usage beacons. On Cloudflare Workers each beacon is an outbound subrequest (cap 50 free / 1000 paid per invocation), so set `true` on hot paths that evaluate many flags per request. |
+| `privateAttributes` | both | `[]` | attribute names usable for targeting but stripped from every outbound `track()` payload (LD/Statsig `privateAttributes`). |
+| `stickyStore` | server | — | a sticky-bucketing store so an enrolled unit stays in its first-assigned variant across requests even when allocation changes — see [Advanced → sticky bucketing](./advanced.md). |
+
+`configure()` is **first-config-wins**: the first call builds the process-wide
+state, later calls are no-ops. The test/offline siblings
+`configureForTesting()` / `configureForOffline()` (see [Testing](./testing.md))
+**replace** it so a suite can reconfigure between cases.
 
 **Identity / bucketing unit.** Bucketing hashes on `user_id`, falling back to
 `anonymous_id`. To bucket a whole org together, the experiment/gate carries a
@@ -161,19 +171,20 @@ if (flags.getFlag("new_checkout")) { /* ... */ }
 ## Express / Node
 
 `configure()` kicks off a one-shot fetch, so the first `new Client(user)`
-resolves against real rules without an explicit `init()`. For a long-running
-server that should keep rules fresh, `await configure(...).init()` to start the
-background poll instead.
+resolves against real rules with no extra wiring. For a long-running server that
+should keep rules fresh, pass `poll: true` so the SDK runs the background refresh
+for you — you never call an init method yourself.
 
 ```ts
 import express from "express";
 import { configure, Client } from "@shipeasy/sdk/server";
 
-// Once, at boot — start the background poll so rules stay fresh:
-await configure({
+// Once, at boot — poll: true keeps rules fresh on a long-running server:
+configure({
   apiKey: process.env.SHIPEASY_SERVER_KEY!, // SERVER key
   attributes: (u) => ({ user_id: u.id, plan: u.plan }),
-}).init();
+  poll: true,
+});
 
 const app = express();
 app.get("/checkout", (req, res) => {
@@ -212,8 +223,8 @@ export default {
 ```
 
 > Workers isolates are short-lived — `configure()`'s one-shot fetch warms the
-> blob; the CDN response is cached, so cold starts stay cheap. Use `init()` only
-> on long-lived Node servers, not per-request Worker isolates.
+> blob; the CDN response is cached, so cold starts stay cheap. Use `poll: true`
+> only on long-lived Node servers, not per-request Worker isolates.
 
 ---
 
@@ -266,19 +277,8 @@ no `configure()` call (the tag attributes ARE the configuration):
 
 ---
 
-## The low-level `Engine`
+## Where to go next
 
-Skip the `configure`-once front door and drive an `Engine` yourself (the
-low-level methods take the **user/attribute bag as an argument**, whereas the
-bound `Client` binds it at construction):
-
-```ts
-import { Engine } from "@shipeasy/sdk/server";
-
-const engine = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-await engine.initOnce(); // one-shot fetch; use init() to also start polling
-const on = engine.getFlag("new_checkout", { user_id: "u-1", plan: "pro" });
-```
-
-See [Configuration](./configuration.md) for the full `attributes`, identity,
-`Engine`, and SSR-bootstrap reference.
+See [Configuration](./configuration.md) for the full `attributes`, identity, and
+SSR-bootstrap reference, and [Testing](./testing.md) for the network-free
+`configureForTesting()` / `configureForOffline()` siblings.

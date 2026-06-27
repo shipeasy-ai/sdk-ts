@@ -1,8 +1,8 @@
 # Configuration
 
 Configure the SDK **once** at app boot, then evaluate per user with
-`new Client(user)`. `configure()` builds the process-wide `Engine` (HTTP +
-blob cache + poll timer) and registers your `attributes` transform.
+`new Client(user)`. `configure()` builds the process-wide machinery (HTTP +
+blob cache + poll lifecycle) and registers your `attributes` transform.
 
 ## Server
 
@@ -19,13 +19,13 @@ const flags = new Client(req.user);
 if (flags.getFlag("new_checkout")) { /* ... */ }
 ```
 
-`configure()` returns the `Engine`. It kicks off a one-shot fetch so the first
-`new Client(user).getFlag(...)` resolves against real rules without an explicit
-`init()`. For a long-running server that should keep rules fresh, start the
-background poll instead:
+`configure()` kicks off a one-shot fetch so the first
+`new Client(user).getFlag(...)` resolves against real rules with no extra
+wiring. For a long-running server that should keep rules fresh, pass `poll: true`
+and the SDK runs the background refresh for you:
 
 ```ts
-await configure({ apiKey: process.env.SHIPEASY_SERVER_KEY! }).init();
+configure({ apiKey: process.env.SHIPEASY_SERVER_KEY!, poll: true });
 ```
 
 ## Browser
@@ -63,24 +63,16 @@ attribute bag (`{ user_id, anonymous_id, ...targeting }`).
 ## Identity / bucketing unit
 
 Bucketing hashes on `user_id` (falling back to `anonymous_id`). To bucket on a
-different attribute (e.g. `company_id`), the experiment/gate carries a
-`bucketBy`, or you can set the `bucketBy` Engine option — see
+different attribute (e.g. `company_id`), the experiment carries a `bucketBy` —
+make sure your `attributes` transform surfaces that attribute. See
 [Advanced](./advanced.md).
 
-## The low-level `Engine`
+## Test & offline configuration
 
-Skip the configure-once front door and drive an Engine yourself:
-
-```ts
-import { Engine } from "@shipeasy/sdk/server";
-
-const engine = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-await engine.initOnce(); // one-shot fetch; use init() to also start polling
-const on = engine.getFlag("new_checkout", { user_id: "u-1", plan: "pro" });
-```
-
-The low-level Engine methods take the **user/attribute bag as an argument**
-(`getFlag(name, user)`), whereas the bound `Client` binds it at construction.
+For tests, swap `configure()` for `configureForTesting()` (no network, seed
+overrides) or `configureForOffline()` (evaluate real rules from a captured
+snapshot). Both replace the active configuration and are read through the same
+`new Client(user)` — see [Testing](./testing.md).
 
 ## SSR bootstrap (flags on first paint)
 

@@ -2,14 +2,16 @@
 
 A flag (a.k.a. a **gate**) evaluates to a `boolean` for a given user.
 
-## Bound `Client` form (recommended)
+## Read a flag
+
+Configure once at startup, then bind the user and read:
 
 ```ts
 import { configure, Client } from "@shipeasy/sdk/server"; // or /client
 
 configure({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
 
-const flags = new Client(req.user);
+const flags = new Client(req.user); // construct once per callsite
 if (flags.getFlag("new_checkout")) { /* ship it */ }
 ```
 
@@ -24,18 +26,6 @@ await flags.ready();
 flags.getFlag("new_checkout"); // boolean
 ```
 
-## Low-level `Engine` form
-
-The Engine takes the user/attribute bag as an argument:
-
-```ts
-import { Engine } from "@shipeasy/sdk/server";
-
-const engine = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-await engine.initOnce();
-engine.getFlag("new_checkout", { user_id: "u-1", plan: "pro" }); // boolean
-```
-
 ## Default / fallback behaviour
 
 `getFlag` takes a caller-supplied default returned **only when the value can't
@@ -44,13 +34,10 @@ loaded rules. A flag that legitimately evaluates to `false` (disabled, rule
 denied, rolled out to 0%) still returns `false`, never the default.
 
 ```ts
-// Bound Client (no user arg)
+const flags = new Client(req.user);   // construct once per callsite
+
 flags.getFlag("new_checkout");        // false for a missing/disabled flag
 flags.getFlag("new_checkout", true);  // true ONLY if not-ready / not-found
-
-// Engine (user arg)
-engine.getFlag("new_checkout", { user_id: "u1" });
-engine.getFlag("new_checkout", { user_id: "u1" }, true); // default if not-ready/not-found
 ```
 
 ## Evaluation detail — `getFlagDetail`

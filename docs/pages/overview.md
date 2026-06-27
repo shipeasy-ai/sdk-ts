@@ -30,22 +30,21 @@ const flags = new Client(currentUser);
 if (flags.getFlag("new_checkout")) { /* ship it */ }
 ```
 
-## Engine vs Client
+## What `configure()` and `Client` do
 
-- **`Engine`** is the heavyweight singleton — it owns the key, the HTTP
-  transport, the blob cache, and the poll timer. `configure()` builds one
-  process-wide Engine for you. (It was named `FlagsClient` / `FlagsClientBrowser`
-  before 6.0.0.)
-- **`Client(user)`** is a cheap, user-bound handle over that shared Engine. It
-  opens no connection and runs no poller — it just binds the resolved
-  attribute bag once at construction. Construct one per user / per request. It
-  exposes `getFlag`, `getFlagDetail`, `getConfig`, `getExperiment`,
-  `getKillswitch`, plus `track(event, props?)` and `logExposure(name)` — so
-  reading an experiment **and** recording its conversion/exposure are
-  end-to-end Client-only (no need to drop to the Engine).
+- **`configure({ apiKey })`** is the one-time setup call. It owns the key, the
+  HTTP transport, the blob cache, and the poll lifecycle for the whole process —
+  the first call wins, later calls are no-ops. Test/offline siblings:
+  `configureForTesting()` and `configureForOffline()` (see [Testing](./testing.md)).
+- **`new Client(user)`** is a cheap, user-bound handle. It opens no connection
+  and runs no poller — it just binds the resolved attribute bag once at
+  construction. Construct one per user / per request. It exposes `getFlag`,
+  `getFlagDetail`, `getConfig`, `getExperiment`, `getKillswitch`, plus
+  `track(event, props?)` and `logExposure(name)` — so reading an experiment
+  **and** recording its conversion/exposure are end-to-end `Client`-only.
 
-You can also drive an `Engine` directly when you don't want the configure-once
-front door (see [Configuration](./configuration.md) and [Advanced](./advanced.md)).
+That is the entire surface you wire up: configure once, then `new Client(user)`
+everywhere you evaluate.
 
 ## Where to go next
 
@@ -59,6 +58,6 @@ front door (see [Configuration](./configuration.md) and [Advanced](./advanced.md
 | [Experiments](./experiments.md) | `getExperiment`, `ExperimentResult`, `track` |
 | [i18n](./i18n.md) | loader, SSR bootstrap, `i18n.t()` |
 | [Error reporting](./error-reporting.md) | `see()` grammar |
-| [Testing](./testing.md) | `forTesting()`, `override*`, `fromFile`/`fromSnapshot` |
+| [Testing](./testing.md) | `configureForTesting`/`configureForOffline`, `override*` |
 | [OpenFeature](./openfeature.md) | server + web providers |
 | [Advanced](./advanced.md) | manual exposure, private attrs, bucketBy, sticky |

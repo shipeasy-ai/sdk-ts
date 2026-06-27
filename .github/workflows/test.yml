@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ["20", "22"]
+        node: ["18", "20", "22"]
     steps:
       - uses: actions/checkout@v6
 
@@ -35,3 +35,25 @@ jobs:
       - run: pnpm run build
 
       - run: pnpm run test
+
+  readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: README is generated from docs/ — check it's in sync
+        run: |
+          pnpm run gen:readme
+          git diff --exit-code README.md \
+            || { echo "::error::README.md is out of date — run 'pnpm run gen:readme' and commit."; exit 1; }

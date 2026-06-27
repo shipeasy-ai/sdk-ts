@@ -40,6 +40,16 @@ export default defineConfig([
     dts: true,
     external: ["@openfeature/server-sdk", "@openfeature/web-sdk"],
   },
+  // `shipeasy-skill` CLI — the opt-in installer that copies the bundled agent
+  // skill (docs/skill/SKILL.md) into a consumer's project. A Node bin (CJS +
+  // shebang); SKILL.md ships via the package `files` list and is read at runtime.
+  {
+    entry: { "skill-cli": "src/skill-cli.ts" },
+    outDir: "dist",
+    format: ["cjs"],
+    dts: false,
+    banner: { js: "#!/usr/bin/env node" },
+  },
   // Drop-in <script>-tag loader for non-React customers. Uploaded to the
   // public R2 bucket on every npm publish via the `publish-loader` script.
   // Not exported via the npm `files` list — it's a CDN artifact, not a

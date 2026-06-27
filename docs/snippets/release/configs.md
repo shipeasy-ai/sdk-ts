@@ -10,7 +10,7 @@ const flags = new Client(currentUser);
 //   name             — the config name
 //   opts.defaultValue — returned when the config key is absent
 //   opts.decode       — optional (raw) => T to validate/shape the stored value
-const cfg = flags.getConfig<{ max: number }>("{{RESOURCE_NAME}}", {
+const cfg = flags.getConfig<{ max: number }>("{{CONFIG_KEY}}", {
   defaultValue: { max: 50 },               // used when the key isn't published
   decode: (raw) => raw as { max: number }, // optional — typed decode / zod parse
 });

@@ -28,7 +28,7 @@ import type {
 } from "@openfeature/server-sdk";
 import { ErrorCode } from "@openfeature/server-sdk";
 
-import { Engine } from "../server/index";
+import { Engine, getShipeasyServerClient } from "../server/index";
 import {
   mapFlagReason,
   resolveConfigValue,
@@ -70,7 +70,31 @@ export class ShipeasyProvider implements Provider {
   readonly metadata = { name: "shipeasy" } as const;
   readonly runsOn = "server" as const;
 
-  constructor(private readonly client: Engine) {}
+  private readonly client: Engine;
+
+  /**
+   * Construct the provider. The **global form** (no argument) resolves the
+   * engine built by `configure({ apiKey })`, so the docs build it after
+   * configuration without ever naming the `Engine`:
+   *
+   * ```ts
+   * configure({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
+   * await OpenFeature.setProviderAndWait(new ShipeasyProvider());
+   * ```
+   *
+   * Passing an explicit `Engine` stays supported for advanced/back-compat use.
+   * Throws if no engine is passed and `configure()` has not run.
+   */
+  constructor(client?: Engine) {
+    const resolved = client ?? getShipeasyServerClient();
+    if (!resolved) {
+      throw new Error(
+        "[shipeasy] new ShipeasyProvider() resolves the configured global engine — " +
+          "call configure({ apiKey }) first, or pass an Engine explicitly.",
+      );
+    }
+    this.client = resolved;
+  }
 
   /** Fetch the rules blob once. The SDK fires `Ready` when this resolves. */
   async initialize(): Promise<void> {

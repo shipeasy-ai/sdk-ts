@@ -47,14 +47,6 @@ flags.getConfig("limits", {
 `decode` callback. If `decode` throws, the SDK warns and falls back to the
 default / `undefined`.
 
-## Low-level `Engine` form
-
-`getConfig` is **not** user-bound on the Engine either (configs resolve from the
-loaded blob), so the signature matches the bound Client:
-
-```ts
-import { Engine } from "@shipeasy/sdk/server";
-const engine = new Engine({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-await engine.initOnce();
-engine.getConfig<{ max: number }>("limits", { defaultValue: { max: 50 } });
-```
+> A dynamic config is not user-targeting-bound the way a flag is — it resolves
+> from the loaded rules blob — but it is still read through the same bound
+> `Client` so there is one read surface for everything.
