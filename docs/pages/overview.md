@@ -38,7 +38,11 @@ if (flags.getFlag("new_checkout")) { /* ship it */ }
   before 6.0.0.)
 - **`Client(user)`** is a cheap, user-bound handle over that shared Engine. It
   opens no connection and runs no poller — it just binds the resolved
-  attribute bag once at construction. Construct one per user / per request.
+  attribute bag once at construction. Construct one per user / per request. It
+  exposes `getFlag`, `getFlagDetail`, `getConfig`, `getExperiment`,
+  `getKillswitch`, plus `track(event, props?)` and `logExposure(name)` — so
+  reading an experiment **and** recording its conversion/exposure are
+  end-to-end Client-only (no need to drop to the Engine).
 
 You can also drive an `Engine` directly when you don't want the configure-once
 front door (see [Configuration](./configuration.md) and [Advanced](./advanced.md)).

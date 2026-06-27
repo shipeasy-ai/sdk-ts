@@ -92,6 +92,30 @@ describe("server configure() + new Client(user)", () => {
     expect(flags.getConfig("hero")).toEqual({ variant: "b" });
     expect(flags.getKillswitch("missing")).toBe(false);
   });
+
+  it("Client.track derives the user_id from the bound attributes and forwards to Engine.track", () => {
+    const engine = serverConfigure({ apiKey: "k", testMode: true });
+    const spy = vi.spyOn(engine, "track");
+    const flags = new ServerClient({ user_id: "u1", plan: "pro" });
+    flags.track("purchase", { value: 42 });
+    expect(spy).toHaveBeenCalledWith("u1", "purchase", { value: 42 });
+  });
+
+  it("Client.track falls back to anonymous_id when no user_id is bound", () => {
+    const engine = serverConfigure({ apiKey: "k", testMode: true });
+    const spy = vi.spyOn(engine, "track");
+    const flags = new ServerClient({ anonymous_id: "anon-9" });
+    flags.track("signup");
+    expect(spy).toHaveBeenCalledWith("anon-9", "signup", undefined);
+  });
+
+  it("Client.logExposure forwards the bound attribute bag to Engine.logExposure", () => {
+    const engine = serverConfigure({ apiKey: "k", testMode: true });
+    const spy = vi.spyOn(engine, "logExposure");
+    const flags = new ServerClient({ user_id: "u1", plan: "pro" });
+    flags.logExposure("price_test");
+    expect(spy).toHaveBeenCalledWith({ user_id: "u1", plan: "pro" }, "price_test");
+  });
 });
 
 // ---- browser entry ----
@@ -166,5 +190,25 @@ describe("browser configure() + new Client(user)", () => {
     expect(() => new sdk.Client({ user_id: "u1" })).toThrowError(
       /new Client\(user\) called before configure/,
     );
+  });
+
+  it("Client.track / logExposure forward to the engine for the identified user", async () => {
+    const sdk = await import("../client/index");
+    sdk._resetShipeasyForTests();
+    sdk._resetConfigureForTests();
+    sdk.configureShipeasy({ sdkKey: "", testMode: true, autoGuardrails: false });
+    sdk._resetConfigureForTests();
+    const engine = sdk.getShipeasyClient()!;
+    const trackSpy = vi.spyOn(engine, "track");
+    const exposureSpy = vi.spyOn(engine, "logExposure");
+
+    const flags = new sdk.Client({ user_id: "u1", plan: "pro" });
+    await flags.ready();
+    // Browser Engine.track is (event, props?) — no user arg; the engine already
+    // knows the identified visitor.
+    flags.track("purchase", { value: 42 });
+    expect(trackSpy).toHaveBeenCalledWith("purchase", { value: 42 });
+    flags.logExposure("price_test");
+    expect(exposureSpy).toHaveBeenCalledWith("price_test");
   });
 });

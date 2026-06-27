@@ -48,23 +48,40 @@ const { params } = flags.getExperiment(
 ## Track conversions
 
 Record the success event so the analysis pipeline can compute lift. Conversion
-events are attributed to the enrolled user.
+events are attributed to the enrolled user. You already have a `Client` from
+`getExperiment` — call `track` on the **same handle**, so an experiment is
+end-to-end Client-only:
 
 ```ts
-// Server — track takes the user id explicitly
-import { track } from "@shipeasy/sdk/server";
-track(req.user.id, "{{SUCCESS_EVENT}}", { value: order.total });
-
-// Browser — the user is already bound via configure()/identify()
-import { track } from "@shipeasy/sdk/client";
-track("{{SUCCESS_EVENT}}", { value: order.total });
+// Same bound Client you read the experiment with — no user arg.
+// Server: derives the unit from the bound attributes (user_id, else anonymous_id).
+// Browser: attributes the active (identified) user.
+flags.track("{{SUCCESS_EVENT}}", { value: order.total });
 ```
 
-> The bound `Client` does **not** expose `track` — it lives on the top-level
-> facade / `Engine`. On the server, `track(userId, event, props?)` takes the
-> user id; in the browser, `track(event, props?)` (the active user is implicit).
+`Client.track(event, props?)` takes the same shape on both entrypoints; the
+unit is always inferred from the user you bound the `Client` to.
+
+## Manual exposure on the bound `Client`
+
+When you read with auto-exposure disabled, log the exposure at the treatment's
+render with `logExposure` on the same handle:
+
+```ts
+const { params } = flags.getExperiment("hero_cta", { primary_label: "Sign up" });
+// …at the moment you actually render the treatment:
+flags.logExposure("hero_cta");
+```
+
+On the server `logExposure(name)` re-evaluates enrolment for the bound
+attributes and emits the exposure; in the browser it forwards for the identified
+visitor (no-op when the user isn't enrolled). See
+[Advanced → manual exposure](./advanced.md) for the read-side flag.
 
 ## Low-level `Engine` form
+
+The `Engine` forms remain for advanced use — when you don't have a bound
+`Client` (e.g. a batch job iterating over many users):
 
 ```ts
 import { Engine } from "@shipeasy/sdk/server";
@@ -76,8 +93,13 @@ const { group, params } = engine.getExperiment(
   { user_id: "u1" },              // user/attribute bag
   { primary_label: "Sign up" },   // default params
 );
-engine.track("u1", "{{SUCCESS_EVENT}}");
+engine.track("u1", "{{SUCCESS_EVENT}}");  // server Engine.track takes the user id
+engine.logExposure("u1", "hero_cta");
 ```
+
+(The top-level `track` facade — `import { track } from "@shipeasy/sdk/server"`,
+`track(userId, event, props?)` on the server / `track(event, props?)` in the
+browser — also still works for code that isn't holding a `Client`.)
 
 ## Exposure logging
 

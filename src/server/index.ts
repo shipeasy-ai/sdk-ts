@@ -1780,6 +1780,29 @@ export class Client<U = unknown> {
   getKillswitch(name: string, switchKey?: string): boolean {
     return this.engine.getKillswitch(name, switchKey);
   }
+
+  /**
+   * Record a conversion/metric event for the bound user. Derives the unit from
+   * the resolved attribute bag (`user_id`, else `anonymous_id`) and delegates to
+   * {@link Engine.track} — so an experiment is end-to-end Client-only (no need to
+   * drop down to the Engine to log a conversion). Fire-and-forget; no-op in test
+   * mode.
+   */
+  track(eventName: string, props?: Record<string, unknown>): void {
+    const id = this.attributes.user_id ?? this.attributes.anonymous_id;
+    if (id === undefined) return;
+    this.engine.track(String(id), eventName, props);
+  }
+
+  /**
+   * Emit an exposure event for `name` at this server-side decision point for the
+   * bound user. Delegates to {@link Engine.logExposure} with the resolved
+   * attribute bag (re-evaluates enrolment; no-op when the user isn't enrolled or
+   * in test mode).
+   */
+  logExposure(name: string): void {
+    this.engine.logExposure(this.attributes, name);
+  }
 }
 
 // ---- see (structured error reporting) ----

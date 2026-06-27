@@ -19,8 +19,11 @@ flags.logExposure("hero_cta"); // Engine / top-level facade
 ```
 
 Set `disableAutoExposure: true` on the Engine to make manual exposure the
-default for every read. (The bound `Client` reads do not log exposures
-themselves — use the `Engine` / top-level facade `logExposure`.)
+default for every read. The bound `Client` exposes `logExposure(name)` directly
+(it forwards to the Engine for the bound user), so the snippet above works on the
+same `Client` handle you read with — `flags.logExposure("hero_cta")`. The
+`Engine` / top-level facade `logExposure` remains for code without a bound
+`Client`.
 
 ## Private attributes
 

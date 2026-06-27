@@ -1,5 +1,29 @@
 # Changelog
 
+## 6.1.0 (2026-06-27)
+
+### Added
+
+- **`track()` / `logExposure()` on the bound `Client`** (both entrypoints) —
+  experiments are now end-to-end Client-only; you no longer have to drop down to
+  the `Engine` to record a conversion or an exposure. The `Engine` forms remain
+  for advanced use.
+
+  - Server (`@shipeasy/sdk/server`): `client.track(event, props?)` derives the
+    unit from the bound attribute bag (`user_id`, else `anonymous_id`) and
+    delegates to `Engine.track(userId, event, props?)`. `client.logExposure(name)`
+    re-evaluates enrolment for the bound attributes and emits the exposure.
+  - Browser (`@shipeasy/sdk/client`): `client.track(event, props?)` and
+    `client.logExposure(name)` forward to the engine for the already-identified
+    visitor.
+
+  ```ts
+  const client = new Client(req.user);
+  if (client.getExperiment("checkout_test", {}).inExperiment) {
+    client.track("purchase", { value: 42 });
+  }
+  ```
+
 ## 6.0.0 (2026-06-25)
 
 ### BREAKING
