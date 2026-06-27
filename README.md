@@ -17,6 +17,9 @@ pnpm add @shipeasy/sdk
 For React projects use [`@shipeasy/sdk-react`](https://github.com/shipeasy-ai/sdk-react)
 which wraps this package with a `<ShipeasyProvider>` and hooks.
 
+📖 **Documentation:** [Installation & configuration](docs/pages/installation.md)
+(Next.js, Express/Node, Cloudflare Workers, browser/React) · [full docs](docs/)
+
 ## Quickstart — `configure()` once, then `new Client(user)`
 
 The ergonomic front door: **configure once** with your key and an optional

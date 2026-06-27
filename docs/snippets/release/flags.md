@@ -1,12 +1,16 @@
-Configure once, then read a flag per user with a bound `Client`.
+Read a feature flag per user with a bound `Client`. Assumes `configure()` ran at startup — see Installation.
 
 ```ts
-import { configure, Client } from "@shipeasy/sdk/server"; // or "@shipeasy/sdk/client"
+import { Client } from "@shipeasy/sdk/server"; // or "@shipeasy/sdk/client"
 
-configure({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-
+// construct once per callsite (cheap; binds the user + runs the attributes transform)
 const flags = new Client(currentUser);
-if (flags.getFlag("{{RESOURCE_NAME}}")) {
+
+// getFlag(name, defaultValue?)
+//   name         — the flag/gate name
+//   defaultValue — returned ONLY when the flag can't be evaluated
+//                  (client not ready / flag not found); defaults to false
+if (flags.getFlag("{{RESOURCE_NAME}}", false)) {
   // ship it
 }
 ```
