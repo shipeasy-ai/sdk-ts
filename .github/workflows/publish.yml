@@ -44,7 +44,7 @@ jobs:
       # Trusted Publishing via OIDC — no token required. Requires a matching
       # Trusted Publisher rule on
       # https://www.npmjs.com/package/@shipeasy/sdk/access (Settings →
-      # Trusted Publishers → GitHub Actions, repo shipeasy-ai/sdk, workflow
+      # Trusted Publishers → GitHub Actions, repo shipeasy-ai/sdk-ts, workflow
       # publish.yml).
       #
       # The drop-in <script> loader artifact (R2 upload) is published from the

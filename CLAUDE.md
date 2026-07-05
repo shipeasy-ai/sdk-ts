@@ -35,7 +35,7 @@ affordance, then be documented through that.
 ## HARD RULE: change the SDK → update the docs in the SAME change
 
 `docs/` is the published, user-facing source of truth (rendered at
-<https://shipeasy-ai.github.io/sdk/> and ingested by the Shipeasy CLI/MCP `docs`
+<https://shipeasy-ai.github.io/sdk-ts/> and ingested by the Shipeasy CLI/MCP `docs`
 tooling and the central docs portal). If you change the SDK's **public API or
 behaviour**, you MUST update the docs in the same commit:
 
@@ -60,7 +60,7 @@ update is incomplete — when in doubt, grep `docs/` for the symbol you touched.
 ## Versioning & release
 
 - Bump `version` in `package.json` and add a `CHANGELOG.md` entry.
-- Publishing is **release-gated**: a GitHub release on `shipeasy-ai/sdk` triggers
+- Publishing is **release-gated**: a GitHub release on `shipeasy-ai/sdk-ts` triggers
   the OIDC Trusted-Publishing workflow (`.github/workflows/publish.yml`) which
   publishes `@shipeasy/sdk` to npm with provenance. Never `npm publish` from a
   local checkout.

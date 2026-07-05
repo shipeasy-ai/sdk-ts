@@ -10,10 +10,10 @@ GitHub Pages serves this folder verbatim: **Settings → Pages → Deploy from a
 branch → `main` / `/docs`**. Files are then fetchable raw at:
 
 ```
-https://shipeasy-ai.github.io/sdk/manifest.json
-https://shipeasy-ai.github.io/sdk/pages/<page>.md
-https://shipeasy-ai.github.io/sdk/snippets/<group>/<leaf>.md
-https://shipeasy-ai.github.io/sdk/skill/SKILL.md
+https://shipeasy-ai.github.io/sdk-ts/manifest.json
+https://shipeasy-ai.github.io/sdk-ts/pages/<page>.md
+https://shipeasy-ai.github.io/sdk-ts/snippets/<group>/<leaf>.md
+https://shipeasy-ai.github.io/sdk-ts/skill/SKILL.md
 ```
 
 `/.nojekyll` MUST stay — it makes Pages serve raw `.md`/JSON bytes (no Jekyll

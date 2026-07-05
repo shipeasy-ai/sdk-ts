@@ -5,7 +5,7 @@
 
 # @shipeasy/sdk (TypeScript)
 
-[![Tests](https://github.com/shipeasy-ai/sdk/actions/workflows/test.yml/badge.svg)](https://github.com/shipeasy-ai/sdk/actions/workflows/test.yml)
+[![Tests](https://github.com/shipeasy-ai/sdk-ts/actions/workflows/test.yml/badge.svg)](https://github.com/shipeasy-ai/sdk-ts/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/@shipeasy/sdk.svg)](https://www.npmjs.com/package/@shipeasy/sdk)
 [![node](https://img.shields.io/node/v/@shipeasy/sdk.svg)](https://www.npmjs.com/package/@shipeasy/sdk)
 
@@ -13,8 +13,8 @@ The Shipeasy SDK for **feature flags, dynamic configs, kill switches, A/B
 experiments, metric tracking, and SSR/i18n** — for Node, Next.js, and Cloudflare
 Workers. Server-key only on the server; the browser uses its own client key.
 
-> 📚 **Full documentation:** **<https://shipeasy-ai.github.io/sdk/>** — also browsable under
-> [`docs/`](https://github.com/shipeasy-ai/sdk/blob/main/docs). This README is generated from those docs.
+> 📚 **Full documentation:** **<https://shipeasy-ai.github.io/sdk-ts/>** — also browsable under
+> [`docs/`](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs). This README is generated from those docs.
 
 ## 🤖 Using an AI agent?
 
@@ -22,8 +22,8 @@ This SDK ships an installable **agent skill** — a copy-paste-ready guide to
 `configure()` + `new Client(user)`, testing, experiments, error reporting, and
 more, with links the agent can pull for deeper docs:
 
-- **Skill:** [`docs/skill/SKILL.md`](https://github.com/shipeasy-ai/sdk/blob/main/docs/skill/SKILL.md) · raw:
-  `https://shipeasy-ai.github.io/sdk/skill/SKILL.md`
+- **Skill:** [`docs/skill/SKILL.md`](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/skill/SKILL.md) · raw:
+  `https://shipeasy-ai.github.io/sdk-ts/skill/SKILL.md`
 - **Install it** (ships with the package — no network):
   `npx shipeasy-skill install` → `.claude/skills/shipeasy-typescript/SKILL.md`
   (or via the Shipeasy CLI: `shipeasy docs skill --sdk typescript --install`)
@@ -31,7 +31,7 @@ more, with links the agent can pull for deeper docs:
 **Humans:** you can copy that skill straight into your own project's agent skills
 directory (e.g. `.claude/skills/shipeasy-typescript/SKILL.md`) so your coding agent
 always uses the correct Shipeasy patterns. Every doc page and snippet is also
-fetchable by URL — start from the manifest at `https://shipeasy-ai.github.io/sdk/manifest.json`.
+fetchable by URL — start from the manifest at `https://shipeasy-ai.github.io/sdk-ts/manifest.json`.
 
 ## Install
 
@@ -44,7 +44,7 @@ yarn add @shipeasy/sdk
 ```
 
 Per-framework setup (Next.js / Express / Cloudflare Workers) and the anon-id
-middleware are on the [Installation](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/installation.md) page.
+middleware are on the [Installation](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/installation.md) page.
 
 ## Quickstart — `configure()` once, then `new Client(user)` per request
 
@@ -64,22 +64,22 @@ Constructing `new Client(user)` before `configure()` throws.
 
 | Page | What |
 | --- | --- |
-| [Overview](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/overview.md) | The `configure()` + `new Client(user)` model. |
-| [Installation](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/installation.md) | Install, frameworks (Next / Express / Workers), `configure()` wiring. |
-| [Configuration](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/configuration.md) | Keys, `attributes`, one-shot vs poll, every option. |
-| [Feature flags](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/flags.md) | `getFlag`, `getFlagDetail`, defaults. |
-| [Dynamic configs](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/configs.md) | `getConfig`, typed decode, defaults. |
-| [Kill switches](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/killswitches.md) | `getKillswitch`, named switches. |
-| [Experiments](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/experiments.md) | `getExperiment`, `logExposure`, `track`. |
-| [Internationalization](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/i18n.md) | SSR bootstrap + i18n loader tags. |
-| [Error reporting](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/error-reporting.md) | `see()` structured error reporting. |
-| [Testing](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/testing.md) | `configureForTesting` / `configureForOffline`, overrides. |
-| [OpenFeature](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/openfeature.md) | `ShipeasyProvider` (OpenFeature server provider). |
-| [Advanced](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/advanced.md) | Anon-id middleware, private attributes, sticky bucketing, SSR. |
+| [Overview](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/overview.md) | The `configure()` + `new Client(user)` model. |
+| [Installation](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/installation.md) | Install, frameworks (Next / Express / Workers), `configure()` wiring. |
+| [Configuration](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/configuration.md) | Keys, `attributes`, one-shot vs poll, every option. |
+| [Feature flags](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/flags.md) | `getFlag`, `getFlagDetail`, defaults. |
+| [Dynamic configs](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/configs.md) | `getConfig`, typed decode, defaults. |
+| [Kill switches](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/killswitches.md) | `getKillswitch`, named switches. |
+| [Experiments](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/experiments.md) | `getExperiment`, `logExposure`, `track`. |
+| [Internationalization](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/i18n.md) | SSR bootstrap + i18n loader tags. |
+| [Error reporting](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/error-reporting.md) | `see()` structured error reporting. |
+| [Testing](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/testing.md) | `configureForTesting` / `configureForOffline`, overrides. |
+| [OpenFeature](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/openfeature.md) | `ShipeasyProvider` (OpenFeature server provider). |
+| [Advanced](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/advanced.md) | Anon-id middleware, private attributes, sticky bucketing, SSR. |
 
-Copy-paste snippets live under [`docs/snippets/`](https://github.com/shipeasy-ai/sdk/blob/main/docs/snippets)
+Copy-paste snippets live under [`docs/snippets/`](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/snippets)
 (release · metrics · i18n · ops); an installable agent skill is at
-[`docs/skill/SKILL.md`](https://github.com/shipeasy-ai/sdk/blob/main/docs/skill/SKILL.md).
+[`docs/skill/SKILL.md`](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/skill/SKILL.md).
 
 ## Testing
 
@@ -105,9 +105,9 @@ clearOverrides(); // reset every seeded override back to the empty-blob default
 ```
 
 More — the on-the-spot override helpers and a working example snapshot file — on
-the [Testing](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/testing.md) page.
+the [Testing](https://github.com/shipeasy-ai/sdk-ts/blob/main/docs/pages/testing.md) page.
 
 ## License
 
-See [LICENSE](https://github.com/shipeasy-ai/sdk/blob/main/LICENSE). Evaluation is tested against the cross-language
+See [LICENSE](https://github.com/shipeasy-ai/sdk-ts/blob/main/LICENSE). Evaluation is tested against the cross-language
 MurmurHash3 vectors in `experiment-platform/04-evaluation.md`.

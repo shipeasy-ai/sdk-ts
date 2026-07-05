@@ -6,10 +6,10 @@
   "homepage": "https://shipeasy.ai",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shipeasy-ai/sdk.git"
+    "url": "https://github.com/shipeasy-ai/sdk-ts.git"
   },
   "bugs": {
-    "url": "https://github.com/shipeasy-ai/sdk/issues"
+    "url": "https://github.com/shipeasy-ai/sdk-ts/issues"
   },
   "main": "./dist/server/index.js",
   "module": "./dist/server/index.mjs",

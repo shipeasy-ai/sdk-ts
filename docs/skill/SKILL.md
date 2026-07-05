@@ -12,7 +12,7 @@ public **client** key). Everything works from vanilla JS.
 > The documented surface is exactly **`configure()`** (setup) and the bound
 > **`new Client(user)`** (use), plus the package-level helpers below. For deeper
 > docs, fetch any page/snippet from the manifest at
-> <https://shipeasy-ai.github.io/sdk/manifest.json> (raw page/snippet URLs below).
+> <https://shipeasy-ai.github.io/sdk-ts/manifest.json> (raw page/snippet URLs below).
 
 ## Install
 
@@ -42,11 +42,11 @@ flags.getFlagDetail("new_checkout");                   // { value, reason }
 `configure()` is first-config-wins and owns the fetch lifecycle (one-shot by
 default; `poll: true` for a background refresh). Construct `new Client(user)` once
 per user/request — it binds the user, so no method takes a user argument.
-Full reference: <https://shipeasy-ai.github.io/sdk/pages/configuration.md> ·
-<https://shipeasy-ai.github.io/sdk/pages/flags.md> ·
-snippets <https://shipeasy-ai.github.io/sdk/snippets/release/flags.md> ·
-<https://shipeasy-ai.github.io/sdk/snippets/release/configs.md> ·
-<https://shipeasy-ai.github.io/sdk/snippets/release/killswitches.md>
+Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/configuration.md> ·
+<https://shipeasy-ai.github.io/sdk-ts/pages/flags.md> ·
+snippets <https://shipeasy-ai.github.io/sdk-ts/snippets/release/flags.md> ·
+<https://shipeasy-ai.github.io/sdk-ts/snippets/release/configs.md> ·
+<https://shipeasy-ai.github.io/sdk-ts/snippets/release/killswitches.md>
 
 ## Experiments + track (Client-only, end to end)
 
@@ -62,8 +62,8 @@ flags.track("purchase", { value: 42 }); // record a conversion for the bound use
 ```
 
 `ExperimentResult = { inExperiment: boolean; group: string; params: P }`. Full
-reference: <https://shipeasy-ai.github.io/sdk/pages/experiments.md> · track snippet
-<https://shipeasy-ai.github.io/sdk/snippets/metrics/track.md>
+reference: <https://shipeasy-ai.github.io/sdk-ts/pages/experiments.md> · track snippet
+<https://shipeasy-ai.github.io/sdk-ts/snippets/metrics/track.md>
 
 ## i18n
 
@@ -76,9 +76,9 @@ i18n.t("checkout.cta", "Place order");
 i18n.t("cart.count", "{count} items", { count: cart.length });
 ```
 
-Full reference: <https://shipeasy-ai.github.io/sdk/pages/i18n.md> · snippets
-<https://shipeasy-ai.github.io/sdk/snippets/i18n/setup.md> ·
-<https://shipeasy-ai.github.io/sdk/snippets/i18n/render.md>
+Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/i18n.md> · snippets
+<https://shipeasy-ai.github.io/sdk-ts/snippets/i18n/setup.md> ·
+<https://shipeasy-ai.github.io/sdk-ts/snippets/i18n/render.md>
 
 ## Error reporting (see)
 
@@ -94,8 +94,8 @@ see.ControlFlowException(e).because("because it wasn't an encoded Foo"); // expe
 
 Fire-and-forget on the next microtask (no `.send()`). Don't catch what you can't
 name a consequence for. You may `see()` then re-throw (links as `caused_by`). Full
-reference: <https://shipeasy-ai.github.io/sdk/pages/error-reporting.md> · snippet
-<https://shipeasy-ai.github.io/sdk/snippets/ops/see.md>
+reference: <https://shipeasy-ai.github.io/sdk-ts/pages/error-reporting.md> · snippet
+<https://shipeasy-ai.github.io/sdk-ts/snippets/ops/see.md>
 
 ## Testing — no network
 
@@ -120,7 +120,7 @@ configureForOffline({ path: "./shipeasy-snapshot.json" });
 // or: configureForOffline({ snapshot: { flags, experiments }, flags: { new_checkout: true } });
 ```
 
-Full reference: <https://shipeasy-ai.github.io/sdk/pages/testing.md>
+Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/testing.md>
 
 ## OpenFeature
 
@@ -133,7 +133,7 @@ await OpenFeature.setProviderAndWait(new ShipeasyProvider());
 await OpenFeature.getClient().getBooleanValue("new_checkout", false, { targetingKey: "u1" });
 ```
 
-Full reference: <https://shipeasy-ai.github.io/sdk/pages/openfeature.md>
+Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/openfeature.md>
 
 ## Advanced
 
@@ -142,4 +142,4 @@ Full reference: <https://shipeasy-ai.github.io/sdk/pages/openfeature.md>
 (`getExperiment(..., { logExposure: false })` + `flags.logExposure(name)`),
 `onChange(cb)` (requires `configure({ poll: true })`) / browser `subscribe()`.
 Devtools overlay: `Shift+Alt+S` or `?se=1`. Full reference:
-<https://shipeasy-ai.github.io/sdk/pages/advanced.md>
+<https://shipeasy-ai.github.io/sdk-ts/pages/advanced.md>
