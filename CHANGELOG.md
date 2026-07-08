@@ -1,16 +1,23 @@
 # Changelog
 
-## 6.3.0 (2026-07-07)
-
-Fail-safe reads and a configurable log level.
+## 6.3.1 (2026-07-07)
 
 ### Fixed
 
-- CI/build toolchain rot that had left `main` red (and blocked publishing): pin
-  `vite` to a `vitest`-4-compatible major, silence the TypeScript 6 `baseUrl`
-  deprecation in the dts build, compile example JSX with the automatic runtime,
-  scope the test runner to `src/`, and make the "missing server key" test robust
-  against unrelated fire-and-forget telemetry from earlier tests.
+- Repair the build/test toolchain so the package publishes again. The publish
+  workflow gates on type-check + test + build, all three of which had been red on
+  `main` for weeks (pre-existing floating-dependency rot), so 6.3.0 could not be
+  released to npm. Fixes: pin `vite` to a `vitest`-4-compatible major (vite 5
+  lacks `./module-runner`), silence the TypeScript 6 `baseUrl` deprecation in the
+  dts build, compile example JSX with the automatic runtime and scope the test
+  runner to `src/`, and make the "missing server key" test assert on the
+  flags/experiments/i18n endpoints instead of a global fetch count (which was
+  polluted by earlier tests' fire-and-forget telemetry). No SDK behaviour change.
+
+## 6.3.0 (2026-07-07)
+
+Fail-safe reads and a configurable log level. (Superseded by 6.3.1 for the actual
+npm release — 6.3.0 never published due to the CI breakage fixed above.)
 
 ### Added
 
