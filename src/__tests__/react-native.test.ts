@@ -54,7 +54,7 @@ describe("client entry under React Native (no DOM on window)", () => {
     const client = new Engine({ sdkKey: "k", baseUrl: "http://x" });
     expect(client.getFlag("f")).toBe(false);
     expect(client.getConfig("c")).toBeUndefined();
-    expect(client.getExperiment("e", {}).inExperiment).toBe(false);
+    expect(client.universe("e").assign().enrolled).toBe(false);
   });
 
   it("identify() evaluates over fetch and reads reflect the response", async () => {
@@ -75,12 +75,12 @@ describe("client entry under React Native (no DOM on window)", () => {
     expect(client.getFlag("new_ui")).toBe(true);
   });
 
-  it("track() and logExposure() are safe (buffer flushes over fetch)", async () => {
+  it("track() and universe().assign() are safe (buffer flushes over fetch)", async () => {
     stubReactNativeEnv();
     const { Engine } = await import("../client/index");
     const client = new Engine({ sdkKey: "k", baseUrl: "http://x", disableTelemetry: true });
     expect(() => client.track("checkout")).not.toThrow();
-    expect(() => client.logExposure("exp")).not.toThrow();
+    expect(() => client.universe("exp").assign()).not.toThrow();
   });
 
   it("subscribe() does not throw without window.addEventListener", async () => {

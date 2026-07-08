@@ -83,7 +83,7 @@ Copy-paste snippets live under [`docs/snippets/`](https://github.com/shipeasy-ai
 
 ## Testing
 
-For unit tests, swap the live `configure()` for **`configureForTesting()`** — a drop-in sibling with **no network, ever** (no SDK key required). It replaces the active configuration with a network-free engine, seeds the values your code should see, and is read through the ordinary `new Client(user)`. In this mode the rules never fetch, `track()` / `logExposure()` are no-ops, and telemetry is off — your tests never touch the network.
+For unit tests, swap the live `configure()` for **`configureForTesting()`** — a drop-in sibling with **no network, ever** (no SDK key required). It replaces the active configuration with a network-free engine, seeds the values your code should see, and is read through the ordinary `new Client(user)`. In this mode the rules never fetch, `track()` is a no-op, `assign()` logs no exposure, and telemetry is off — your tests never touch the network.
 
 ```ts
 import { configureForTesting, Client, clearOverrides } from "@shipeasy/sdk/server"; // or /client
@@ -92,14 +92,11 @@ import { configureForTesting, Client, clearOverrides } from "@shipeasy/sdk/serve
 configureForTesting({
   flags: { new_checkout: true },
   configs: { upload_limits: { max_uploads: 50 } },
-  experiments: { hero_cta: ["treatment", { primary_label: "Buy now" }] },
 });
 
 const flags = new Client({ user_id: "u_1" }); // construct once per callsite
 flags.getFlag("new_checkout");                 // true
 flags.getConfig("upload_limits");              // { max_uploads: 50 }
-flags.getExperiment("hero_cta", { primary_label: "Sign up" });
-// → { inExperiment: true, group: "treatment", params: { primary_label: "Buy now" } }
 
 clearOverrides(); // reset every seeded override back to the empty-blob default
 ```

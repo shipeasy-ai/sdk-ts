@@ -30,19 +30,44 @@ afterEach(() => {
 });
 
 describe("configureForTesting", () => {
-  it("seeds flags/configs/experiments read through new Client(user)", () => {
+  it("seeds flags/configs read through new Client(user)", () => {
     configureForTesting({
       flags: { new_checkout: true },
       configs: { theme: { color: "blue" } },
-      experiments: { price_test: ["treatment", { price: 9 }] },
     });
     const c = new Client({ user_id: "u_1" });
     expect(c.getFlag("new_checkout")).toBe(true);
     expect(c.getConfig("theme")).toEqual({ color: "blue" });
-    const exp = c.getExperiment("price_test", { price: 0 });
-    expect(exp.inExperiment).toBe(true);
+  });
+
+  it("an experiment override surfaces through universe().assign() when the experiment exists in the universe", () => {
+    // Overrides refine an experiment that lives in a universe — they don't invent
+    // one in an empty universe. Seed a real (offline) experiment in universe
+    // `pricing`, then force the enrolment with overrideExperiment.
+    configureForOffline({
+      snapshot: {
+        flags: { version: "t", plan: "free", gates: {}, configs: {}, killswitches: {} },
+        experiments: {
+          version: "t",
+          universes: { pricing: { holdout_range: null } },
+          experiments: {
+            price_test: {
+              universe: "pricing",
+              allocationPct: 10000,
+              salt: "s",
+              status: "running",
+              groups: [{ name: "control", weight: 10000, params: { price: 0 } }],
+            },
+          } as unknown as ExpsBlob["experiments"],
+        },
+      },
+      experiments: { price_test: ["treatment", { price: 9 }] },
+    });
+    const c = new Client({ user_id: "u_1" });
+    const exp = c.universe("pricing").assign();
+    expect(exp.enrolled).toBe(true);
     expect(exp.group).toBe("treatment");
-    expect(exp.params).toEqual({ price: 9 });
+    expect(exp.get("price")).toBe(9);
   });
 
   it("REPLACES prior config (not first-config-wins)", () => {
@@ -70,21 +95,41 @@ describe("configureForTesting", () => {
 
 describe("on-the-spot overrides", () => {
   it("overrideFlag/Config/Experiment win over the seed; clearOverrides drops the seed too", () => {
-    configureForTesting({ flags: { f: true } });
+    // Seed a real experiment `e` in universe `u` so the experiment override is
+    // reachable via universe().assign(); flags/configs still ride the empty blob.
+    configureForOffline({
+      snapshot: {
+        flags: { version: "t", plan: "free", gates: {}, configs: {}, killswitches: {} },
+        experiments: {
+          version: "t",
+          universes: { u: { holdout_range: null } },
+          experiments: {
+            e: {
+              universe: "u",
+              allocationPct: 10000,
+              salt: "s",
+              status: "running",
+              groups: [{ name: "A", weight: 10000, params: { v: 1 } }],
+            },
+          } as unknown as ExpsBlob["experiments"],
+        },
+      },
+      flags: { f: true },
+    });
     overrideFlag("f", false);
     overrideConfig("c", 123);
     overrideExperiment("e", "B", { v: 2 });
     const c = new Client({ user_id: "u" });
     expect(c.getFlag("f")).toBe(false);
     expect(c.getConfig("c")).toBe(123);
-    expect(c.getExperiment("e", {}).group).toBe("B");
+    expect(c.universe("u").assign().group).toBe("B");
 
-    // Under test mode there is no blob beneath, so clearOverrides drops the
-    // configureForTesting seed too — everything reverts to empty-blob defaults.
+    // clearOverrides drops the override layer; flags/configs revert to the (empty)
+    // snapshot, and the experiment reverts to its real assignment (group A).
     clearOverrides();
     expect(new Client({}).getFlag("f")).toBe(false);
     expect(new Client({}).getConfig("c")).toBeUndefined();
-    expect(new Client({}).getExperiment("e", { d: 1 }).inExperiment).toBe(false);
+    expect(new Client({ user_id: "u" }).universe("u").assign().group).toBe("A");
   });
 
   it("override helpers throw before any configure*", () => {

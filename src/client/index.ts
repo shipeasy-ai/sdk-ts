@@ -117,12 +117,18 @@ interface EvalExpResult {
   inExperiment: boolean;
   group: string;
   params: Record<string, unknown>;
+  /** The universe this experiment belongs to — lets `universe(name).assign()`
+   *  find the enrolled experiment within a universe. */
+  universe?: string;
 }
 
 interface EvalResponse {
   flags: Record<string, boolean>;
   configs: Record<string, unknown>;
   experiments: Record<string, EvalExpResult>;
+  /** Per-universe param defaults (name → default map) so `universe(name).get()`
+   *  resolves to the universe default even when the unit is not enrolled. */
+  universes?: Record<string, { defaults: Record<string, unknown> }>;
   /**
    * Killswitch state, flattened by the server. A boolean means the killswitch
    * is whole-killed; an object means it's not whole-killed and carries per-
@@ -135,6 +141,39 @@ interface EvalResponse {
    * sticky bucketing is on and at least one assignment was made/refreshed.
    */
   sticky?: Record<string, StickyCookieEntry>;
+}
+
+/**
+ * The result of `universe(name).assign()` — the visitor's standing in a universe.
+ * A universe is a mutual-exclusion pool, so the visitor lands in **at most one**
+ * experiment. Never throws: an un-enrolled visitor still resolves `get()` to the
+ * universe defaults (or your fallback). `assign()` auto-logs one exposure when
+ * enrolled (subject to `disableAutoExposure`).
+ */
+export interface Assignment {
+  /** The experiment the visitor landed in, or `null` when not enrolled. */
+  readonly name: string | null;
+  /** The assigned variant/group name, or `null` when not enrolled. */
+  readonly group: string | null;
+  /** True iff the visitor is enrolled in an experiment in this universe. */
+  readonly enrolled: boolean;
+  /** Read a resolved param: variant override ?? universe default ?? `fallback`. */
+  get<T = unknown>(field: string, fallback?: T): T | undefined;
+}
+
+class AssignmentImpl implements Assignment {
+  constructor(
+    readonly name: string | null,
+    readonly group: string | null,
+    private readonly params: Record<string, unknown>,
+  ) {}
+  get enrolled(): boolean {
+    return this.group !== null;
+  }
+  get<T = unknown>(field: string, fallback?: T): T | undefined {
+    const v = this.params[field];
+    return v === undefined ? fallback : (v as T);
+  }
 }
 
 /** One persisted sticky assignment: group + 8-char salt prefix (reshuffle key). */
@@ -1417,84 +1456,45 @@ export class Engine {
     }
   }
 
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    defaultParams: P,
-    decode?: (raw: unknown) => P,
-    variants?: Record<string, Partial<P>>,
-  ): ExperimentResult<P>;
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    defaultParams: P,
-    opts: GetExperimentOptions<P>,
-  ): ExperimentResult<P>;
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    defaultParams: P,
-    decodeOrOpts?: ((raw: unknown) => P) | GetExperimentOptions<P>,
-    variantsArg?: Record<string, Partial<P>>,
-  ): ExperimentResult<P> {
-    // Discriminate the positional (decode, variants) form from the options form.
-    const opts: GetExperimentOptions<P> =
-      typeof decodeOrOpts === "function"
-        ? { decode: decodeOrOpts, variants: variantsArg }
-        : (decodeOrOpts ?? {});
-    const { decode, variants } = opts;
-
-    this.telemetry.emit("experiment", name);
-    const notIn: ExperimentResult<P> = {
-      inExperiment: false,
-      group: "control",
-      params: defaultParams,
-    };
-
-    // Programmatic override wins over URL overrides + the eval result, and
-    // skips exposure logging (it's an explicit in-code decision, not a real
-    // enrolment). Caller `variants` still merge on top of defaults.
-    const pov = this.experimentOverrides.get(name);
-    if (pov) {
-      const variantParams = variants?.[pov.group];
-      const params = { ...defaultParams, ...pov.params, ...(variantParams ?? {}) };
-      return { inExperiment: true, group: pov.group, params };
-    }
-
-    // URL-forced variant short-circuits the server response so the demo
-    // works synchronously before identify() resolves. Caller can supply a
-    // `variants` map to merge variant-specific params on top of defaults.
-    const ov = readExpOverride(name);
-    if (ov !== null) {
-      const variantParams = variants?.[ov];
-      const params = variantParams ? { ...defaultParams, ...variantParams } : defaultParams;
-      return { inExperiment: true, group: ov, params };
-    }
-
-    const entry = this.evalResult?.experiments[name];
-    if (!entry || !entry.inExperiment) return notIn;
-    // Auto-log exposure (deduped within session) unless suppressed. Per-call
-    // `logExposure` wins; otherwise the client-level `disableAutoExposure`
-    // setting decides. The dedup set makes auto + manual never double-count.
-    const shouldLog = opts.logExposure ?? !this.disableAutoExposure;
-    if (shouldLog) this.buffer.pushExposure(name, entry.group, this.userId, this.anonId);
-    if (!decode) return { inExperiment: true, group: entry.group, params: entry.params as P };
-    try {
-      return { inExperiment: true, group: entry.group, params: decode(entry.params) };
-    } catch (err) {
-      logger.warn(`[shipeasy] getExperiment('${name}') decode failed:`, String(err));
-      return notIn;
-    }
+  /**
+   * Assign the visitor within a universe: `universe("checkout").assign()`. A
+   * universe is a mutual-exclusion pool, so the visitor lands in ≤1 experiment;
+   * the returned {@link Assignment} exposes `.group` / `.get(field, fallback)`
+   * and auto-logs one exposure when enrolled (unless `disableAutoExposure` or
+   * `assign({ logExposure: false })`). An un-enrolled visitor still resolves
+   * `get()` to the universe defaults. This is the sole experiment read path —
+   * there is no `getExperiment` (ask a universe, not an experiment).
+   */
+  universe(name: string): { assign(opts?: { logExposure?: boolean }): Assignment } {
+    return { assign: (opts) => this.assignUniverse(name, opts) };
   }
 
-  /**
-   * Manually log an exposure for an enrolled experiment (Statsig's
-   * `manuallyLogExposure`). Reads the cached eval result; if the visitor is in
-   * the experiment, pushes the session-deduped exposure. Pair this with the
-   * render of the treatment when reading with `{ logExposure: false }` (or
-   * `disableAutoExposure: true`). No-op if the visitor isn't enrolled.
-   */
-  logExposure(name: string): void {
-    const entry = this.evalResult?.experiments[name];
-    if (!entry || !entry.inExperiment) return;
-    this.buffer.pushExposure(name, entry.group, this.userId, this.anonId);
+  private assignUniverse(name: string, opts?: { logExposure?: boolean }): Assignment {
+    this.telemetry.emit("experiment", name);
+    const defaults = this.evalResult?.universes?.[name]?.defaults ?? {};
+
+    // Programmatic override wins: an override on any experiment mapped to this
+    // universe forces its variant (no exposure — an explicit in-code decision).
+    for (const [expName, pov] of this.experimentOverrides) {
+      if (this.evalResult?.experiments[expName]?.universe !== name) continue;
+      return new AssignmentImpl(expName, pov.group, { ...defaults, ...pov.params });
+    }
+    // URL-forced variant (?se_exp_<name>=variant) — keyed by experiment name.
+    for (const [expName, entry] of Object.entries(this.evalResult?.experiments ?? {})) {
+      if (entry.universe !== name) continue;
+      const ov = readExpOverride(expName);
+      if (ov !== null) return new AssignmentImpl(expName, ov, { ...defaults, ...entry.params });
+    }
+
+    // Real enrolment: the ≤1 experiment in this universe the visitor is in.
+    for (const [expName, entry] of Object.entries(this.evalResult?.experiments ?? {})) {
+      if (entry.universe !== name || !entry.inExperiment) continue;
+      const shouldLog = opts?.logExposure ?? !this.disableAutoExposure;
+      if (shouldLog) this.buffer.pushExposure(expName, entry.group, this.userId, this.anonId);
+      // Params are already merged (universe defaults ⊕ variant) by the edge.
+      return new AssignmentImpl(expName, entry.group, entry.params);
+    }
+    return new AssignmentImpl(null, null, defaults);
   }
 
   /**
@@ -1521,9 +1521,11 @@ export class Engine {
     if (typeof window === "undefined") return null;
     const bridge: ShipeasySdkBridge = {
       getFlag: (n) => this.getFlag(n),
+      // Devtools reads assignments by experiment name straight off the eval
+      // result (the public read path is universe-first; this is display-only).
       getExperiment: (n) => {
-        const r = this.getExperiment(n, {});
-        return { inExperiment: r.inExperiment, group: r.group };
+        const entry = this.evalResult?.experiments[n];
+        return { inExperiment: entry?.inExperiment ?? false, group: entry?.group ?? "control" };
       },
       getConfig: (n) => this.getConfig(n),
     };
@@ -2123,28 +2125,21 @@ export const flags = {
     }
     });
   },
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    defaultParams: P,
-    decodeOrOpts?: ((raw: unknown) => P) | GetExperimentOptions<P>,
-    variants?: Record<string, Partial<P>>,
-  ): ExperimentResult<P> {
-    const fallback: ExperimentResult<P> = {
-      inExperiment: false,
-      group: "control",
-      params: defaultParams,
+  /**
+   * Assign the visitor within a universe: `flags.universe("checkout").assign()`.
+   * A universe is a mutual-exclusion pool, so the visitor lands in ≤1 experiment;
+   * the returned {@link Assignment} exposes `.group` / `.get(field, fallback)`
+   * and auto-logs one exposure when enrolled. Before configure() (or on error)
+   * returns a safe not-enrolled handle. Replaces the removed `getExperiment` —
+   * read experiments by universe, never by name.
+   */
+  universe(name: string): { assign(opts?: { logExposure?: boolean }): Assignment } {
+    return {
+      assign: (opts): Assignment =>
+        safeRun<Assignment>("flags.universe.assign", new AssignmentImpl(null, null, {}), () =>
+          _client ? _client.universe(name).assign(opts) : new AssignmentImpl(null, null, {}),
+        ),
     };
-    return safeRun("flags.getExperiment", fallback, () => {
-      if (!_client) return fallback;
-      return typeof decodeOrOpts === "function"
-        ? _client.getExperiment(name, defaultParams, decodeOrOpts, variants)
-        : _client.getExperiment(name, defaultParams, decodeOrOpts ?? {});
-    });
-  },
-  /** Manually log an exposure for an enrolled experiment. See
-   *  {@link Engine.logExposure}. No-op before configure(). */
-  logExposure(name: string): void {
-    safeRun("flags.logExposure", undefined, () => _client?.logExposure(name));
   },
   track(eventName: string, props?: Record<string, unknown>): void {
     safeRun("flags.track", undefined, () => _client?.track(eventName, props));
@@ -2340,15 +2335,19 @@ export class Client<U = unknown> {
     );
   }
 
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    defaultParams: P,
-    decode?: (raw: unknown) => P,
-  ): ExperimentResult<P> {
-    const notIn: ExperimentResult<P> = { inExperiment: false, group: "control", params: defaultParams };
-    return safeRun("Client.getExperiment", notIn, () =>
-      this.engine.getExperiment(name, defaultParams, decode),
-    );
+  /**
+   * Assign the visitor within a universe: `client.universe("checkout").assign()`.
+   * A universe is a mutual-exclusion pool, so the visitor lands in ≤1 experiment;
+   * returns an {@link Assignment} (`.group` / `.get(field, fallback)`) and
+   * auto-logs one exposure when enrolled. Replaces the removed `getExperiment`.
+   */
+  universe(name: string): { assign(opts?: { logExposure?: boolean }): Assignment } {
+    return {
+      assign: (opts): Assignment =>
+        safeRun<Assignment>("Client.universe.assign", new AssignmentImpl(null, null, {}), () =>
+          this.engine.universe(name).assign(opts),
+        ),
+    };
   }
 
   /** Read a killswitch (not user-bound; mirrors {@link Engine.getKillswitch}). */
@@ -2364,16 +2363,6 @@ export class Client<U = unknown> {
    */
   track(eventName: string, props?: Record<string, unknown>): void {
     safeRun("Client.track", undefined, () => this.engine.track(eventName, props));
-  }
-
-  /**
-   * Log an exposure for `name` at the treatment's render for the bound user.
-   * Delegates to {@link Engine.logExposure} (no-op when the visitor isn't
-   * enrolled). Pair with `getExperiment(name, …, { logExposure: false })` /
-   * `disableAutoExposure` to log exposure exactly when you render.
-   */
-  logExposure(name: string): void {
-    safeRun("Client.logExposure", undefined, () => this.engine.logExposure(name));
   }
 }
 

@@ -50,7 +50,7 @@ The browser is single-user: `new Client(user)` runs the transform and
 ## Fail-safe reads & the `logLevel` option
 
 Every **runtime** method the SDK exposes — `getFlag`, `getFlagDetail`,
-`getConfig`, `getExperiment`, `getKillswitch`, `track`, `logExposure`, and
+`getConfig`, `universe(name).assign()`, `getKillswitch`, `track`, and
 `see()` — is guaranteed to **never throw** into your code. If anything goes wrong
 internally (a bad `decode` callback, a malformed value, an unexpected state) the
 call fails silently: it returns the documented safe default (`false` /

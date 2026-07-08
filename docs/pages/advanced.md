@@ -3,26 +3,28 @@
 LaunchDarkly / Statsig parity features. All are set as options on `configure()`
 (or on `shipeasy()` for SSR), or read through the bound `Client`.
 
-## Manual exposure
+## Exposure control
 
-By default reading an experiment fires one exposure beacon. To control exactly
-when the exposure is logged (e.g. only when the treatment actually renders), read
-without auto-exposure and call `logExposure(name)` on the bound `Client`:
+By default `universe(name).assign()` fires one (deduped) exposure beacon when the
+unit is enrolled. In the **browser** you can suppress that beacon so the exposure
+only counts when the treatment actually renders — read without auto-exposure, then
+re-`assign()` (with logging on) at render:
 
 ```ts
-const flags = new Client(req.user); // construct once per callsite
+const flags = new Client(visitor); // construct once per callsite
 
-// Read the params, then…
-const { params } = flags.getExperiment("hero_cta", { primary_label: "Sign up" });
+// Read the params WITHOUT logging an exposure:
+const cta = flags.universe("hero_cta").assign({ logExposure: false });
+render(cta.get("primary_label", "Sign up"));
 
-// …log the exposure at the moment you actually render the treatment:
-flags.logExposure("hero_cta");
+// …at the moment you actually render the treatment, log the exposure:
+flags.universe("hero_cta").assign(); // auto-logs (deduped per session)
 ```
 
-On the server `logExposure(name)` re-evaluates enrolment for the bound user and
-emits the exposure (no-op when the user isn't enrolled). In the browser, set
-`autoExposure: false` on `configure()` to make manual exposure the default for
-every read.
+To make suppression the default for **every** browser read, set
+`disableAutoExposure: true` on `configure()` and pass `assign({ logExposure: true })`
+at the callsites where you do want the exposure. On the server, `assign()` always
+auto-logs a single deduped exposure (there is no read-without-exposure form).
 
 ## Private attributes
 

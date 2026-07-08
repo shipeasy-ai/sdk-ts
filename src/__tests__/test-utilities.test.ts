@@ -47,26 +47,55 @@ describe("Engine.forTesting() — server", () => {
     ).toBe(42);
   });
 
-  it("overrideExperiment returns { inExperiment: true, group, params }", () => {
+  // An experiment override refines an experiment that lives in a universe; it
+  // doesn't invent one in an empty universe. Seed a real experiment in universe
+  // `cta` so the override is reachable via universe().assign().
+  function seedCtaBlob(client: Engine): void {
+    (client as unknown as { flagsBlob: unknown }).flagsBlob = {
+      version: "t",
+      plan: "free",
+      gates: {},
+      configs: {},
+      killswitches: {},
+    };
+    (client as unknown as { expsBlob: unknown }).expsBlob = {
+      version: "t",
+      universes: { cta: { holdout_range: null } },
+      experiments: {
+        hero_cta: {
+          universe: "cta",
+          allocationPct: 10000,
+          salt: "s",
+          status: "running",
+          groups: [{ name: "control", weight: 10000, params: { label: "Sign up" } }],
+        },
+      },
+    };
+  }
+
+  it("overrideExperiment surfaces through universe().assign() as { enrolled, group, params }", () => {
     vi.stubGlobal("fetch", failingFetch);
     const client = Engine.forTesting();
+    seedCtaBlob(client);
     client.overrideExperiment("hero_cta", "treatment", { label: "Buy now" });
-    const res = client.getExperiment("hero_cta", { user_id: "u1" }, { label: "Sign up" });
-    expect(res.inExperiment).toBe(true);
+    const res = client.universe("cta").assign({ user_id: "u1" });
+    expect(res.enrolled).toBe(true);
     expect(res.group).toBe("treatment");
-    expect(res.params).toEqual({ label: "Buy now" });
+    expect(res.get("label")).toBe("Buy now");
   });
 
   it("clearOverrides resets every entity back to default", () => {
     vi.stubGlobal("fetch", failingFetch);
     const client = Engine.forTesting();
+    seedCtaBlob(client);
     client.overrideFlag("g", true);
     client.overrideConfig("c", 1);
-    client.overrideExperiment("e", "treatment", { x: 1 });
+    client.overrideExperiment("hero_cta", "treatment", { label: "x" });
     client.clearOverrides();
     expect(client.getFlag("g", { user_id: "u1" })).toBe(false);
     expect(client.getConfig("c")).toBeUndefined();
-    expect(client.getExperiment("e", { user_id: "u1" }, { x: 0 }).inExperiment).toBe(false);
+    // Override gone → the real (seeded) assignment is control, not treatment.
+    expect(client.universe("cta").assign({ user_id: "u1" }).group).toBe("control");
   });
 
   it("track() is a no-op in test mode (no network, no throw)", () => {
@@ -110,26 +139,42 @@ describe("BrowserEngine.forTesting() — browser", () => {
     ).toBe(7);
   });
 
-  it("overrideExperiment returns { inExperiment: true, group, params }", () => {
+  // Seed an eval result so the experiment lives in universe `cta` — the override
+  // refines it; it doesn't invent an experiment in an empty universe.
+  function seedCta(client: BrowserEngine): void {
+    client.initFromBootstrap({
+      flags: {},
+      configs: {},
+      experiments: {
+        hero_cta: { inExperiment: true, group: "control", params: { label: "Sign up" }, universe: "cta" },
+      },
+      universes: { cta: { defaults: { label: "Sign up" } } },
+    });
+  }
+
+  it("overrideExperiment surfaces through universe().assign() as { enrolled, group, params }", () => {
     vi.stubGlobal("fetch", failingFetch);
     const client = BrowserEngine.forTesting();
+    seedCta(client);
     client.overrideExperiment("hero_cta", "treatment", { label: "Buy now" });
-    const res = client.getExperiment("hero_cta", { label: "Sign up" });
-    expect(res.inExperiment).toBe(true);
+    const res = client.universe("cta").assign();
+    expect(res.enrolled).toBe(true);
     expect(res.group).toBe("treatment");
-    expect(res.params).toEqual({ label: "Buy now" });
+    expect(res.get("label")).toBe("Buy now");
   });
 
   it("clearOverrides resets every entity back to default", () => {
     vi.stubGlobal("fetch", failingFetch);
     const client = BrowserEngine.forTesting();
+    seedCta(client);
     client.overrideFlag("g", true);
     client.overrideConfig("c", 1);
-    client.overrideExperiment("e", "treatment", { x: 1 });
+    client.overrideExperiment("hero_cta", "treatment", { label: "x" });
     client.clearOverrides();
     expect(client.getFlag("g")).toBe(false);
     expect(client.getConfig("c")).toBeUndefined();
-    expect(client.getExperiment("e", { x: 0 }).inExperiment).toBe(false);
+    // Override gone → the real (seeded) assignment is control, not treatment.
+    expect(client.universe("cta").assign().group).toBe("control");
   });
 
   it("track() is a no-op in test mode (no network, no throw)", () => {

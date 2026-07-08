@@ -43,16 +43,17 @@ describe("runtime methods never throw", () => {
     expect(warn.mock.calls.flat().join(" ")).toContain("decode failed");
   });
 
-  it("getExperiment with a throwing decode returns notIn and does not throw", () => {
-    configureForTesting({ experiments: { price_test: ["treatment", { price: 9 }] } });
+  it("universe().assign() on an unknown universe returns a safe not-enrolled handle, never throws", () => {
+    configureForTesting({});
     const c = new Client({ user_id: "u_1" });
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    let r: { inExperiment: boolean; group: string } | undefined;
+    let r: ReturnType<ReturnType<Client["universe"]>["assign"]> | undefined;
     expect(() => {
-      r = c.getExperiment("price_test", { price: 0 }, boom as never);
+      r = c.universe("missing_universe").assign();
     }).not.toThrow();
-    expect(r?.inExperiment).toBe(false);
-    expect(r?.group).toBe("control");
+    expect(r?.enrolled).toBe(false);
+    expect(r?.group).toBeNull();
+    expect(r?.get("price", 0)).toBe(0);
   });
 
   it("the flags facade swallows a throwing decode too", () => {

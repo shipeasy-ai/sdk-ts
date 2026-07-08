@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Manual / suppressible exposure logging (doc 20 §3). Browser getExperiment
+// Auto / suppressible exposure logging (doc 20 §3). The browser `assign()`
 // auto-logs a deduped exposure unless suppressed per-call (`{ logExposure:false }`)
-// or per-client (`disableAutoExposure: true`); `logExposure(name)` fires it on
-// demand. We capture exposure events out of the /collect fetches.
+// or per-client (`disableAutoExposure: true`). Exposure is fired by the read
+// path itself — there is no manual `logExposure`. We capture exposure events out
+// of the /collect fetches.
 
 interface ExposureEv {
   type: string;
@@ -28,14 +29,15 @@ function mockEvalFetch(captured: ExposureEv[]) {
         flags: {},
         configs: {},
         experiments: {
-          exp: { inExperiment: true, group: "test", params: { color: "blue" } },
+          exp: { inExperiment: true, group: "test", params: { color: "blue" }, universe: "u" },
         },
+        universes: { u: { defaults: { color: "red" } } },
       }),
     } as Response);
   });
 }
 
-describe("manual / suppressible exposure — browser", () => {
+describe("auto / suppressible exposure — browser", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", {
       getItem: vi.fn().mockReturnValue(null),
@@ -55,57 +57,45 @@ describe("manual / suppressible exposure — browser", () => {
     vi.restoreAllMocks();
   });
 
-  it("auto-logs exactly one exposure by default", async () => {
+  it("assign() auto-logs exactly one exposure by default", async () => {
     vi.resetModules();
     const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
     const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
-    client.getExperiment("exp", { color: "gray" });
+    client.universe("u").assign();
     await client.flush();
     expect(captured.filter((e) => e.experiment === "exp")).toHaveLength(1);
     expect(captured[0].group).toBe("test");
   });
 
-  it("logExposure:false suppresses the exposure", async () => {
+  it("repeated assign() never double-counts (session dedup)", async () => {
     vi.resetModules();
     const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
     const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
-    const r = client.getExperiment("exp", { color: "gray" }, { logExposure: false });
-    expect(r.inExperiment).toBe(true);
-    expect(r.params).toEqual({ color: "blue" });
+    client.universe("u").assign();
+    client.universe("u").assign();
+    client.universe("u").assign();
+    await client.flush();
+    expect(captured).toHaveLength(1);
+  });
+
+  it("logExposure:false suppresses the exposure but still resolves params", async () => {
+    vi.resetModules();
+    const { Engine: BrowserEngine } = await import("../client/index");
+    const captured: ExposureEv[] = [];
+    vi.stubGlobal("fetch", mockEvalFetch(captured));
+    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
+    await client.identify({ user_id: "u1" });
+    const a = client.universe("u").assign({ logExposure: false });
+    expect(a.enrolled).toBe(true);
+    expect(a.get("color")).toBe("blue");
     await client.flush();
     expect(captured).toHaveLength(0);
-  });
-
-  it("manual logExposure emits exactly once after a suppressed read", async () => {
-    vi.resetModules();
-    const { Engine: BrowserEngine } = await import("../client/index");
-    const captured: ExposureEv[] = [];
-    vi.stubGlobal("fetch", mockEvalFetch(captured));
-    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
-    await client.identify({ user_id: "u1" });
-    client.getExperiment("exp", { color: "gray" }, { logExposure: false });
-    client.logExposure("exp");
-    await client.flush();
-    expect(captured).toHaveLength(1);
-  });
-
-  it("auto + manual never double-count (session dedup)", async () => {
-    vi.resetModules();
-    const { Engine: BrowserEngine } = await import("../client/index");
-    const captured: ExposureEv[] = [];
-    vi.stubGlobal("fetch", mockEvalFetch(captured));
-    const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
-    await client.identify({ user_id: "u1" });
-    client.getExperiment("exp", { color: "gray" }); // auto
-    client.logExposure("exp"); // manual — deduped
-    await client.flush();
-    expect(captured).toHaveLength(1);
   });
 
   it("disableAutoExposure flips the default; per-call logExposure:true re-enables", async () => {
@@ -119,30 +109,32 @@ describe("manual / suppressible exposure — browser", () => {
       disableAutoExposure: true,
     });
     await client.identify({ user_id: "u1" });
-    client.getExperiment("exp", { color: "gray" }); // suppressed by client default
+    client.universe("u").assign(); // suppressed by client default
     await client.flush();
     expect(captured).toHaveLength(0);
 
-    client.getExperiment("exp", { color: "gray" }, { logExposure: true }); // forced on
+    client.universe("u").assign({ logExposure: true }); // forced on
     await client.flush();
     expect(captured).toHaveLength(1);
   });
 
-  it("logExposure is a no-op when the visitor isn't enrolled", async () => {
+  it("assign() logs nothing when the visitor isn't enrolled", async () => {
     vi.resetModules();
     const { Engine: BrowserEngine } = await import("../client/index");
     const captured: ExposureEv[] = [];
     vi.stubGlobal("fetch", mockEvalFetch(captured));
     const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
-    client.logExposure("not_enrolled");
+    const a = client.universe("no_such_universe").assign();
+    expect(a.enrolled).toBe(false);
+    expect(a.group).toBeNull();
     await client.flush();
     expect(captured).toHaveLength(0);
   });
 });
 
-describe("server logExposure", () => {
-  it("emits an exposure for an enrolled user, no-op otherwise", async () => {
+describe("server assign() auto-exposure", () => {
+  it("emits an exposure for an enrolled user, deduped, no-op when not enrolled", async () => {
     vi.resetModules();
     const { Engine } = await import("../server/index");
     const collectBodies: string[] = [];
@@ -153,7 +145,7 @@ describe("server logExposure", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     // A snapshot with one fully-allocated running experiment, single group.
-    const client = Engine.fromSnapshot({
+    const snapshot = {
       flags: { version: "t", plan: "free", gates: {}, configs: {}, killswitches: {} },
       experiments: {
         version: "t",
@@ -163,24 +155,22 @@ describe("server logExposure", () => {
             universe: "u",
             allocationPct: 10000,
             salt: "s",
-            status: "running",
+            status: "running" as const,
             groups: [{ name: "test", weight: 10000, params: { color: "blue" } }],
           },
         },
       },
-    } as never);
-    // fromSnapshot is testMode → logExposure no-ops; rebuild as a live client
-    // with the same blob so the /collect POST actually fires.
+    };
+    // A live (non-testMode) engine seeded with the snapshot blobs so the
+    // /collect POST from auto-exposure actually fires.
     const live = new Engine({ apiKey: "k", baseUrl: "http://x", disableTelemetry: true });
-    (live as unknown as { flagsBlob: unknown }).flagsBlob = (
-      client as unknown as { flagsBlob: unknown }
-    ).flagsBlob;
-    (live as unknown as { expsBlob: unknown }).expsBlob = (
-      client as unknown as { expsBlob: unknown }
-    ).expsBlob;
+    (live as unknown as { flagsBlob: unknown }).flagsBlob = snapshot.flags;
+    (live as unknown as { expsBlob: unknown }).expsBlob = snapshot.experiments;
     (live as unknown as { initialized: boolean }).initialized = true;
 
-    live.logExposure("user_abc", "exp");
+    const a = live.universe("u").assign({ user_id: "user_abc" });
+    expect(a.enrolled).toBe(true);
+    expect(a.group).toBe("test");
     expect(collectBodies).toHaveLength(1);
     const parsed = JSON.parse(collectBodies[0]) as {
       events: { type: string; experiment: string; group: string; user_id?: string }[];
@@ -192,7 +182,12 @@ describe("server logExposure", () => {
       user_id: "user_abc",
     });
 
-    live.logExposure("user_abc", "missing_experiment");
+    // Repeat assign for the same (user, exp, group) is deduped per process.
+    live.universe("u").assign({ user_id: "user_abc" });
     expect(collectBodies).toHaveLength(1); // no new POST
+
+    // A not-enrolled read (unknown universe) never posts.
+    live.universe("missing_universe").assign({ user_id: "user_abc" });
+    expect(collectBodies).toHaveLength(1);
   });
 });

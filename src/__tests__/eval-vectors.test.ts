@@ -153,20 +153,23 @@ describe("eval-parity golden vectors — experiment evaluation", () => {
         { universes, experiments: { exp: v.experiment } },
       );
 
-      // defaultParams sentinel so we can confirm it's returned only when NOT in.
-      const SENTINEL = { __se_default: true };
-      const result = client.getExperiment("exp", v.user, SENTINEL);
+      // Read the universe (mutual-exclusion pool) the experiment lives in.
+      const result = client.universe(v.experiment.universe).assign(v.user);
 
-      expect(result.inExperiment).toBe(v.result.inExperiment);
+      expect(result.enrolled).toBe(v.result.inExperiment);
       if (v.result.inExperiment) {
         // Assigned: group must match the canonical group exactly.
         expect(result.group).toBe(v.result.group);
-        // And the returned params are the assigned group's params, not the default.
+        // And every resolved param matches the assigned group's params.
         const assigned = v.experiment.groups.find((gr) => gr.name === v.result.group);
-        expect(result.params).toEqual(assigned?.params);
+        for (const [k, val] of Object.entries(assigned?.params ?? {})) {
+          expect(result.get(k)).toEqual(val);
+        }
       } else {
-        // Not assigned: the SDK returns the caller's default params untouched.
-        expect(result.params).toEqual(SENTINEL);
+        // Not enrolled: group is null and a param read falls back to the caller's
+        // sentinel (no universe param_schema in these vectors).
+        expect(result.group).toBeNull();
+        expect(result.get("__any_field", "__se_default")).toBe("__se_default");
       }
     });
   }

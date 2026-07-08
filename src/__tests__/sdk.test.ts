@@ -111,8 +111,8 @@ describe("murmur3 hash vectors — known values from 04-evaluation.md", () => {
       { gates: {} },
       { universes: { default: { holdout_range: null } }, experiments: { exp_001: exp } },
     );
-    const result = client.getExperiment("exp_001", { user_id: "user_abc" }, { v: "default" });
-    expect(result.inExperiment).toBe(true);
+    const result = client.universe("default").assign({ user_id: "user_abc" });
+    expect(result.enrolled).toBe(true);
   });
 
   it("experiment allocation boundary: allocationPct=2887 excludes user_abc", () => {
@@ -130,9 +130,10 @@ describe("murmur3 hash vectors — known values from 04-evaluation.md", () => {
       { gates: {} },
       { universes: { default: { holdout_range: null } }, experiments: { exp_001: exp } },
     );
-    const result = client.getExperiment("exp_001", { user_id: "user_abc" }, { v: "default" });
-    expect(result.inExperiment).toBe(false);
-    expect(result.params).toEqual({ v: "default" });
+    const result = client.universe("default").assign({ user_id: "user_abc" });
+    expect(result.enrolled).toBe(false);
+    expect(result.group).toBeNull();
+    expect(result.get("v", "default")).toBe("default");
   });
 });
 
@@ -202,7 +203,7 @@ describe("getConfig", () => {
   });
 });
 
-describe("getExperiment", () => {
+describe("universe assign", () => {
   const baseExp = {
     universe: "default",
     allocationPct: 10000,
@@ -214,37 +215,36 @@ describe("getExperiment", () => {
     status: "running" as const,
   };
 
-  it("returns notIn defaults when blobs not loaded", () => {
+  it("returns not-enrolled defaults when blobs not loaded", () => {
     const client = new Engine({ apiKey: "k", baseUrl: "http://x" });
-    const r = client.getExperiment("exp", { user_id: "u1" }, { color: "default" });
-    expect(r.inExperiment).toBe(false);
-    expect(r.params.color).toBe("default");
+    const r = client.universe("default").assign({ user_id: "u1" });
+    expect(r.enrolled).toBe(false);
+    expect(r.get("color", "default")).toBe("default");
   });
 
-  it("returns notIn for draft experiment", () => {
+  it("returns not-enrolled for draft experiment", () => {
     const exp = { ...baseExp, status: "draft" as const };
     const client = makeClient(
       { gates: {} },
       { universes: { default: { holdout_range: null } }, experiments: { exp: exp } },
     );
-    const r = client.getExperiment("exp", { user_id: "u1" }, { color: "default" });
-    expect(r.inExperiment).toBe(false);
+    const r = client.universe("default").assign({ user_id: "u1" });
+    expect(r.enrolled).toBe(false);
   });
 
-  it("targeting gate miss → not in experiment", () => {
+  it("targeting gate miss → not enrolled", () => {
     const gate = { rules: [], rolloutPct: 0, salt: "sg", enabled: 1 as const }; // rollout=0 → always false
     const exp = { ...baseExp, targetingGate: "beta" };
     const client = makeClient(
       { gates: { beta: gate } },
       { universes: { default: { holdout_range: null } }, experiments: { exp } },
     );
-    const r = client.getExperiment("exp", { user_id: "u1" }, { color: "default" });
-    expect(r.inExperiment).toBe(false);
+    const r = client.universe("default").assign({ user_id: "u1" });
+    expect(r.enrolled).toBe(false);
   });
 
   it("holdout excludes user in holdout range", () => {
-    // murmur3("default:u1") % 10000 — compute and set holdout range to include it
-    // Instead: use rolloutPct=10000 + holdout_range=[0,9999] to exclude all users
+    // rolloutPct=10000 + holdout_range=[0,9999] excludes all users.
     const exp = { ...baseExp, universe: "holdout_u" };
     const client = makeClient(
       { gates: {} },
@@ -253,23 +253,9 @@ describe("getExperiment", () => {
         experiments: { exp },
       },
     );
-    const r = client.getExperiment("exp", { user_id: "u1" }, { color: "default" });
-    expect(r.inExperiment).toBe(false);
-  });
-
-  it("decode failure returns notIn with warning", () => {
-    const exp = { ...baseExp };
-    const client = makeClient(
-      { gates: {} },
-      { universes: { default: { holdout_range: null } }, experiments: { exp } },
-    );
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const r = client.getExperiment("exp", { user_id: "u1" }, { color: "default" }, () => {
-      throw new Error("bad decode");
-    });
-    expect(r.inExperiment).toBe(false);
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
+    const r = client.universe("holdout_u").assign({ user_id: "u1" });
+    expect(r.enrolled).toBe(false);
+    expect(r.group).toBeNull();
   });
 });
 
@@ -412,17 +398,17 @@ describe("BrowserEngine", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("getExperiment returns notIn before identify", async () => {
+  it("universe assign returns not-enrolled before identify", async () => {
     vi.resetModules();
     const { Engine: BrowserEngine } = await import("../client/index");
     vi.stubGlobal("setInterval", () => 1);
     const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
-    const r = client.getExperiment("exp", { color: "gray" });
-    expect(r.inExperiment).toBe(false);
-    expect(r.params).toEqual({ color: "gray" });
+    const r = client.universe("btns").assign();
+    expect(r.enrolled).toBe(false);
+    expect(r.get("color", "gray")).toBe("gray");
   });
 
-  it("getExperiment returns params after identify and logs exposure", async () => {
+  it("universe assign returns params after identify and logs exposure", async () => {
     vi.resetModules();
     const { Engine: BrowserEngine } = await import("../client/index");
     const mockFetch = vi.fn().mockResolvedValue({
@@ -431,17 +417,20 @@ describe("BrowserEngine", () => {
       json: async () => ({
         flags: {},
         configs: {},
-        experiments: { btn_exp: { inExperiment: true, group: "test", params: { color: "blue" } } },
+        experiments: {
+          btn_exp: { inExperiment: true, group: "test", params: { color: "blue" }, universe: "btns" },
+        },
+        universes: { btns: { defaults: { color: "gray" } } },
       }),
     });
     vi.stubGlobal("fetch", mockFetch);
     vi.stubGlobal("setInterval", () => 1);
     const client = new BrowserEngine({ sdkKey: "k", baseUrl: "http://x" });
     await client.identify({ user_id: "u1" });
-    const r = client.getExperiment("btn_exp", { color: "gray" });
-    expect(r.inExperiment).toBe(true);
+    const r = client.universe("btns").assign();
+    expect(r.enrolled).toBe(true);
     expect(r.group).toBe("test");
-    expect(r.params).toEqual({ color: "blue" });
+    expect(r.get("color")).toBe("blue");
   });
 
   it("late-arriving stale identify does not overwrite a newer result", async () => {

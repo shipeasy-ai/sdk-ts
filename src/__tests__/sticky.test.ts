@@ -37,14 +37,14 @@ describe("server sticky store", () => {
     (c as unknown as { flagsBlob: FlagsBlob }).flagsBlob = FLAGS;
     (c as unknown as { expsBlob: ExpsBlob }).expsBlob = expsBlob();
     (c as unknown as { initialized: boolean }).initialized = true;
-    const a = c.getExperiment("exp", { user_id: "u1" }, {});
-    const b = c.getExperiment("exp", { user_id: "u1" }, {});
+    const a = c.universe("u").assign({ user_id: "u1" });
+    const b = c.universe("u").assign({ user_id: "u1" });
     expect(a.group).toBe(b.group);
   });
 
   it("a weight change keeps a stickied user in their original group", () => {
     const store = createInMemoryStickyStore();
-    const first = seededClient(store).getExperiment("exp", { user_id: "u1" }, {});
+    const first = seededClient(store).universe("u").assign({ user_id: "u1" });
     const original = first.group;
 
     // Reweight so the deterministic pick would flip — the stickied user stays.
@@ -57,24 +57,24 @@ describe("server sticky store", () => {
         ],
       }),
     );
-    expect(reweighted.getExperiment("exp", { user_id: "u1" }, {}).group).toBe(original);
+    expect(reweighted.universe("u").assign({ user_id: "u1" }).group).toBe(original);
   });
 
   it("an allocation shrink keeps enrolled users in but denies new ones", () => {
     const store = createInMemoryStickyStore();
-    expect(seededClient(store).getExperiment("exp", { user_id: "u1" }, {}).inExperiment).toBe(true);
+    expect(seededClient(store).universe("u").assign({ user_id: "u1" }).enrolled).toBe(true);
 
     const shrunk = () => seededClient(store, expsBlob({ allocationPct: 0 }));
-    expect(shrunk().getExperiment("exp", { user_id: "u1" }, {}).inExperiment).toBe(true);
-    expect(shrunk().getExperiment("exp", { user_id: "u_new" }, {}).inExperiment).toBe(false);
+    expect(shrunk().universe("u").assign({ user_id: "u1" }).enrolled).toBe(true);
+    expect(shrunk().universe("u").assign({ user_id: "u_new" }).enrolled).toBe(false);
   });
 
   it("a salt change reshuffles the stored prefix", () => {
     const store = createInMemoryStickyStore();
-    seededClient(store).getExperiment("exp", { user_id: "u1" }, {});
+    seededClient(store).universe("u").assign({ user_id: "u1" });
     expect(store.get("u1")!.exp.s).toBe("salt_abc");
 
-    seededClient(store, expsBlob({ salt: "zzzz_newsalt" })).getExperiment("exp", { user_id: "u1" }, {});
+    seededClient(store, expsBlob({ salt: "zzzz_newsalt" })).universe("u").assign({ user_id: "u1" });
     expect(store.get("u1")!.exp.s).toBe("zzzz_new");
   });
 });

@@ -109,12 +109,12 @@ describe("server configure() + new Client(user)", () => {
     expect(spy).toHaveBeenCalledWith("anon-9", "signup", undefined);
   });
 
-  it("Client.logExposure forwards the bound attribute bag to Engine.logExposure", () => {
+  it("Client.universe().assign() forwards the bound attribute bag to Engine.assignUniverse", () => {
     const engine = serverConfigure({ apiKey: "k", testMode: true });
-    const spy = vi.spyOn(engine, "logExposure");
+    const spy = vi.spyOn(engine, "assignUniverse");
     const flags = new ServerClient({ user_id: "u1", plan: "pro" });
-    flags.logExposure("price_test");
-    expect(spy).toHaveBeenCalledWith({ user_id: "u1", plan: "pro" }, "price_test");
+    flags.universe("checkout").assign();
+    expect(spy).toHaveBeenCalledWith("checkout", { user_id: "u1", plan: "pro" });
   });
 });
 
@@ -192,7 +192,7 @@ describe("browser configure() + new Client(user)", () => {
     );
   });
 
-  it("Client.track / logExposure forward to the engine for the identified user", async () => {
+  it("Client.track / universe().assign() forward to the engine for the identified user", async () => {
     const sdk = await import("../client/index");
     sdk._resetShipeasyForTests();
     sdk._resetConfigureForTests();
@@ -200,7 +200,7 @@ describe("browser configure() + new Client(user)", () => {
     sdk._resetConfigureForTests();
     const engine = sdk.getShipeasyClient()!;
     const trackSpy = vi.spyOn(engine, "track");
-    const exposureSpy = vi.spyOn(engine, "logExposure");
+    const universeSpy = vi.spyOn(engine, "universe");
 
     const flags = new sdk.Client({ user_id: "u1", plan: "pro" });
     await flags.ready();
@@ -208,7 +208,9 @@ describe("browser configure() + new Client(user)", () => {
     // knows the identified visitor.
     flags.track("purchase", { value: 42 });
     expect(trackSpy).toHaveBeenCalledWith("purchase", { value: 42 });
-    flags.logExposure("price_test");
-    expect(exposureSpy).toHaveBeenCalledWith("price_test");
+    // universe().assign() delegates to Engine.universe(name).assign(opts).
+    const a = flags.universe("checkout").assign();
+    expect(universeSpy).toHaveBeenCalledWith("checkout");
+    expect(a.enrolled).toBe(false); // test-mode engine has no eval result
   });
 });

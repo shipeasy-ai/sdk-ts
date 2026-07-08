@@ -1,8 +1,10 @@
-# A/B experiments (`getExperiment` + `track`)
+# A/B experiments (`universe().assign()` + `track`)
 
-`getExperiment` enrolls a user into an experiment and returns the assigned
-group plus its parameters. You read parameters from the result and record a
-conversion with `track`.
+Experiments are read by **universe**. A universe is a mutual-exclusion pool: a
+unit lands in **at most one** experiment in it. `assign()` picks that experiment
+(if any), returns the assigned group plus its resolved parameters, and auto-logs
+a single exposure. You read parameters with `assign(...).get(field, fallback)`
+and record a conversion with `track`.
 
 ## Read an experiment
 
@@ -10,50 +12,51 @@ conversion with `track`.
 import { configure, Client } from "@shipeasy/sdk/server"; // or /client
 
 configure({ apiKey: process.env.SHIPEASY_SERVER_KEY! });
-const flags = new Client(req.user);
+const flags = new Client(req.user); // construct once per user (cheap)
 
-const { inExperiment, group, params } = flags.getExperiment("hero_cta", {
-  primary_label: "Sign up", // default params (the control / not-enrolled value)
-});
+// Ask the UNIVERSE, not the experiment: the unit lands in ≤1 experiment in it.
+const cta = flags.universe("hero_cta").assign();
 
-render(params.primary_label);
+// Read a param: variant override ?? universe default ?? your fallback.
+render(cta.get("primary_label", "Sign up"));
 ```
 
-## `ExperimentResult`
+On the **server** the user is bound at construction, so `assign()` takes no
+argument. In the **browser** the identified visitor is global, so `assign()` also
+takes no user (optionally `assign({ logExposure: false })`).
+
+## `Assignment`
 
 ```ts
-interface ExperimentResult<P> {
-  inExperiment: boolean;             // false if not enrolled (targeting/holdout/allocation)
-  group: string;                     // "control" | "treatment" | … (your variation key)
-  params: P;                         // the variation's params, or your defaults
+interface Assignment {
+  name: string | null;   // the experiment the unit landed in, or null when not enrolled
+  group: string | null;  // the assigned variant, or null when not enrolled
+  enrolled: boolean;     // === (group !== null)
+  get<T>(field: string, fallback?: T): T | undefined; // variant ?? universe default ?? fallback
 }
 ```
 
-When the user isn't enrolled, `inExperiment` is `false`, `group` is `"control"`,
-and `params` is exactly the `defaultParams` you passed — so reading
-`params.<key>` is always safe.
-
-### Decoding params
-
-Pass an optional `decode` to validate/shape the params:
+When the unit isn't enrolled (targeting/holdout/allocation), `enrolled` is
+`false`, `group` and `name` are `null`, and `get(field, fallback)` returns the
+universe default if there is one, else your `fallback` — so reading a param is
+always safe.
 
 ```ts
-const { params } = flags.getExperiment(
-  "hero_cta",
-  { primary_label: "Sign up" },
-  (raw) => HeroSchema.parse(raw),
-);
+const cta = flags.universe("hero_cta").assign();
+if (cta.enrolled) {
+  // cta.group is the variant, e.g. "treatment"
+}
+const label = cta.get("primary_label", "Sign up"); // never throws
 ```
 
 ## Track conversions
 
 Record the success event so the analysis pipeline can compute lift. Conversion
-events are attributed to the enrolled user. You already have a `Client` from
-`getExperiment` — call `track` on the **same handle**, so an experiment is
-end-to-end Client-only:
+events are attributed to the bound user. You already have a `Client` — call
+`track` on the **same handle**, so an experiment is end-to-end Client-only:
 
 ```ts
-// Same bound Client you read the experiment with — no user arg.
+// Same bound Client you assigned with — no user arg.
 // Server: derives the unit from the bound attributes (user_id, else anonymous_id).
 // Browser: attributes the active (identified) user.
 flags.track("{{SUCCESS_EVENT}}", { value: order.total });
@@ -61,22 +64,6 @@ flags.track("{{SUCCESS_EVENT}}", { value: order.total });
 
 `Client.track(event, props?)` takes the same shape on both entrypoints; the
 unit is always inferred from the user you bound the `Client` to.
-
-## Manual exposure on the bound `Client`
-
-When you read with auto-exposure disabled, log the exposure at the treatment's
-render with `logExposure` on the same handle:
-
-```ts
-const { params } = flags.getExperiment("hero_cta", { primary_label: "Sign up" });
-// …at the moment you actually render the treatment:
-flags.logExposure("hero_cta");
-```
-
-On the server `logExposure(name)` re-evaluates enrolment for the bound
-attributes and emits the exposure; in the browser it forwards for the identified
-visitor (no-op when the user isn't enrolled). See
-[Advanced → manual exposure](./advanced.md) for the read-side flag.
 
 ## Iterating over many users
 
@@ -87,13 +74,14 @@ the configuration built once at startup; it opens no connection):
 ```ts
 for (const user of users) {
   const flags = new Client(user); // construct once per user (cheap)
-  const { group } = flags.getExperiment("hero_cta", { primary_label: "Sign up" });
-  flags.track("{{SUCCESS_EVENT}}", { group });
+  const cta = flags.universe("hero_cta").assign();
+  flags.track("{{SUCCESS_EVENT}}", { group: cta.group });
 }
 ```
 
 ## Exposure logging
 
-By default reading an experiment logs an exposure. To control exactly when the
-exposure fires (e.g. log on render of the treatment, not on read), see
-[Advanced → manual exposure](./advanced.md).
+By default `assign()` auto-logs a single (deduped) exposure when the unit is
+enrolled. To control exactly when the exposure fires — e.g. suppress it on read
+and log it on render of the treatment — see
+[Advanced → exposure control](./advanced.md).

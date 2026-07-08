@@ -106,6 +106,10 @@ export interface ExperimentResult<P> {
   inExperiment: boolean;
   group: string;
   params: P;
+  /** The universe this experiment belongs to. Carried in the SSR bootstrap +
+   *  `/sdk/evaluate` so the client can resolve `universe(name).assign()` by
+   *  finding the enrolled experiment in a universe. */
+  universe?: string;
 }
 
 /**
@@ -165,18 +169,60 @@ interface ExperimentGroup {
 interface Experiment {
   universe: string;
   targetingGate?: string | null;
+  /**
+   * Per-experiment holdout flag (a `type='holdout'` gate). When set and the flag
+   * passes for a unit, that unit is *held out* of THIS experiment — never
+   * assigned, sees the universe defaults. Checked after the universe holdout,
+   * before allocation. Mirrors @shipeasy/core §B3.
+   */
+  holdoutGate?: string | null;
   allocationPct: number;
+  /**
+   * Contiguous half-open slice `[poolOffsetBp, poolOffsetBp + poolSizeBp)` of the
+   * *universe* hash space this experiment claims. Used only when `hashVersion >= 2`
+   * (pooled assignment / real mutual exclusion, §B4): the unit's universe segment
+   * must fall in this range to be in the experiment. Null ⇒ fall back to the
+   * legacy independent-salt `allocationPct` gate.
+   */
+  poolOffsetBp?: number | null;
+  poolSizeBp?: number | null;
+  /**
+   * A tail of the group split kept empty (basis points) so a new variant can be
+   * appended into it while running without reshuffling enrolled units. Group
+   * weights sum to `10000 − reservedHeadroomBp`; a unit hashing into the reserved
+   * tail is treated as not-assigned (sees universe defaults). §B5.
+   */
+  reservedHeadroomBp?: number | null;
   salt: string;
   groups: ExperimentGroup[];
   status: "draft" | "running" | "stopped" | "archived";
+  /** Bucketing scheme version. `>= 2` unlocks pooled (mutually-exclusive) assignment. */
+  hashVersion?: number;
   /** Attribute to bucket on (e.g. company_id); defaults to user_id/anonymous_id. */
   bucketBy?: string | null;
 }
+
+/** One param the universe owns: a name, a type, and the default a variant
+ *  inherits when it doesn't override the value (§A/§B2). */
+export interface UniverseParam {
+  name: string;
+  type: "bool" | "int" | "number" | "string";
+  default: unknown;
+}
+export type UniverseParamSchema = UniverseParam[];
 
 /** One persisted sticky assignment: group + 8-char salt prefix (reshuffle key). */
 export interface StickyEntry {
   g: string;
   s: string;
+}
+
+/** Per-experiment sticky seam bound to one (unit, experiment): `get` reads the
+ *  stored entry, `set` persists a freshly-assigned one. Built over a
+ *  {@link StickyBucketStore} by the assignment path. */
+interface StickyContext {
+  get(): StickyEntry | undefined;
+  set(entry: StickyEntry): void;
 }
 
 /**
@@ -208,6 +254,13 @@ export function createInMemoryStickyStore(
 
 interface Universe {
   holdout_range: [number, number] | null;
+  /**
+   * The universe's config schema — the single source of truth for param names,
+   * types, and defaults (§A). The `assign()` merge layers these defaults *under*
+   * an assigned variant's overrides so an unset param still returns the universe
+   * default. Null/absent ⇒ no defaults (legacy: variant params returned verbatim).
+   */
+  param_schema?: UniverseParamSchema | null;
 }
 
 interface Killswitch {
@@ -236,6 +289,11 @@ export interface BootstrapPayload {
   configs: Record<string, unknown>;
   experiments: Record<string, ExperimentResult<Record<string, unknown>>>;
   killswitches: Record<string, boolean | Record<string, boolean>>;
+  /** Per-universe param defaults (name → default map) so the client can resolve
+   *  `universe(name).get(field)` to the universe default even when the unit is
+   *  not enrolled in any experiment there. Only universes with running
+   *  experiments are included. */
+  universes?: Record<string, { defaults: Record<string, unknown> }>;
 }
 
 // ---- Evaluation helpers ----
@@ -337,6 +395,157 @@ function evalGateInternal(gate: Gate, user: User): boolean {
   // deny rather than guess. See experiment-platform/18-identity-bucketing.md.
   if (!uid) return gate.rolloutPct >= 10000;
   return murmur3(`${gate.salt}:${uid}`) % 10000 < gate.rolloutPct;
+}
+
+// ---- Universe assignment (mutual-exclusion pool eval) ----
+
+/** Flatten a universe param schema to a plain `name → default` map — the
+ *  defaults `assign()` layers under a variant's override map (§B2). Returns null
+ *  for a null/empty schema so the merge short-circuits. Mirrors @shipeasy/core. */
+function paramDefaultsFromSchema(
+  schema: UniverseParamSchema | null | undefined,
+): Record<string, unknown> | null {
+  if (!schema || schema.length === 0) return null;
+  const out: Record<string, unknown> = {};
+  for (const p of schema) out[p.name] = p.default;
+  return out;
+}
+
+/** `universeDefaults ⊕ variantOverride` — a variant inherits every universe
+ *  default it doesn't explicitly override (§B2). */
+function mergeParams(
+  paramDefaults: Record<string, unknown> | null,
+  groupParams: Record<string, unknown>,
+): Record<string, unknown> {
+  return paramDefaults ? { ...paramDefaults, ...groupParams } : { ...groupParams };
+}
+
+/** A unit's standing in one experiment: an assigned `group` (with merged params),
+ *  `holdout` (universe carve-out or holdout gate — never assigned), or `out`. */
+interface ExpStanding {
+  state: "group" | "holdout" | "out";
+  group?: string;
+  params?: Record<string, unknown>;
+}
+
+/**
+ * Targeting → universe holdout → holdout gate → sticky → allocation (pooled or
+ * legacy) → weighted group split. The single local mirror of @shipeasy/core's
+ * `classifyExperiment` — keep the two in sync (see experiment-platform/04). The
+ * caller supplies `evalGate` (a gate-name → boolean lookup over the flags blob)
+ * so the two gate checks reuse the SDK's real gate evaluation.
+ */
+function classifyExperimentLocal(
+  exp: Experiment,
+  user: User,
+  holdoutRange: [number, number] | null,
+  paramDefaults: Record<string, unknown> | null,
+  evalGate: (name: string) => boolean,
+  sticky?: StickyContext,
+): ExpStanding {
+  const asGroup = (g: ExperimentGroup): ExpStanding => ({
+    state: "group",
+    group: g.name,
+    params: mergeParams(paramDefaults, g.params),
+  });
+
+  if (exp.targetingGate && !evalGate(exp.targetingGate)) return { state: "out" };
+
+  const uid = pickIdentifier(user, exp.bucketBy);
+  if (!uid) return { state: "out" };
+
+  // One segment in the universe's shared `[0, 10000)` hash space. The holdout
+  // carve-out AND every experiment's pool slice are disjoint ranges of THIS
+  // segment — that's what makes "held out / taken / free" a real partition.
+  const universeSeg = murmur3(`${exp.universe}:${uid}`) % 10000;
+
+  if (holdoutRange) {
+    const [lo, hi] = holdoutRange;
+    if (universeSeg >= lo && universeSeg <= hi) return { state: "holdout" };
+  }
+
+  if (exp.holdoutGate && evalGate(exp.holdoutGate)) return { state: "holdout" };
+
+  const salt8 = exp.salt.slice(0, 8);
+  if (sticky) {
+    const entry = sticky.get();
+    if (entry && entry.s === salt8) {
+      const g = exp.groups.find((x) => x.name === entry.g);
+      if (g) return asGroup(g);
+    }
+  }
+
+  // Allocation. Pooled (hashVersion ≥ 2 with a slice) gives real mutual
+  // exclusion: the unit's universe segment must fall in the claimed range. Legacy
+  // falls back to an independent per-experiment salt so siblings overlap freely.
+  const pooled =
+    (exp.hashVersion ?? 1) >= 2 &&
+    exp.poolOffsetBp != null &&
+    exp.poolSizeBp != null &&
+    exp.poolSizeBp > 0;
+  if (pooled) {
+    const lo = exp.poolOffsetBp as number;
+    const hi = lo + (exp.poolSizeBp as number);
+    if (universeSeg < lo || universeSeg >= hi) return { state: "out" };
+  } else {
+    if (murmur3(`${exp.salt}:alloc:${uid}`) % 10000 >= exp.allocationPct) return { state: "out" };
+  }
+
+  // Group split over `[0, usable)` where `usable = 10000 − reserved`; a unit in
+  // the reserved tail is left unassigned so an appended variant can absorb it (§B5).
+  const reserved = Math.max(0, Math.min(10000, exp.reservedHeadroomBp ?? 0));
+  const usable = 10000 - reserved;
+  const groupHash = murmur3(`${exp.salt}:group:${uid}`) % 10000;
+  if (groupHash >= usable) return { state: "out" };
+  let cumulative = 0;
+  for (let i = 0; i < exp.groups.length; i++) {
+    const g = exp.groups[i];
+    cumulative += g.weight;
+    if (groupHash < cumulative || i === exp.groups.length - 1) {
+      sticky?.set({ g: g.name, s: salt8 });
+      return asGroup(g);
+    }
+  }
+  return { state: "out" };
+}
+
+/**
+ * The result of `universe(name).assign(user)` — a user's standing in a universe.
+ * A universe is a mutual-exclusion pool, so a unit lands in **at most one**
+ * experiment. Never throws: an un-enrolled unit still resolves `get()` to the
+ * universe defaults (or your fallback). Reading is side-effect free — the single
+ * exposure is logged once by `assign()` when the unit is enrolled.
+ */
+export interface Assignment {
+  /** The experiment the unit landed in, or `null` when not enrolled. */
+  readonly name: string | null;
+  /** The assigned variant/group name, or `null` when not enrolled. */
+  readonly group: string | null;
+  /** True iff the unit is enrolled in an experiment in this universe. */
+  readonly enrolled: boolean;
+  /**
+   * Read a resolved param: the assigned variant's override, else the universe
+   * default, else `fallback`. Works even when not enrolled (variant layer is
+   * absent, so you get `universeDefault ?? fallback`).
+   */
+  get<T = unknown>(field: string, fallback?: T): T | undefined;
+}
+
+class AssignmentImpl implements Assignment {
+  constructor(
+    readonly name: string | null,
+    readonly group: string | null,
+    // Already merged (universeDefaults ⊕ variantOverride) when enrolled;
+    // defaults-only (or {}) when not.
+    private readonly params: Record<string, unknown>,
+  ) {}
+  get enrolled(): boolean {
+    return this.group !== null;
+  }
+  get<T = unknown>(field: string, fallback?: T): T | undefined {
+    const v = this.params[field];
+    return v === undefined ? fallback : (v as T);
+  }
 }
 
 // ---- URL override helpers (for evaluate()) ----
@@ -488,6 +697,9 @@ export class Engine {
     string,
     { group: string; params: Record<string, unknown> }
   >();
+  // Bounded per-process exposure dedup (`uid:exp:group`) so auto-exposure from
+  // repeated assign() calls doesn't spam /collect. Cleared past a soft cap.
+  private readonly exposureSeen = new Set<string>();
   // Change listeners fired after a background poll returns NEW data (200, not
   // 304). Never fired in testMode/offline (no polling happens there).
   private readonly changeListeners = new Set<() => void>();
@@ -765,90 +977,91 @@ export class Engine {
     }
   }
 
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    user: User,
-    defaultParams: P,
-    decode?: (raw: unknown) => P,
-  ): ExperimentResult<P> {
-    this.telemetry.emit("experiment", name);
-    const notIn: ExperimentResult<P> = {
-      inExperiment: false,
-      group: "control",
-      params: defaultParams,
+  /**
+   * Bind the per-experiment sticky seam over the configured {@link StickyBucketStore}
+   * for one (unit, experiment). Absent store ⇒ deterministic (no sticky).
+   */
+  private bindSticky(name: string, uid: string): StickyContext | undefined {
+    const store = this.stickyStore;
+    if (!store) return undefined;
+    return {
+      get: () => store.get(uid)?.[name],
+      set: (entry) => store.set(uid, name, entry),
     };
+  }
+
+  /**
+   * Evaluate one experiment by name for `user` — override → full classify
+   * pipeline (targeting → universe holdout → holdout gate → sticky → allocation
+   * → group), merging the universe defaults under the assigned variant (§B2).
+   * Internal: the public surface is `universe(name).assign(user)`. Reused by the
+   * SSR `evaluate()` bootstrap (keyed by experiment name) and by `assignUniverse`.
+   */
+  private evalExperiment(name: string, exp: Experiment, user: User): ExpStanding {
+    const paramDefaults = paramDefaultsFromSchema(
+      this.expsBlob?.universes[exp.universe]?.param_schema,
+    );
     const ov = this.experimentOverrides.get(name);
-    if (ov) {
-      if (!decode) return { inExperiment: true, group: ov.group, params: ov.params as P };
-      try {
-        return { inExperiment: true, group: ov.group, params: decode(ov.params) };
-      } catch (err) {
-        logger.warn(`[shipeasy] getExperiment('${name}') override decode failed:`, String(err));
-        return notIn;
-      }
-    }
-    if (!this.flagsBlob || !this.expsBlob) return notIn;
+    if (ov) return { state: "group", group: ov.group, params: mergeParams(paramDefaults, ov.params) };
+    if (!this.flagsBlob || !this.expsBlob) return { state: "out" };
+    if (exp.status !== "running") return { state: "out" };
 
-    const exp = this.expsBlob.experiments[name];
-    if (!exp || exp.status !== "running") return notIn;
-
-    if (exp.targetingGate) {
-      const gate = this.flagsBlob.gates[exp.targetingGate];
-      if (!gate || !evalGateInternal(gate, user)) return notIn;
-    }
-
-    // Bucket on exp.bucketBy (e.g. company_id) when set, else user_id/anon —
-    // holdout, allocation, and group all hash on the same unit (doc 20 §4).
-    const uid = pickIdentifier(user, exp.bucketBy);
-    if (!uid) return notIn;
-
-    const universe = this.expsBlob.universes[exp.universe];
-    const holdoutRange = universe?.holdout_range ?? null;
-
-    if (holdoutRange) {
-      const seg = murmur3(`${exp.universe}:${uid}`) % 10000;
-      const [lo, hi] = holdoutRange;
-      if (seg >= lo && seg <= hi) return notIn;
-    }
-
-    // Project a chosen group's params (with optional decode) into the result.
-    const asResult = (g: ExperimentGroup): ExperimentResult<P> => {
-      if (!decode) return { inExperiment: true, group: g.name, params: g.params as P };
-      try {
-        return { inExperiment: true, group: g.name, params: decode(g.params) };
-      } catch (err) {
-        logger.warn(`[shipeasy] getExperiment('${name}') decode failed:`, String(err));
-        return notIn;
-      }
+    const holdoutRange = this.expsBlob.universes[exp.universe]?.holdout_range ?? null;
+    const evalGate = (gname: string): boolean => {
+      const gate = this.flagsBlob?.gates[gname];
+      return gate ? evalGateInternal(gate, user) : false;
     };
+    const uid = pickIdentifier(user, exp.bucketBy);
+    const sticky = uid ? this.bindSticky(name, uid) : undefined;
+    return classifyExperimentLocal(exp, user, holdoutRange, paramDefaults, evalGate, sticky);
+  }
 
-    // Sticky short-circuit (doc 20 §2): an enrolled unit whose stored salt
-    // prefix still matches skips the allocation gate (so a shrinking allocation
-    // keeps it in) and returns the stored group without re-running the pick.
-    const salt8 = exp.salt.slice(0, 8);
-    if (this.stickyStore) {
-      const entry = this.stickyStore.get(uid)?.[name];
-      if (entry && entry.s === salt8) {
-        const g = exp.groups.find((x) => x.name === entry.g);
-        if (g) return asResult(g);
-        // Stored group gone — fall through to re-bucket + overwrite.
+  /**
+   * Assign `user` within `universeName`. A universe is a mutual-exclusion pool,
+   * so a unit lands in **at most one** experiment; the returned {@link Assignment}
+   * exposes the variant + resolved params and auto-logs a single exposure when
+   * enrolled. An un-enrolled unit still resolves `get()` to the universe defaults.
+   * Never throws. This is the sole experiment read path (there is no
+   * `getExperiment` — a caller asks a universe, not an experiment).
+   */
+  assignUniverse(universeName: string, user: User): Assignment {
+    this.telemetry.emit("experiment", universeName);
+    const paramDefaults = paramDefaultsFromSchema(
+      this.expsBlob?.universes[universeName]?.param_schema,
+    );
+    const notEnrolled = (): Assignment => new AssignmentImpl(null, null, paramDefaults ?? {});
+    if (!this.expsBlob) return notEnrolled();
+
+    // Candidate running experiments in this universe. Deterministic order:
+    // pool-slice offset asc (slices are disjoint so ≤1 matches under pooling),
+    // then name. A universe-held-out or unallocated unit falls through to the
+    // defaults-only handle.
+    const candidates = Object.entries(this.expsBlob.experiments)
+      .filter(([, e]) => e.universe === universeName && e.status === "running")
+      .sort(
+        (a, b) => (a[1].poolOffsetBp ?? 0) - (b[1].poolOffsetBp ?? 0) || a[0].localeCompare(b[0]),
+      );
+
+    for (const [name, exp] of candidates) {
+      const c = this.evalExperiment(name, exp, user);
+      if (c.state === "group") {
+        this.postExposure(user, name, c.group as string);
+        return new AssignmentImpl(name, c.group as string, c.params ?? {});
       }
+      // "holdout"/"out": try the next candidate — under pooling only one slice
+      // can match, so the loop naturally lands on the winner (or falls through).
     }
+    return notEnrolled();
+  }
 
-    if (murmur3(`${exp.salt}:alloc:${uid}`) % 10000 >= exp.allocationPct) return notIn;
-
-    const groupHash = murmur3(`${exp.salt}:group:${uid}`) % 10000;
-    let cumulative = 0;
-    for (let i = 0; i < exp.groups.length; i++) {
-      const g = exp.groups[i];
-      cumulative += g.weight;
-      if (groupHash < cumulative || i === exp.groups.length - 1) {
-        this.stickyStore?.set(uid, name, { g: g.name, s: salt8 });
-        return asResult(g);
-      }
-    }
-
-    return notIn;
+  /**
+   * The universe-first experiment read entry point:
+   * `engine.universe("checkout").assign(user)`. Returns a reusable handle bound
+   * to one universe; `assign(user)` picks the ≤1 experiment the unit is pooled
+   * into and auto-logs a single exposure. See {@link assignUniverse}.
+   */
+  universe(name: string): { assign(user: User): Assignment } {
+    return { assign: (user: User) => this.assignUniverse(name, user) };
   }
 
   /** Drop caller-marked private attributes from an outbound props bag. */
@@ -887,26 +1100,26 @@ export class Engine {
   }
 
   /**
-   * Emit an exposure event for an experiment at the server-side decision point
-   * (parity with the browser's auto-exposure). The server is stateless and
-   * never auto-logs, so call this when you actually present the treatment.
-   * Re-evaluates the experiment for `user` (a bare `user_id` string is wrapped
-   * as `{ user_id }`); if the user is enrolled, POSTs a single exposure to
-   * `/collect`. No-op in test mode or when the user isn't enrolled.
+   * POST a single exposure for an enrolled `(user, experiment, group)`. Deduped
+   * per process (bounded set) so repeated `assign()` calls in one server don't
+   * spam `/collect`. Fire-and-forget; no-op in test mode. This is how
+   * `assignUniverse` auto-logs — the browser's auto-exposure parity for SSR.
    */
-  logExposure(user: string | User, name: string): void {
+  private postExposure(user: User, experiment: string, group: string): void {
     if (this.testMode) return;
-    const u: User = typeof user === "string" ? { user_id: user } : user;
-    const result = this.getExperiment(name, u, {} as Record<string, unknown>);
-    if (!result.inExperiment) return;
+    const uid = user.user_id ?? user.anonymous_id;
+    const dedupKey = `${uid ?? ""}:${experiment}:${group}`;
+    if (this.exposureSeen.has(dedupKey)) return;
+    if (this.exposureSeen.size > 5000) this.exposureSeen.clear();
+    this.exposureSeen.add(dedupKey);
     const body = JSON.stringify({
       events: [
         {
           type: "exposure",
-          experiment: name,
-          group: result.group,
-          ...(u.user_id !== undefined ? { user_id: u.user_id } : {}),
-          ...(u.anonymous_id !== undefined ? { anonymous_id: u.anonymous_id } : {}),
+          experiment,
+          group,
+          ...(user.user_id !== undefined ? { user_id: user.user_id } : {}),
+          ...(user.anonymous_id !== undefined ? { anonymous_id: user.anonymous_id } : {}),
           ts: Date.now(),
         },
       ],
@@ -917,7 +1130,7 @@ export class Engine {
         headers: { "X-SDK-Key": this.apiKey, "Content-Type": "text/plain" },
         body,
       })
-      .catch((err) => logger.warn("[shipeasy] logExposure failed:", String(err)));
+      .catch((err) => logger.warn("[shipeasy] exposure send failed:", String(err)));
   }
 
   /**
@@ -978,8 +1191,22 @@ export class Engine {
       configs[name] = entry.value;
     }
 
-    for (const [name] of Object.entries(this.expsBlob?.experiments ?? {})) {
-      experiments[name] = this.getExperiment(name, user, {});
+    // Per-universe param defaults so the client can resolve `universe(name).get()`
+    // to a default even when the unit is not enrolled anywhere in the universe.
+    const universes: Record<string, { defaults: Record<string, unknown> }> = {};
+    for (const [name, exp] of Object.entries(this.expsBlob?.experiments ?? {})) {
+      this.telemetry.emit("experiment", exp.universe);
+      const uniName = exp.universe;
+      if (!(uniName in universes)) {
+        universes[uniName] = {
+          defaults: paramDefaultsFromSchema(this.expsBlob?.universes[uniName]?.param_schema) ?? {},
+        };
+      }
+      const c = this.evalExperiment(name, exp, user);
+      experiments[name] =
+        c.state === "group"
+          ? { inExperiment: true, group: c.group as string, params: c.params ?? {}, universe: uniName }
+          : { inExperiment: false, group: "control", params: {}, universe: uniName };
     }
 
     for (const [name, ks] of Object.entries(this.flagsBlob?.killswitches ?? {})) {
@@ -998,11 +1225,12 @@ export class Engine {
       Object.assign(flags, ov.gates);
       Object.assign(configs, ov.configs);
       for (const [name, group] of Object.entries(ov.experiments)) {
-        experiments[name] = { inExperiment: true, group, params: {} };
+        const uni = this.expsBlob?.experiments[name]?.universe;
+        experiments[name] = { inExperiment: true, group, params: {}, ...(uni ? { universe: uni } : {}) };
       }
     }
 
-    return { flags, configs, experiments, killswitches };
+    return { flags, configs, experiments, killswitches, universes };
   }
 
   getKillswitch(name: string, switchKey?: string): boolean {
@@ -1679,16 +1907,21 @@ export const flags = {
       _server?.getConfig(name, decodeOrOpts as GetConfigOptions<T>),
     );
   },
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    user: User,
-    defaultParams: P,
-    decode?: (raw: unknown) => P,
-  ): ExperimentResult<P> {
-    const notIn: ExperimentResult<P> = { inExperiment: false, group: "control", params: defaultParams };
-    return safeRun("flags.getExperiment", notIn, () =>
-      _server?.getExperiment(name, user, defaultParams, decode) ?? notIn,
-    );
+  /**
+   * Assign `user` within a universe: `flags.universe("checkout").assign(user)`.
+   * A universe is a mutual-exclusion pool, so the unit lands in ≤1 experiment;
+   * the returned {@link Assignment} exposes `.group` / `.get(field, fallback)`
+   * and auto-logs one exposure when enrolled. Before configure() (or on any
+   * error) it returns a safe not-enrolled handle. This replaces the removed
+   * `getExperiment` — read experiments by universe, never by name.
+   */
+  universe(name: string): { assign(user: User): Assignment } {
+    return {
+      assign: (user: User): Assignment =>
+        safeRun<Assignment>("flags.universe.assign", new AssignmentImpl(null, null, {}), () =>
+          _server?.assignUniverse(name, user) ?? new AssignmentImpl(null, null, {}),
+        ),
+    };
   },
   /**
    * Read a killswitch. Without `switchKey`, returns true when the whole
@@ -1700,11 +1933,6 @@ export const flags = {
   },
   track(userId: string, eventName: string, props?: Record<string, unknown>): void {
     safeRun("flags.track", undefined, () => _server?.track(userId, eventName, props));
-  },
-  /** Emit an exposure for an enrolled experiment at the decision point. See
-   *  {@link Engine.logExposure}. No-op before configure(). */
-  logExposure(user: string | User, name: string): void {
-    safeRun("flags.logExposure", undefined, () => _server?.logExposure(user, name));
   },
   /**
    * Evaluate all flags / configs / experiments for a user against the locally
@@ -1989,15 +2217,19 @@ export class Client<U = unknown> {
     );
   }
 
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    defaultParams: P,
-    decode?: (raw: unknown) => P,
-  ): ExperimentResult<P> {
-    const notIn: ExperimentResult<P> = { inExperiment: false, group: "control", params: defaultParams };
-    return safeRun("Client.getExperiment", notIn, () =>
-      this.engine.getExperiment(name, this.attributes, defaultParams, decode),
-    );
+  /**
+   * Assign the bound user within a universe: `client.universe("checkout").assign()`.
+   * The user is already bound at construction, so `assign()` takes no arg. Returns
+   * an {@link Assignment} (`.group` / `.get(field, fallback)`) and auto-logs one
+   * exposure when enrolled. Replaces the removed `getExperiment`.
+   */
+  universe(name: string): { assign(): Assignment } {
+    return {
+      assign: (): Assignment =>
+        safeRun<Assignment>("Client.universe.assign", new AssignmentImpl(null, null, {}), () =>
+          this.engine.assignUniverse(name, this.attributes),
+        ),
+    };
   }
 
   /** Read a killswitch (not user-bound; mirrors {@link Engine.getKillswitch}). */
@@ -2018,16 +2250,6 @@ export class Client<U = unknown> {
       if (id === undefined) return;
       this.engine.track(String(id), eventName, props);
     });
-  }
-
-  /**
-   * Emit an exposure event for `name` at this server-side decision point for the
-   * bound user. Delegates to {@link Engine.logExposure} with the resolved
-   * attribute bag (re-evaluates enrolment; no-op when the user isn't enrolled or
-   * in test mode).
-   */
-  logExposure(name: string): void {
-    safeRun("Client.logExposure", undefined, () => this.engine.logExposure(this.attributes, name));
   }
 }
 

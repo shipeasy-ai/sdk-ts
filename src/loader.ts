@@ -18,7 +18,7 @@
 //
 //   window.shipeasy.getFlag("my_gate")
 //   window.shipeasy.getConfig("my_config")
-//   window.shipeasy.getExperiment("my_exp", { defaultParam: 1 })
+//   window.shipeasy.universe("checkout").assign().get("button_color")
 //   window.shipeasy.identify({ user_id: "u-1", plan: "pro" })
 //   window.shipeasy.track("checkout_started", { value: 49 })
 //
@@ -26,15 +26,15 @@
 // instead — this loader is the easy onboarding path for vanilla HTML,
 // Vue, Svelte, Rails ERB, etc.
 
-import { Engine, type ExperimentResult, type User } from "./client";
+import { Engine, type Assignment, type User } from "./client";
 
 interface ShipeasyGlobal {
   getFlag(name: string): boolean;
   getConfig<T = unknown>(name: string): T | undefined;
-  getExperiment<P extends Record<string, unknown>>(
-    name: string,
-    defaultParams: P,
-  ): ExperimentResult<P>;
+  /** Assign the identified visitor within a universe (mutual-exclusion pool);
+   *  the handle exposes `.group` / `.get(field, fallback)` and auto-logs one
+   *  exposure when enrolled. */
+  universe(name: string): { assign(opts?: { logExposure?: boolean }): Assignment };
   identify(user: User): Promise<void>;
   track(event: string, props?: Record<string, unknown>): void;
   ready: Promise<void>;
@@ -94,7 +94,7 @@ function readScriptDataset(): {
   const client = new Engine({ sdkKey, baseUrl });
 
   // Kick off the first identify immediately so flags are warm by the
-  // time customer code calls getFlag / getExperiment. The promise is
+  // time customer code calls getFlag / universe().assign(). The promise is
   // exposed as `shipeasy.ready` for callers that want to await it.
   const ready = client.identify(user).catch((err) => {
     console.warn("[shipeasy] identify failed:", String(err));
@@ -103,8 +103,7 @@ function readScriptDataset(): {
   window.shipeasy = {
     getFlag: (name) => client.getFlag(name),
     getConfig: <T = unknown>(name: string) => client.getConfig(name) as T | undefined,
-    getExperiment: <P extends Record<string, unknown>>(name: string, defaultParams: P) =>
-      client.getExperiment<P>(name, defaultParams),
+    universe: (name: string) => client.universe(name),
     identify: (next) => client.identify(next),
     track: (event, props) => client.track(event, props),
     ready,

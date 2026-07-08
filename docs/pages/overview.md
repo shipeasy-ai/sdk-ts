@@ -39,9 +39,9 @@ if (flags.getFlag("new_checkout")) { /* ship it */ }
 - **`new Client(user)`** is a cheap, user-bound handle. It opens no connection
   and runs no poller — it just binds the resolved attribute bag once at
   construction. Construct one per user / per request. It exposes `getFlag`,
-  `getFlagDetail`, `getConfig`, `getExperiment`, `getKillswitch`, plus
-  `track(event, props?)` and `logExposure(name)` — so reading an experiment
-  **and** recording its conversion/exposure are end-to-end `Client`-only.
+  `getFlagDetail`, `getConfig`, `universe(name).assign()`, `getKillswitch`, plus
+  `track(event, props?)` — so reading an experiment (which auto-logs its
+  exposure) **and** recording its conversion are end-to-end `Client`-only.
 
 That is the entire surface you wire up: configure once, then `new Client(user)`
 everywhere you evaluate.
@@ -55,7 +55,7 @@ everywhere you evaluate.
 | [Flags](./flags.md) | `getFlag`, `getFlagDetail`, defaults |
 | [Configs](./configs.md) | `getConfig` typed values + defaults |
 | [Kill switches](./killswitches.md) | `getKillswitch` semantics |
-| [Experiments](./experiments.md) | `getExperiment`, `ExperimentResult`, `track` |
+| [Experiments](./experiments.md) | `universe().assign()`, `Assignment`, `track` |
 | [i18n](./i18n.md) | loader, SSR bootstrap, `i18n.t()` |
 | [Error reporting](./error-reporting.md) | `see()` grammar |
 | [Testing](./testing.md) | `configureForTesting`/`configureForOffline`, `override*` |

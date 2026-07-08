@@ -282,7 +282,7 @@ no `configure()` call (the tag attributes ARE the configuration):
 The `@shipeasy/sdk/client` build is **React Native safe**. Metro resolves the
 package's `react-native` condition to the same client build, and the SDK detects
 the absence of a DOM at runtime, so `configure()` / `new Client(user)` /
-`getFlag` / `getConfig` / `getExperiment` / `track` / `see` all work over `fetch`
+`getFlag` / `getConfig` / `universe().assign()` / `track` / `see` all work over `fetch`
 — no polyfills, no `react-native-url-polyfill`, no `window`/`document` shims.
 
 ```tsx

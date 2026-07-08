@@ -1,5 +1,50 @@
 # Changelog
 
+## 7.0.0 (2026-07-08)
+
+### Breaking — experiments are now read by universe, not by name
+
+The whole experiment read surface is replaced. A **universe is a mutual-exclusion
+pool**: a unit is enrolled in **at most one** experiment in it, so you ask a
+universe for an assignment instead of naming an experiment. `getExperiment`,
+`logExposure`, and `Client.logExposure` are **removed** on both entrypoints.
+
+```ts
+// Before (removed):
+const exp = flags.getExperiment("checkout_color", user, { button_color: "red" });
+if (exp.inExperiment && exp.params.button_color === "green") …
+
+// After — server (@shipeasy/sdk/server):
+const exp = flags.universe("checkout").assign(user);      // or new Client(user).universe("checkout").assign()
+if (exp.get("button_color") === "green") …
+
+// After — client (@shipeasy/sdk/client):
+const exp = flags.universe("checkout").assign();          // browser identity is global
+```
+
+- **`universe(name).assign(user?)`** returns an `Assignment`:
+  - `.name` — the experiment the unit landed in, or `null` when not enrolled.
+  - `.group` — the assigned variant, or `null` when not enrolled.
+  - `.enrolled` — boolean.
+  - `.get(field, fallback?)` — resolves **variant override ?? universe default ??
+    fallback**. Works even when not enrolled (you get the universe default), because
+    the universe now owns the param schema + defaults. No more `decode`/`variants`.
+- **Auto-exposure.** `assign()` logs a single exposure when the unit is enrolled
+  (server dedups per process; browser dedups per session). The manual
+  `logExposure` primitive is gone — reading *is* the exposure. On the browser you
+  can still suppress it with `disableAutoExposure` or `assign({ logExposure: false })`.
+- **Mutual exclusion (pooled assignment), per-experiment holdout gates, reserved
+  headroom, and universe-default⊕variant param merge** are now honoured by local
+  eval, matching the edge. The SSR bootstrap + `/sdk/evaluate` responses carry a
+  `universes` defaults map and a `universe` field per experiment.
+- `window.shipeasy.getExperiment(...)` (the `<script>` loader global) →
+  `window.shipeasy.universe(name).assign().get(field)`.
+
+Migration: replace each `getExperiment("<exp>", user, defaults)` with
+`universe("<the experiment's universe>").assign(user)` and read fields via
+`.get("field", fallbackFromDefaults)`; delete `logExposure` calls (exposure is
+automatic).
+
 ## 6.5.0 (2026-07-08)
 
 ### Added

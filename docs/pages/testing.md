@@ -4,8 +4,8 @@ For unit tests, swap the live `configure()` for **`configureForTesting()`** —
 a drop-in sibling with **no network, ever** (no SDK key required). It replaces
 the active configuration with a network-free engine, seeds the values your code
 should see, and is read through the ordinary `new Client(user)`. In this mode
-the rules never fetch, `track()` / `logExposure()` are no-ops, and telemetry is
-off — your tests never touch the network.
+the rules never fetch, `track()` is a no-op, `assign()` logs no exposure, and
+telemetry is off — your tests never touch the network.
 
 ```ts
 import { configureForTesting, Client, clearOverrides } from "@shipeasy/sdk/server"; // or /client
@@ -14,16 +14,25 @@ import { configureForTesting, Client, clearOverrides } from "@shipeasy/sdk/serve
 configureForTesting({
   flags: { new_checkout: true },
   configs: { upload_limits: { max_uploads: 50 } },
-  experiments: { hero_cta: ["treatment", { primary_label: "Buy now" }] },
 });
 
 const flags = new Client({ user_id: "u_1" }); // construct once per callsite
 flags.getFlag("new_checkout");                 // true
 flags.getConfig("upload_limits");              // { max_uploads: 50 }
-flags.getExperiment("hero_cta", { primary_label: "Sign up" });
-// → { inExperiment: true, group: "treatment", params: { primary_label: "Buy now" } }
 
 clearOverrides(); // reset every seeded override back to the empty-blob default
+```
+
+To assert an **experiment** assignment, seed a real universe + experiment with
+`configureForOffline()` (below) — an experiment override refines an experiment
+that lives in a universe; it doesn't invent one in an empty universe. Read it
+with `universe(name).assign()`:
+
+```ts
+const exp = new Client({ user_id: "u_1" }).universe("hero_cta").assign();
+exp.enrolled;                 // true when the seeded experiment enrolled the unit
+exp.group;                    // the assigned variant, or null
+exp.get("primary_label", "Sign up"); // variant ?? universe default ?? fallback
 ```
 
 `configureForTesting()` / `configureForOffline()` **replace** the active
@@ -38,8 +47,15 @@ reconfigure freely between cases.
 | --- | --- | --- |
 | `flags` | `{ [name]: boolean }` | forced `getFlag` results |
 | `configs` | `{ [name]: value }` | forced `getConfig` results |
-| `experiments` | `{ [name]: [group, params] }` | forced enrolments |
+| `experiments` | `{ [name]: [group, params] }` | forced enrolment for an experiment that exists in a universe (see below) |
 | `attributes` | `(yourUser) => User` | same transform as `configure()` (default identity) |
+
+An `experiments` seed (and `overrideExperiment`) **refines** an experiment that
+already lives in a universe — it forces that experiment's variant. It does not
+invent an experiment in an empty universe, and it is read by universe, not by
+experiment name. Seed the universe + experiment via `configureForOffline()`, then
+force the variant. On an empty test-mode blob (no snapshot) `universe().assign()`
+returns not-enrolled regardless of the seed.
 
 ## Package-level overrides (on the spot)
 
@@ -82,8 +98,16 @@ configureForOffline({ path: "./snapshot.json" });
 // …or from an object you already hold (works anywhere):
 configureForOffline({ snapshot: { flags, experiments } });
 
+// …optionally force a specific variant of an experiment that exists in the
+// snapshot's universe (overrides layer on top of the real rules):
+configureForOffline({
+  snapshot: { flags, experiments },
+  experiments: { hero_cta: ["treatment", { primary_label: "Buy now" }] },
+});
+
 const flags = new Client({ user_id: "u1" }); // construct once per callsite
 flags.getFlag("new_checkout");
+flags.universe("default").assign().group; // the experiment's universe (see snapshot below)
 ```
 
 ### Snapshot file shape

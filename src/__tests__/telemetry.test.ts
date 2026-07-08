@@ -132,7 +132,7 @@ describe("Engine telemetry wiring", () => {
     const c = make();
     c.getFlag("g", { user_id: "u" });
     c.getConfig("c");
-    c.getExperiment("e", { user_id: "u" }, {});
+    c.universe("e").assign({ user_id: "u" });
     c.getKillswitch("k");
     await waitForBeacons(beacon, 4);
     const paths = beacon.mock.calls.map((c) => (c[0] as string).split("/t/")[1]);
@@ -147,7 +147,7 @@ describe("Engine telemetry wiring", () => {
     const c = make(true);
     c.getFlag("g", { user_id: "u" });
     c.getConfig("c");
-    c.getExperiment("e", { user_id: "u" }, {});
+    c.universe("e").assign({ user_id: "u" });
     c.getKillswitch("k");
     await tick();
     expect(beacon).not.toHaveBeenCalled();

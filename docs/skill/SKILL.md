@@ -1,6 +1,6 @@
 ---
 name: shipeasy-typescript
-description: Use Shipeasy (feature flags, configs, kill switches, A/B experiments, i18n) from TypeScript / JavaScript. Covers configure() + Client(user), getFlag/getConfig/getKillswitch/getExperiment, track, testing, OpenFeature, and the see() error reporter — server (@shipeasy/sdk/server) and browser (@shipeasy/sdk/client).
+description: Use Shipeasy (feature flags, configs, kill switches, A/B experiments, i18n) from TypeScript / JavaScript. Covers configure() + Client(user), getFlag/getConfig/getKillswitch/universe().assign(), track, testing, OpenFeature, and the see() error reporter — server (@shipeasy/sdk/server) and browser (@shipeasy/sdk/client).
 ---
 
 # Shipeasy TypeScript SDK
@@ -52,17 +52,21 @@ snippets <https://shipeasy-ai.github.io/sdk-ts/snippets/release/flags.md> ·
 
 ```ts
 const flags = new Client(currentUser); // construct once per callsite
-const { inExperiment, group, params } = flags.getExperiment("hero_cta", {
-  primary_label: "Sign up", // default params (control / not-enrolled)
-});
-render(params.primary_label);
 
-flags.logExposure("hero_cta");          // record the exposure where you present it
+// Read experiments by UNIVERSE (a mutual-exclusion pool — the unit lands in ≤1
+// experiment). assign() auto-logs one deduped exposure when enrolled.
+const exp = flags.universe("hero_cta").assign();
+render(exp.get("primary_label", "Sign up")); // variant ?? universe default ?? fallback
+
+if (exp.enrolled) {
+  // exp.group is the variant, exp.name is the experiment
+}
 flags.track("purchase", { value: 42 }); // record a conversion for the bound user
 ```
 
-`ExperimentResult = { inExperiment: boolean; group: string; params: P }`. Full
-reference: <https://shipeasy-ai.github.io/sdk-ts/pages/experiments.md> · track snippet
+`Assignment = { name: string | null; group: string | null; enrolled: boolean;
+get(field, fallback) }`. Full reference:
+<https://shipeasy-ai.github.io/sdk-ts/pages/experiments.md> · track snippet
 <https://shipeasy-ai.github.io/sdk-ts/snippets/metrics/track.md>
 
 ## i18n
@@ -138,8 +142,8 @@ Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/openfeature.md>
 ## Advanced
 
 `privateAttributes`, `bucketBy` (custom bucketing unit), `stickyBucketing`
-(browser: on by default, `__se_sticky` cookie), manual exposure
-(`getExperiment(..., { logExposure: false })` + `flags.logExposure(name)`),
+(browser: on by default, `__se_sticky` cookie), exposure control (browser:
+`universe(name).assign({ logExposure: false })` + `disableAutoExposure`),
 `onChange(cb)` (requires `configure({ poll: true })`) / browser `subscribe()`.
 Devtools overlay: `Shift+Alt+S` or `?se=1`. Full reference:
 <https://shipeasy-ai.github.io/sdk-ts/pages/advanced.md>

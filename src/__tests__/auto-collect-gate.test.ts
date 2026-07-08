@@ -84,8 +84,9 @@ const EVAL_WITH_EXPERIMENT = {
   flags: {},
   configs: {},
   experiments: {
-    checkout: { group: "test", params: {}, inExperiment: true },
+    checkout_exp: { group: "test", params: {}, inExperiment: true, universe: "checkout" },
   },
+  universes: { checkout: { defaults: {} } },
 };
 const EVAL_EMPTY = { flags: {}, configs: {}, experiments: {} };
 
@@ -131,9 +132,9 @@ describe("auto-metric exposure gate", () => {
 
   it("emits nav-timing vitals once the visitor is in an experiment", async () => {
     const { client, mockFetch } = await makeClient(EVAL_WITH_EXPERIMENT);
-    // getExperiment records the exposure → the gate opens.
-    const r = client.getExperiment("checkout", {});
-    expect(r.inExperiment).toBe(true);
+    // assign() records the exposure → the gate opens.
+    const r = client.universe("checkout").assign();
+    expect(r.enrolled).toBe(true);
     fireHide();
     const names = collectedMetricNames(mockFetch);
     expect(names).toContain("__auto_page_load");
@@ -156,7 +157,7 @@ describe("auto-metric exposure gate", () => {
     fireHide();
     expect(collectedMetricNames(mockFetch)).not.toContain("__auto_page_load");
     // Exposure lands, user hides again — nav timing emits now.
-    client.getExperiment("checkout", {});
+    client.universe("checkout").assign();
     fireHide();
     expect(collectedMetricNames(mockFetch)).toContain("__auto_page_load");
   });
