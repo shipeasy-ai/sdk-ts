@@ -11,6 +11,14 @@
   `track` / `see()` all work over `fetch` — no polyfills or DOM shims required.
   See the new "React Native / Expo" section on the Installation page.
 
+- **`configure({ anonymousStore })` — pluggable anonymous-id persistence.** A
+  `{ get, set, remove }` store (sync or async) that the SDK hydrates before the
+  first `/sdk/evaluate`, so the anonymous id — and thus bucketing — stays stable
+  across app launches on runtimes with no cookie / `localStorage`. Back it with
+  `@react-native-async-storage/async-storage` on React Native, or any store
+  elsewhere. On a fresh device the freshly-minted id is written back; store
+  failures are non-fatal (the in-memory id is used).
+
 ### Fixed
 
 - **Client SDK no longer crashes under React Native.** React Native defines a

@@ -777,6 +777,34 @@ function getOrCreateAnonId(): string {
 
 export type EngineEnv = "dev" | "staging" | "prod";
 
+/**
+ * A pluggable persistence backend for the anonymous id. Primarily for non-DOM
+ * runtimes (React Native / Expo) where there is no cookie or `localStorage`, so
+ * the anon id would otherwise regenerate every app launch and re-bucket the
+ * visitor. Point it at `@react-native-async-storage/async-storage` (or any
+ * store) and the SDK hydrates a stable id before the first `/sdk/evaluate`:
+ *
+ * ```ts
+ * import AsyncStorage from "@react-native-async-storage/async-storage";
+ * configure({
+ *   clientKey: "...",
+ *   anonymousStore: {
+ *     get: (k) => AsyncStorage.getItem(k),
+ *     set: (k, v) => AsyncStorage.setItem(k, v),
+ *     remove: (k) => AsyncStorage.removeItem(k),
+ *   },
+ * });
+ * ```
+ *
+ * Methods may be sync or async — the SDK awaits either. Any thrown error is
+ * swallowed (the in-memory id is used as a fallback).
+ */
+export interface AnonymousStore {
+  get(key: string): string | null | Promise<string | null>;
+  set(key: string, value: string): void | Promise<void>;
+  remove(key: string): void | Promise<void>;
+}
+
 export interface EngineOptions {
   sdkKey: string;
   baseUrl?: string;
@@ -845,6 +873,14 @@ export interface EngineOptions {
    * lever. Pass `false` to opt out (pure deterministic eval).
    */
   stickyBucketing?: boolean;
+  /**
+   * Pluggable persistence for the anonymous id (React Native / Expo, or any
+   * runtime without a cookie / `localStorage`). When set, the SDK hydrates the
+   * stored id before the first `/sdk/evaluate` so bucketing stays stable across
+   * app launches; on a fresh device it persists the freshly-minted id. See
+   * {@link AnonymousStore}.
+   */
+  anonymousStore?: AnonymousStore;
   /**
    * Test mode — no network at all. identify()/init are no-ops (never call
    * /sdk/evaluate), track() is a no-op, telemetry is forced off, and the client
@@ -1021,6 +1057,10 @@ export class Engine {
   private readonly env: EngineEnv;
   private evalResult: EvalResponse | null = null;
   private anonId: string;
+  // Resolves once a caller-supplied anonymousStore has been consulted (persisted
+  // id adopted, or the minted id written back). identify() awaits it so the
+  // stable id is settled before the first /sdk/evaluate. null when no store.
+  private anonReady: Promise<void> | null = null;
   private userId = "";
   private buffer: EventBuffer;
   private telemetry: Telemetry;
@@ -1081,6 +1121,11 @@ export class Engine {
       engagement: g.engagement ?? this.autoGuardrails,
     };
     this.anonId = getOrCreateAnonId();
+    // Optional pluggable anon-id persistence (React Native / non-DOM runtimes).
+    // Kicked off now; identify() awaits it so bucketing uses the persisted id.
+    if (opts.anonymousStore && !this.testMode) {
+      this.anonReady = this.hydrateAnonFromStore(opts.anonymousStore);
+    }
     this.buffer = new EventBuffer(`${this.baseUrl}/collect`, this.sdkKey);
     this.telemetry = new Telemetry({
       endpoint: opts.telemetryUrl ?? DEFAULT_TELEMETRY_URL,
@@ -1096,6 +1141,25 @@ export class Engine {
       this.evalResult = { flags: {}, configs: {}, experiments: {}, killswitches: {} };
     } else {
       void this.buffer.flushPendingAlias();
+    }
+  }
+
+  /**
+   * Consult the caller-supplied {@link AnonymousStore}: adopt a persisted id so
+   * the visitor buckets identically across app launches, or persist the id just
+   * minted by getOrCreateAnonId() on a fresh device. Best-effort — any store
+   * failure leaves the in-memory id in place.
+   */
+  private async hydrateAnonFromStore(store: AnonymousStore): Promise<void> {
+    try {
+      const stored = await store.get(ANON_ID_KEY);
+      if (typeof stored === "string" && stored) {
+        this.anonId = stored;
+      } else {
+        await store.set(ANON_ID_KEY, this.anonId);
+      }
+    } catch {
+      /* store failures are non-fatal — keep the in-memory id */
     }
   }
 
@@ -1128,6 +1192,12 @@ export class Engine {
       if (user.user_id !== undefined) this.userId = user.user_id;
       this.notify();
       return;
+    }
+    // Settle the persisted anon id (if an anonymousStore was supplied) before we
+    // alias/evaluate, so the first bucketing round-trip uses the stable id.
+    if (this.anonReady) {
+      await this.anonReady;
+      this.anonReady = null;
     }
     const seq = ++this.identifySeq;
     const prevUserId = this.userId;
@@ -1794,6 +1864,12 @@ export interface ShipeasyClientConfig {
    * opt out. See {@link EngineOptions.stickyBucketing}.
    */
   stickyBucketing?: boolean;
+  /**
+   * Pluggable anon-id persistence for non-DOM runtimes (React Native / Expo).
+   * Back it with AsyncStorage so the anonymous id — and thus bucketing — stays
+   * stable across app launches. See {@link AnonymousStore}.
+   */
+  anonymousStore?: AnonymousStore;
 }
 
 /**
@@ -1826,6 +1902,7 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
     disableAutoExposure: opts.disableAutoExposure,
     privateAttributes: opts.privateAttributes,
     stickyBucketing: opts.stickyBucketing,
+    anonymousStore: opts.anonymousStore,
   });
   // Inject the runtime i18n loader with the client key. The server no longer
   // does this (it doesn't hold the client key); the SSR shim in __SE_BOOTSTRAP

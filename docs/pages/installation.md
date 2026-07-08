@@ -286,13 +286,20 @@ the absence of a DOM at runtime, so `configure()` / `new Client(user)` /
 — no polyfills, no `react-native-url-polyfill`, no `window`/`document` shims.
 
 ```tsx
-import { useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { configure, Client } from "@shipeasy/sdk/client";
 
 // Once, at app startup:
 configure({
   clientKey: process.env.EXPO_PUBLIC_SHIPEASY_CLIENT_KEY!, // public CLIENT key
   attributes: (u: MyUser) => ({ user_id: u.id, plan: u.plan }),
+  // Persist the anonymous id so bucketing is stable across app launches
+  // (there is no cookie / localStorage in React Native). Optional.
+  anonymousStore: {
+    get: (k) => AsyncStorage.getItem(k),
+    set: (k, v) => AsyncStorage.setItem(k, v),
+    remove: (k) => AsyncStorage.removeItem(k),
+  },
 });
 
 // Per user:
@@ -301,14 +308,18 @@ await flags.ready();                    // optional — await first /sdk/evaluat
 if (flags.getFlag("new_checkout")) { /* … */ }
 ```
 
-What differs from a browser (all graceful — the SDK degrades, never throws):
+**`anonymousStore`** is the one piece worth wiring: its `get`/`set`/`remove`
+(sync or async — the SDK awaits either) back the anonymous id with a real store,
+so `await flags.ready()` resolves against a stable id that survives restarts. On
+a fresh install the SDK mints an id and persists it; on later launches it adopts
+the stored one. Omit it and the anon id simply regenerates per session — passing
+a stable `user_id` via `attributes` also gives you durable bucketing.
+
+What else differs from a browser (all graceful — the SDK degrades, never throws):
 
 - **No DOM lifecycle listeners.** There is no `beforeunload`/`visibilitychange`
   in React Native, so the event buffer flushes on its 5s timer and on explicit
   `track()` — not on tab-hide.
-- **No persisted `anonymous_id`.** There is no cookie or `localStorage`, so an
-  anon id is generated per app session. Pass a stable `user_id` via your
-  `attributes` transform for durable bucketing across launches.
 - **Auto web-vitals, the devtools overlay, and loader-driven i18n are skipped** —
   they are DOM-only. Flags, configs, experiments, `track()`, and `see()` error
   reporting are unaffected.
