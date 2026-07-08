@@ -1,5 +1,30 @@
 # Changelog
 
+## 6.5.0 (2026-07-08)
+
+### Added
+
+- **React Native / Expo support for `@shipeasy/sdk/client`.** The browser build is
+  now safe to run under React Native, and the package advertises a `react-native`
+  export condition (+ top-level field) so Metro resolves it to the client build.
+  `configure()` / `new Client(user)` / `getFlag` / `getConfig` / `getExperiment` /
+  `track` / `see()` all work over `fetch` — no polyfills or DOM shims required.
+  See the new "React Native / Expo" section on the Installation page.
+
+### Fixed
+
+- **Client SDK no longer crashes under React Native.** React Native defines a
+  global `window` (=== the global object) but exposes none of the DOM APIs on it,
+  so the previous `typeof window !== "undefined"` guards ran browser-only code
+  (`window.addEventListener` / `document.addEventListener`) and threw during
+  `configure()`, `subscribe()`, `attachDevtools()`, and the i18n
+  `whenReady()`/`onUpdate()` helpers. These now gate on the actual DOM capability
+  and degrade gracefully: no lifecycle listeners (the event buffer flushes on its
+  timer + explicit `track()`), no cookie/`localStorage` anon-id persistence (an
+  anon id is generated per session — pass a stable `user_id` for durable
+  bucketing), and the DOM-only extras (auto web-vitals, devtools overlay,
+  loader-driven i18n) are skipped.
+
 ## 6.4.0 (2026-07-08)
 
 ### Added

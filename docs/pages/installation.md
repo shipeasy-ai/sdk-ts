@@ -277,6 +277,44 @@ no `configure()` call (the tag attributes ARE the configuration):
 
 ---
 
+## React Native / Expo
+
+The `@shipeasy/sdk/client` build is **React Native safe**. Metro resolves the
+package's `react-native` condition to the same client build, and the SDK detects
+the absence of a DOM at runtime, so `configure()` / `new Client(user)` /
+`getFlag` / `getConfig` / `getExperiment` / `track` / `see` all work over `fetch`
+— no polyfills, no `react-native-url-polyfill`, no `window`/`document` shims.
+
+```tsx
+import { useEffect } from "react";
+import { configure, Client } from "@shipeasy/sdk/client";
+
+// Once, at app startup:
+configure({
+  clientKey: process.env.EXPO_PUBLIC_SHIPEASY_CLIENT_KEY!, // public CLIENT key
+  attributes: (u: MyUser) => ({ user_id: u.id, plan: u.plan }),
+});
+
+// Per user:
+const flags = new Client(currentUser); // construct once per visitor
+await flags.ready();                    // optional — await first /sdk/evaluate
+if (flags.getFlag("new_checkout")) { /* … */ }
+```
+
+What differs from a browser (all graceful — the SDK degrades, never throws):
+
+- **No DOM lifecycle listeners.** There is no `beforeunload`/`visibilitychange`
+  in React Native, so the event buffer flushes on its 5s timer and on explicit
+  `track()` — not on tab-hide.
+- **No persisted `anonymous_id`.** There is no cookie or `localStorage`, so an
+  anon id is generated per app session. Pass a stable `user_id` via your
+  `attributes` transform for durable bucketing across launches.
+- **Auto web-vitals, the devtools overlay, and loader-driven i18n are skipped** —
+  they are DOM-only. Flags, configs, experiments, `track()`, and `see()` error
+  reporting are unaffected.
+
+---
+
 ## Where to go next
 
 See [Configuration](./configuration.md) for the full `attributes`, identity, and

@@ -143,6 +143,47 @@ interface StickyCookieEntry {
   s: string;
 }
 
+// ---- Non-DOM runtime safety (React Native, etc.) ----
+//
+// React Native (and some server runtimes) define a global `window` that === the
+// global object but expose NO DOM APIs on it: `window.addEventListener` is
+// undefined and `document` / `localStorage` / `sessionStorage` / `document.cookie`
+// simply don't exist. Using `typeof window !== "undefined"` as a "we're in a real
+// browser" proxy therefore throws under React Native. These helpers gate on the
+// actual capability so the browser build degrades gracefully — evaluation,
+// `track()`, exposure logging and `see()` all still work over `fetch`; only the
+// DOM-only extras (lifecycle listeners, cookie/storage persistence, devtools
+// hotkey, loader-driven i18n events) are skipped when there is no DOM.
+
+/** True only in a real DOM environment with event wiring (false under React Native). */
+function hasDomEvents(): boolean {
+  return typeof window !== "undefined" && typeof window.addEventListener === "function";
+}
+
+/** `window.addEventListener`, a no-op when the runtime has no DOM (React Native). */
+function onWindow(
+  type: string,
+  handler: EventListenerOrEventListenerObject,
+  opts?: boolean | AddEventListenerOptions,
+): void {
+  try {
+    if (hasDomEvents()) window.addEventListener(type, handler, opts);
+  } catch {}
+}
+
+/** `document.addEventListener`, a no-op when there is no DOM (React Native). */
+function onDocument(
+  type: string,
+  handler: EventListenerOrEventListenerObject,
+  opts?: boolean | AddEventListenerOptions,
+): void {
+  try {
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener(type, handler, opts);
+    }
+  } catch {}
+}
+
 // ---- EventBuffer ----
 
 const FLUSH_INTERVAL_MS = 5_000;
@@ -173,12 +214,16 @@ class EventBuffer {
     private readonly sdkKey: string,
   ) {
     if (typeof window !== "undefined") {
+      // Timers exist in every runtime (browser, React Native, Node). The DOM
+      // lifecycle listeners only bind where a DOM is actually present — under
+      // React Native `window` exists but `window.addEventListener` / `document`
+      // do not, so these no-op instead of throwing.
       this.timer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
-      window.addEventListener("beforeunload", () => this.flush());
-      document.addEventListener("visibilitychange", () => {
+      onWindow("beforeunload", () => this.flush());
+      onDocument("visibilitychange", () => {
         if (document.visibilityState === "hidden") this.flush(true);
       });
-      // Reload dedup set from sessionStorage on init
+      // Reload dedup set from sessionStorage on init (absent under React Native)
       try {
         const stored = sessionStorage.getItem(SEEN_KEY);
         if (stored) this.exposureSeen = new Set(JSON.parse(stored) as string[]);
@@ -1389,7 +1434,7 @@ export class Engine {
    */
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
-    if (!this.overrideListenerInstalled && typeof window !== "undefined") {
+    if (!this.overrideListenerInstalled && hasDomEvents()) {
       this.overrideListenerInstalled = true;
       window.addEventListener("se:override:change", this.onOverrideChange);
     }
@@ -1592,7 +1637,9 @@ export function attachDevtools(
   client: Engine,
   opts: AttachDevtoolsOptions = {},
 ): () => void {
-  if (typeof window === "undefined") return () => {};
+  // Devtools overlay is inherently DOM-only (hotkey listener + bridge on window).
+  // No DOM (React Native / SSR) → nothing to attach.
+  if (!hasDomEvents()) return () => {};
 
   const hotkey = opts.hotkey ?? "Shift+Alt+S";
   const parts = hotkey.split("+");
@@ -1927,7 +1974,7 @@ const _standaloneListeners = new Set<() => void>();
 let _standaloneOverrideWired = false;
 
 function wireStandaloneOverride(): void {
-  if (_standaloneOverrideWired || typeof window === "undefined") return;
+  if (_standaloneOverrideWired || !hasDomEvents()) return;
   _standaloneOverrideWired = true;
   window.addEventListener("se:override:change", () => {
     for (const cb of _standaloneListeners) cb();
@@ -2705,6 +2752,9 @@ export const i18n: I18nFacade = {
   whenReady(): Promise<void> {
     if (typeof window === "undefined") return Promise.resolve();
     if (window.i18n?.locale) return Promise.resolve();
+    // No DOM (React Native) → the loader that installs window.i18n never runs;
+    // resolve rather than hang on a se:i18n:ready event that can't fire.
+    if (!hasDomEvents()) return Promise.resolve();
     // window.i18n not yet installed — wait for the se:i18n:ready DOM event.
     return new Promise((resolve) => {
       const handler = () => resolve();
@@ -2715,6 +2765,8 @@ export const i18n: I18nFacade = {
   onUpdate(cb: () => void): () => void {
     if (typeof window === "undefined") return () => {};
     if (window.i18n) return window.i18n.on("update", cb);
+    // No DOM (React Native) → window.i18n is never installed; nothing to subscribe to.
+    if (!hasDomEvents()) return () => {};
     // window.i18n not yet installed — subscribe once ready, then forward to on("update").
     let unsub = () => {};
     const handler = () => {
