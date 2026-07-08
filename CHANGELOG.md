@@ -1,5 +1,30 @@
 # Changelog
 
+## 7.1.0 (2026-07-08)
+
+### Environment-derived network & telemetry defaults
+
+The SDK is now **quiet by default outside production** — an app that embeds it no
+longer makes any outbound request from a local dev machine or a CI run unless it
+opts in. Two options, both on the server `configure({ apiKey })`, the browser
+`configure({ clientKey })`, and the SSR `shipeasy({ serverKey })` entry points:
+
+- **`isNetworkEnabled`** (new) — master switch for **any** outbound request:
+  flag/experiment fetches, `track()`, exposure logging, `see()` reports, usage
+  telemetry, and internal error self-monitoring. `false` ⇒ fully offline (reads
+  return code defaults / overrides).
+- **`disableTelemetry`** (default changed) — the per-evaluation usage beacon.
+
+Both **default to ON in production and OFF everywhere else**. Production is read
+from `SHIPEASY_ENV`/`NODE_ENV`, falling back to the SDK's own `env` option (which
+defaults to `"prod"`) when neither is set — so a real production deploy (including
+Cloudflare Workers, where `NODE_ENV` is absent) stays on by default.
+
+**Behaviour change:** if your app previously relied on the SDK fetching flags or
+emitting telemetry while running under `NODE_ENV=development`/`test` (or with
+`env: "dev"`), pass `isNetworkEnabled: true` (or set `NODE_ENV=production` /
+`SHIPEASY_ENV=production`) to restore it. Explicitly-passed values always win.
+
 ## 7.0.0 (2026-07-08)
 
 ### Breaking — experiments are now read by universe, not by name

@@ -1,6 +1,7 @@
 // ShipEasy browser SDK — calls /sdk/evaluate on identify(), logs exposures + events via /collect.
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
+import { isProductionEnv } from "../env";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
@@ -865,10 +866,26 @@ export interface EngineOptions {
   /** Which published env to read values from. Defaults to "prod". */
   env?: EngineEnv;
   /**
-   * Per-evaluation usage telemetry. ON by default — each getFlag/getConfig/
+   * Master network switch — when `false`, the browser SDK makes NO outbound
+   * requests at all: identify()/init never call /sdk/evaluate (getters read code
+   * defaults / overrides), track() and exposure logging are no-ops, usage
+   * telemetry is off, and SDK-internal error self-monitoring is off.
+   *
+   * DEFAULT is environment-derived (see {@link isProductionEnv}): ON in
+   * production, OFF everywhere else. In the browser there is usually no native
+   * `NODE_ENV`, so production is taken from the `env` option above (default
+   * `"prod"`) — meaning it defaults ON. Pass `false` (or set `env: "dev"`) to
+   * keep a local build quiet.
+   */
+  isNetworkEnabled?: boolean;
+  /**
+   * Per-evaluation usage telemetry ("tracking") — each getFlag/getConfig/
    * getExperiment/getKillswitch call fires one fire-and-forget sendBeacon so
-   * usage is counted by Cloudflare's native per-path analytics. Pass `true` to
-   * disable entirely.
+   * usage is counted by Cloudflare's native per-path analytics.
+   *
+   * DEFAULT is environment-derived: ON in production, OFF everywhere else (same
+   * inference as {@link isNetworkEnabled}). Pass `true` to force it off, `false`
+   * to force it on. Forced off whenever `isNetworkEnabled` is false.
    */
   disableTelemetry?: boolean;
   /** Override the telemetry beacon host. Defaults to {@link DEFAULT_TELEMETRY_URL}. */
@@ -1114,6 +1131,12 @@ export class Engine {
   // never fetches, track() is a no-op, telemetry is off, and the client is
   // already ready with an empty eval result.
   private readonly testMode: boolean;
+  // Master network gate — false ⇒ the SDK never touches the network. Defaults to
+  // environment-derived (prod-on), forced false by testMode.
+  private readonly networkEnabled: boolean;
+  // Convenience inverse of networkEnabled — the "no network at all" state every
+  // /sdk/evaluate, /collect and telemetry gate keys on. testMode implies offline.
+  private readonly offline: boolean;
   // Programmatic overrides (Statsig-style). Set on any client via
   // overrideFlag/overrideConfig/overrideExperiment; they win over BOTH the URL
   // overrides and the fetched eval result. Cleared by clearOverrides().
@@ -1136,12 +1159,18 @@ export class Engine {
     this.baseUrl = (opts.baseUrl ?? "https://api.shipeasy.ai").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
     this.testMode = opts.testMode === true;
+    // Environment-derived egress default: ON in prod, OFF elsewhere. In the
+    // browser there's usually no native NODE_ENV, so `env` (default "prod") is
+    // the signal. testMode always forces offline.
+    const prod = isProductionEnv(this.env);
+    this.networkEnabled = this.testMode ? false : (opts.isNetworkEnabled ?? prod);
+    this.offline = !this.networkEnabled;
     // Self-monitoring: SDK-internal errors caught by safeRun report to
-    // Shipeasy's own project. Off in test mode (no network) and when opted out.
+    // Shipeasy's own project. Off when the network is disabled and when opted out.
     setInternalReportContext({
       side: "client",
       sdkVersion: version,
-      enabled: !this.testMode && opts.disableInternalErrorReporting !== true,
+      enabled: this.networkEnabled && opts.disableInternalErrorReporting !== true,
     });
     // Auto web vitals + error capture defaults ON. Vitals/engagement emit
     // `__auto_*` metric events (the worker bypasses event-catalog validation
@@ -1162,7 +1191,7 @@ export class Engine {
     this.anonId = getOrCreateAnonId();
     // Optional pluggable anon-id persistence (React Native / non-DOM runtimes).
     // Kicked off now; identify() awaits it so bucketing uses the persisted id.
-    if (opts.anonymousStore && !this.testMode) {
+    if (opts.anonymousStore && !this.offline) {
       this.anonReady = this.hydrateAnonFromStore(opts.anonymousStore);
     }
     this.buffer = new EventBuffer(`${this.baseUrl}/collect`, this.sdkKey);
@@ -1171,12 +1200,13 @@ export class Engine {
       sdkKey: this.sdkKey,
       side: "client",
       env: this.env,
-      // Test mode never talks to the network — telemetry off regardless of opt.
-      disabled: this.testMode || opts.disableTelemetry,
+      // Off when the network is disabled; otherwise honour an explicit
+      // disableTelemetry, else default to prod-on (off outside production).
+      disabled: this.offline || (opts.disableTelemetry ?? !prod),
     });
-    if (this.testMode) {
-      // Start "ready" with an empty eval result so getters read from overrides
-      // without any /sdk/evaluate having happened.
+    if (this.offline) {
+      // Start "ready" with an empty eval result so getters read from overrides /
+      // code defaults without any /sdk/evaluate having happened.
       this.evalResult = { flags: {}, configs: {}, experiments: {}, killswitches: {} };
     } else {
       void this.buffer.flushPendingAlias();
@@ -1225,7 +1255,7 @@ export class Engine {
   }
 
   async identify(user: User): Promise<void> {
-    if (this.testMode) {
+    if (this.offline) {
       // No-op — capture user_id for track()/exposure attribution, but never
       // hit /sdk/evaluate. Notify so subscribers settle.
       if (user.user_id !== undefined) this.userId = user.user_id;
@@ -1321,6 +1351,7 @@ export class Engine {
     kind?: SeeKind,
     correlationId?: string,
   ): void {
+    if (this.offline) return; // no-op when the network is disabled
     try {
       // Auto-collected env (env.* keys) goes first; the developer's own
       // .extras({…}) win on any collision and take priority in the key budget.
@@ -1535,7 +1566,7 @@ export class Engine {
   }
 
   track(eventName: string, props?: Record<string, unknown>): void {
-    if (this.testMode) return; // no-op in test mode — never touch the network
+    if (this.offline) return; // no-op when the network is disabled
     this.buffer.pushMetric(eventName, this.userId, this.anonId, this.stripPrivate(props));
   }
 
@@ -1785,6 +1816,12 @@ export interface ShipeasyClientConfig {
   clientKey: string;
   /** Override the ShipEasy CDN/edge base URL. Defaults to https://cdn.shipeasy.ai. */
   baseUrl?: string;
+  /**
+   * Which published env to read values from — also the fallback signal for the
+   * environment-derived egress defaults (see {@link isNetworkEnabled}) when the
+   * browser exposes no native `NODE_ENV`. Defaults to `"prod"`.
+   */
+  env?: EngineEnv;
   /** Override the admin URL for the devtools overlay (dev use). */
   adminUrl?: string;
   /**
@@ -1835,9 +1872,18 @@ export interface ShipeasyClientConfig {
    */
   logLevel?: LogLevel;
   /**
-   * Disable per-evaluation usage telemetry. Telemetry is ON by default — every
+   * Master network switch — `false` puts the browser SDK fully offline (no
+   * /sdk/evaluate, no /collect, no telemetry, no error self-monitoring).
+   * Defaults to environment-derived: ON in production, OFF everywhere else
+   * (in the browser, "production" comes from `env`, default `"prod"`). See
+   * {@link EngineOptions.isNetworkEnabled}.
+   */
+  isNetworkEnabled?: boolean;
+  /**
+   * Disable per-evaluation usage telemetry ("tracking"). Defaults to
+   * environment-derived: ON in production, OFF everywhere else. Every
    * flag/config/experiment/killswitch read fires one fire-and-forget beacon
-   * counted by Cloudflare's native per-path analytics. Pass `true` to opt out.
+   * counted by Cloudflare's native per-path analytics. Pass `true` to force off.
    */
   disableTelemetry?: boolean;
   /**
@@ -1895,10 +1941,12 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
   const client = configureShipeasy({
     sdkKey: opts.clientKey,
     baseUrl,
+    env: opts.env,
     logLevel: opts.logLevel,
     autoGuardrails: blanket,
     autoGuardrailGroups: groups,
     autoCollectAlways: acObj?.always === true,
+    isNetworkEnabled: opts.isNetworkEnabled,
     disableTelemetry: opts.disableTelemetry,
     disableInternalErrorReporting: opts.disableInternalErrorReporting,
     disableAutoExposure: opts.disableAutoExposure,

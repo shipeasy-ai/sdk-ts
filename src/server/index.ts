@@ -3,6 +3,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
+import { isProductionEnv } from "../env";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
@@ -617,12 +618,31 @@ export interface EngineOptions {
    */
   initialBlob?: FlagsBlob;
   /**
-   * Per-evaluation usage telemetry. ON by default — each getFlag/getConfig/
-   * getExperiment/getKillswitch (and the per-key evaluate() loop) fires one
-   * fire-and-forget beacon counted by Cloudflare's native per-path analytics.
-   * Pass `true` to disable. NOTE: on Cloudflare Workers each beacon is an
-   * outbound subrequest (cap 50 free / 1000 paid per invocation), so disable
-   * this on hot request paths that evaluate many flags per request.
+   * Master network switch — when `false`, the SDK makes NO outbound requests at
+   * all: init()/initOnce() never fetch (getters read code defaults / overrides),
+   * track() and exposure logging are no-ops, usage telemetry is off, and
+   * SDK-internal error self-monitoring is off. Think of it as a production-safe
+   * offline mode.
+   *
+   * DEFAULT is environment-derived (see {@link isProductionEnv}): ON in
+   * production, OFF everywhere else — so a local/dev/CI run never phones home
+   * unless you opt in. Production is inferred from `SHIPEASY_ENV`/`NODE_ENV`, or
+   * (when neither is set, e.g. on Cloudflare Workers) from the `env` option
+   * above, which defaults to `"prod"`. Pass an explicit value to override.
+   */
+  isNetworkEnabled?: boolean;
+  /**
+   * Per-evaluation usage telemetry ("tracking"/outside logging). Each
+   * getFlag/getConfig/getExperiment/getKillswitch (and the per-key evaluate()
+   * loop) fires one fire-and-forget beacon counted by Cloudflare's native
+   * per-path analytics.
+   *
+   * DEFAULT is environment-derived: ON in production, OFF everywhere else (same
+   * inference as {@link isNetworkEnabled}). Pass `true` to force it off, `false`
+   * to force it on. NOTE: on Cloudflare Workers each beacon is an outbound
+   * subrequest (cap 50 free / 1000 paid per invocation), so disable this on hot
+   * request paths that evaluate many flags per request. Forced off whenever
+   * `isNetworkEnabled` is false.
    */
   disableTelemetry?: boolean;
   /** Override the telemetry beacon host. Defaults to {@link DEFAULT_TELEMETRY_URL}. */
@@ -675,6 +695,13 @@ export class Engine {
   private readonly env: EngineEnv;
   private readonly privateAttributes: readonly string[];
   private readonly stickyStore: StickyBucketStore | undefined;
+  // Master network gate — false ⇒ the SDK never touches the network (no fetch,
+  // no track, no telemetry, no internal error reports). Defaults to
+  // environment-derived (prod-on), forced false by testMode.
+  private readonly networkEnabled: boolean;
+  // Convenience inverse of networkEnabled — the "no network at all" state that
+  // every fetch/track/init gate keys on. `testMode` implies offline.
+  private readonly offline: boolean;
   private readonly telemetry: Telemetry;
   private readonly seeLimiter = new SeeLimiter();
   private flagsBlob: FlagsBlob | null = null;
@@ -714,24 +741,34 @@ export class Engine {
     this.privateAttributes = opts.privateAttributes ?? [];
     this.stickyStore = opts.stickyStore;
     this.testMode = opts.testMode === true;
+    // Environment-derived egress default: ON in prod, OFF elsewhere. `env` (the
+    // SDK's published-env selector) is the fallback signal when no native
+    // NODE_ENV/SHIPEASY_ENV is set (e.g. on Cloudflare Workers).
+    const prod = isProductionEnv(this.env);
+    // Master network gate. testMode always forces offline; otherwise honour an
+    // explicit isNetworkEnabled, else default to prod-on.
+    this.networkEnabled = this.testMode ? false : (opts.isNetworkEnabled ?? prod);
+    this.offline = !this.networkEnabled;
     // Self-monitoring: SDK-internal errors caught by safeRun report to
-    // Shipeasy's own project. Off in test mode (no network) and when opted out.
+    // Shipeasy's own project. Off whenever the network is disabled and when
+    // opted out.
     setInternalReportContext({
       side: "server",
       sdkVersion: version,
-      enabled: !this.testMode && opts.disableInternalErrorReporting !== true,
+      enabled: this.networkEnabled && opts.disableInternalErrorReporting !== true,
     });
     this.telemetry = new Telemetry({
       endpoint: opts.telemetryUrl ?? DEFAULT_TELEMETRY_URL,
       sdkKey: this.apiKey,
       side: "server",
       env: this.env,
-      // Test mode never talks to the network — telemetry off regardless of opt.
-      disabled: this.testMode || opts.disableTelemetry,
+      // Off when the network is disabled; otherwise honour an explicit
+      // disableTelemetry, else default to prod-on (off outside production).
+      disabled: this.offline || (opts.disableTelemetry ?? !prod),
     });
-    if (opts.initialBlob || this.testMode) {
-      // Seed an empty blob in test mode so getters read from overrides without
-      // any fetch having happened.
+    if (opts.initialBlob || this.offline) {
+      // Seed an empty blob when offline so getters read from overrides / code
+      // defaults without any fetch having happened.
       this.flagsBlob =
         opts.initialBlob ?? { version: "test", plan: "free", gates: {}, configs: {}, killswitches: {} };
       this.expsBlob = this.expsBlob ?? { version: "test", universes: {}, experiments: {} };
@@ -790,7 +827,7 @@ export class Engine {
   }
 
   async init(): Promise<void> {
-    if (this.testMode) {
+    if (this.offline) {
       this.initialized = true;
       return;
     }
@@ -800,7 +837,7 @@ export class Engine {
   }
 
   async initOnce(): Promise<void> {
-    if (this.testMode || this.initialized) return;
+    if (this.offline || this.initialized) return;
     await this.fetchAll();
     this.initialized = true;
   }
@@ -1077,7 +1114,7 @@ export class Engine {
   }
 
   track(userId: string, eventName: string, props?: Record<string, unknown>): void {
-    if (this.testMode) return; // no-op in test mode — never touch the network
+    if (this.offline) return; // no-op when the network is disabled
     const safeProps = this.stripPrivate(props);
     const body = JSON.stringify({
       events: [
@@ -1102,11 +1139,11 @@ export class Engine {
   /**
    * POST a single exposure for an enrolled `(user, experiment, group)`. Deduped
    * per process (bounded set) so repeated `assign()` calls in one server don't
-   * spam `/collect`. Fire-and-forget; no-op in test mode. This is how
-   * `assignUniverse` auto-logs — the browser's auto-exposure parity for SSR.
+   * spam `/collect`. Fire-and-forget; no-op when the network is disabled. This
+   * is how `assignUniverse` auto-logs — the browser's auto-exposure parity for SSR.
    */
   private postExposure(user: User, experiment: string, group: string): void {
-    if (this.testMode) return;
+    if (this.offline) return;
     const uid = user.user_id ?? user.anonymous_id;
     const dedupKey = `${uid ?? ""}:${experiment}:${group}`;
     if (this.exposureSeen.has(dedupKey)) return;
@@ -1144,6 +1181,7 @@ export class Engine {
     extras?: SeeExtras,
     kind?: SeeKind,
   ): void {
+    if (this.offline) return; // no-op when the network is disabled
     try {
       // Ambient per-request correlation token (seeded by the safety-net hook).
       // Read here so `see()` stays vanilla — no caller ever passes an id.
@@ -1565,7 +1603,15 @@ export interface ShipeasyServerConfig {
    */
   logLevel?: LogLevel;
   /**
-   * Disable per-evaluation usage telemetry. ON by default. On Cloudflare
+   * Master network switch — `false` puts the SDK fully offline (no fetch, no
+   * track, no telemetry, no error self-monitoring). Defaults to
+   * environment-derived: ON in production, OFF everywhere else. See
+   * {@link EngineOptions.isNetworkEnabled}.
+   */
+  isNetworkEnabled?: boolean;
+  /**
+   * Disable per-evaluation usage telemetry ("tracking"). Defaults to
+   * environment-derived: ON in production, OFF everywhere else. On Cloudflare
    * Workers each beacon is an outbound subrequest, so disable on hot SSR paths
    * that evaluate many flags per request. See {@link EngineOptions.disableTelemetry}.
    */
@@ -1634,6 +1680,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   const profile = opts.i18nDefaultProfile ?? "en:prod";
   flags.configure({
     apiKey: serverKey,
+    isNetworkEnabled: opts.isNetworkEnabled,
     disableTelemetry: opts.disableTelemetry,
     disableInternalErrorReporting: opts.disableInternalErrorReporting,
     privateAttributes: opts.privateAttributes,

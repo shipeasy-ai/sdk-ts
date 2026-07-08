@@ -106,6 +106,39 @@ different attribute (e.g. `company_id`), the experiment carries a `bucketBy` —
 make sure your `attributes` transform surfaces that attribute. See
 [Advanced](./advanced.md).
 
+## Network & telemetry defaults (environment-derived)
+
+The SDK is **quiet by default outside production** — an app that embeds it never
+phones home from a local dev machine or a CI run. Two switches control egress,
+and both **default to ON in production and OFF everywhere else**:
+
+| Option | Controls | Default |
+| --- | --- | --- |
+| `isNetworkEnabled` | **Any** outbound request — flag/experiment fetches, `track()`, exposure logging, `see()` reports, usage telemetry, internal error self-monitoring. When `false` the SDK is fully offline: reads return code defaults / overrides. | `true` in prod, `false` otherwise |
+| `disableTelemetry` | Just the per-evaluation usage telemetry beacon ("tracking"/outside logging). | telemetry ON in prod, OFF otherwise |
+
+Production is inferred, in order:
+
+1. `SHIPEASY_ENV`, then `NODE_ENV` — a value of `production`/`prod` ⇒ production.
+2. When neither is set (e.g. a Cloudflare Worker, or the browser, where there is
+   no native `NODE_ENV`), the SDK's own `env` option is used — and it defaults to
+   `"prod"`. So a real production deploy stays **on** by default; set `env: "dev"`
+   (or pass the switch explicitly) to keep a non-standard build quiet.
+
+Pass either option explicitly to override the environment default:
+
+```ts
+// Force the SDK fully offline regardless of environment (no requests at all):
+configure({ apiKey: process.env.SHIPEASY_SERVER_KEY!, isNetworkEnabled: false });
+
+// Keep flag fetching but never emit usage telemetry:
+configure({ apiKey: process.env.SHIPEASY_SERVER_KEY!, disableTelemetry: true });
+```
+
+Both options exist identically on the browser `configure({ clientKey, … })` and
+the SSR `shipeasy({ serverKey, … })` entry points. `isNetworkEnabled: false` is
+the production-safe equivalent of the test/offline modes below.
+
 ## Test & offline configuration
 
 For tests, swap `configure()` for `configureForTesting()` (no network, seed

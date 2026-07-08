@@ -42,6 +42,12 @@ flags.getFlagDetail("new_checkout");                   // { value, reason }
 `configure()` is first-config-wins and owns the fetch lifecycle (one-shot by
 default; `poll: true` for a background refresh). Construct `new Client(user)` once
 per user/request — it binds the user, so no method takes a user argument.
+
+Egress is **environment-derived**: network + usage telemetry default ON in
+production and OFF otherwise (prod is read from `SHIPEASY_ENV`/`NODE_ENV`, else
+the `env` option, default `"prod"`), so the SDK never phones home from dev/CI.
+Override with `isNetworkEnabled: false` (fully offline) or `disableTelemetry: true`
+(keep fetching, no usage beacons).
 Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/configuration.md> ·
 <https://shipeasy-ai.github.io/sdk-ts/pages/flags.md> ·
 snippets <https://shipeasy-ai.github.io/sdk-ts/snippets/release/flags.md> ·
