@@ -73,6 +73,15 @@ otherwise. Pass `"silent"` to mute the SDK entirely. The same option exists on
 the browser `configure({ clientKey, logLevel })` and on the SSR
 `shipeasy({ serverKey, logLevel })` helper.
 
+When one of these last-resort guards catches an internal SDK failure — a bug on
+*our* side, not yours — the SDK also reports it to **Shipeasy's own** project so
+we can find and fix SDK bugs across the apps that run it. This never touches
+your project or your Errors tab, carries no user/app data beyond the error
+itself, and is fire-and-forget (it can never slow down or break a read). It is
+on by default; opt out with `disableInternalErrorReporting: true` on any of the
+`configure({ apiKey })`, browser `configure({ clientKey })`, or
+`shipeasy({ serverKey })` entry points.
+
 > Setup is deliberately still loud: constructing `new Client(user)` before
 > `configure()`, or loading a bad offline snapshot, throws — those are boot-time
 > misconfigurations you want to see immediately, not per-request runtime reads.

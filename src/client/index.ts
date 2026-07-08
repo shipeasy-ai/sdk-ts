@@ -2,6 +2,7 @@
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
+import { setInternalReportContext } from "../internal-report";
 import {
   buildSeeEvent,
   causesThe,
@@ -769,6 +770,14 @@ export interface EngineOptions {
    */
   logLevel?: LogLevel;
   /**
+   * Opt out of SDK-internal error self-monitoring. When one of the SDK's own
+   * last-resort guards catches an internal failure (an "on our end" bug), the
+   * SDK reports it to Shipeasy's own project so we can track SDK bugs across
+   * apps — never to your project. ON by default; forced off in test mode. Pass
+   * `true` to disable.
+   */
+  disableInternalErrorReporting?: boolean;
+  /**
    * Suppress automatic exposure logging in `getExperiment` (Statsig's
    * `disableExposureLogging`). Default false — reading an enrolled variant
    * auto-logs a deduped exposure. When true, no exposure fires unless you call
@@ -1003,6 +1012,13 @@ export class Engine {
     this.baseUrl = (opts.baseUrl ?? "https://api.shipeasy.ai").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
     this.testMode = opts.testMode === true;
+    // Self-monitoring: SDK-internal errors caught by safeRun report to
+    // Shipeasy's own project. Off in test mode (no network) and when opted out.
+    setInternalReportContext({
+      side: "client",
+      sdkVersion: version,
+      enabled: !this.testMode && opts.disableInternalErrorReporting !== true,
+    });
     // Auto web vitals + error capture defaults ON. Vitals/engagement emit
     // `__auto_*` metric events (the worker bypasses event-catalog validation
     // for those names); errors report into the errors primitive via the see()
@@ -1706,6 +1722,13 @@ export interface ShipeasyClientConfig {
    */
   disableTelemetry?: boolean;
   /**
+   * Opt out of SDK-internal error self-monitoring. Internal SDK failures ("on
+   * our end") are reported to Shipeasy's own project (never yours) so we can
+   * track SDK bugs. ON by default. See
+   * {@link EngineOptions.disableInternalErrorReporting}.
+   */
+  disableInternalErrorReporting?: boolean;
+  /**
    * Suppress automatic exposure logging in `flags.getExperiment` (Statsig's
    * `disableExposureLogging`). Default false. When true, call
    * `flags.logExposure(name)` at the treatment's render to log the exposure.
@@ -1752,6 +1775,7 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
     autoGuardrailGroups: groups,
     autoCollectAlways: acObj?.always === true,
     disableTelemetry: opts.disableTelemetry,
+    disableInternalErrorReporting: opts.disableInternalErrorReporting,
     disableAutoExposure: opts.disableAutoExposure,
     privateAttributes: opts.privateAttributes,
     stickyBucketing: opts.stickyBucketing,

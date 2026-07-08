@@ -13,6 +13,8 @@
 // "warn" (the default) therefore prints `error` + `warn`, and suppresses the
 // informational `info` / `debug` chatter.
 
+import { reportInternalError } from "./internal-report";
+
 export type LogLevel = "silent" | "error" | "warn" | "info" | "debug";
 
 /** All accepted {@link LogLevel} values, in increasing verbosity. */
@@ -87,12 +89,19 @@ export const logger = {
  * `fallback`. The last-resort guard that makes a public runtime method
  * (getFlag/getConfig/…) unable to throw into product code, even if an internal
  * invariant is violated. `label` names the method for the log line.
+ *
+ * A caught error here is by definition "on our end" — an internal SDK failure,
+ * not the caller's — so in addition to logging locally it is reported to
+ * Shipeasy's own project via the self-monitoring channel (fire-and-forget,
+ * never throws). `label` doubles as the stable issue subject so occurrences of
+ * the same bug dedupe.
  */
 export function safeRun<T>(label: string, fallback: T, fn: () => T): T {
   try {
     return fn();
   } catch (err) {
     logger.error(`[shipeasy] ${label} failed — returning safe default:`, String(err));
+    reportInternalError(label, err);
     return fallback;
   }
 }

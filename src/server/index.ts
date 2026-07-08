@@ -4,6 +4,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
+import { setInternalReportContext } from "../internal-report";
 import {
   buildSeeEvent,
   isExpected,
@@ -428,6 +429,14 @@ export interface EngineOptions {
    */
   logLevel?: LogLevel;
   /**
+   * Opt out of SDK-internal error self-monitoring. When one of the SDK's own
+   * last-resort guards catches an internal failure (an "on our end" bug), the
+   * SDK reports it to Shipeasy's own project so we can track SDK bugs across
+   * apps — never to your project. ON by default; forced off in test mode. Pass
+   * `true` to disable.
+   */
+  disableInternalErrorReporting?: boolean;
+  /**
    * Attribute names usable for targeting but never persisted in analytics
    * (LD/Statsig `privateAttributes`). The server evaluates locally so private
    * attrs never leave for evaluation at all; the only egress is `/collect`, and
@@ -493,6 +502,13 @@ export class Engine {
     this.privateAttributes = opts.privateAttributes ?? [];
     this.stickyStore = opts.stickyStore;
     this.testMode = opts.testMode === true;
+    // Self-monitoring: SDK-internal errors caught by safeRun report to
+    // Shipeasy's own project. Off in test mode (no network) and when opted out.
+    setInternalReportContext({
+      side: "server",
+      sdkVersion: version,
+      enabled: !this.testMode && opts.disableInternalErrorReporting !== true,
+    });
     this.telemetry = new Telemetry({
       endpoint: opts.telemetryUrl ?? DEFAULT_TELEMETRY_URL,
       sdkKey: this.apiKey,
@@ -1327,6 +1343,13 @@ export interface ShipeasyServerConfig {
    */
   disableTelemetry?: boolean;
   /**
+   * Opt out of SDK-internal error self-monitoring. Internal SDK failures ("on
+   * our end") are reported to Shipeasy's own project (never yours) so we can
+   * track SDK bugs. ON by default. See
+   * {@link EngineOptions.disableInternalErrorReporting}.
+   */
+  disableInternalErrorReporting?: boolean;
+  /**
    * Attribute names usable for targeting but never persisted in analytics
    * (LD/Statsig `privateAttributes`). Stripped from every outbound `track()`
    * payload. See {@link EngineOptions.privateAttributes}.
@@ -1384,6 +1407,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   flags.configure({
     apiKey: serverKey,
     disableTelemetry: opts.disableTelemetry,
+    disableInternalErrorReporting: opts.disableInternalErrorReporting,
     privateAttributes: opts.privateAttributes,
     logLevel: opts.logLevel,
   });
