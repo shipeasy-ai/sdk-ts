@@ -68,7 +68,7 @@ update is incomplete — when in doubt, grep `docs/` for the symbol you touched.
 ## Checks before you commit
 
 - `pnpm run type-check`, `pnpm run build`, `pnpm run test` (vitest; the suite is
-  hermetic — no network). CI runs them on Node 18/20/22 via `test.yml`; the
+  hermetic — no network). CI runs them on Node 20/22/24 via `test.yml`; the
   generated README shows the Tests badge.
 - New public behaviour ships with a test.
 - Docs updated per the hard rule above; `docs/manifest.json` stays valid JSON and

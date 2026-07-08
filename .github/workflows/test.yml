@@ -15,7 +15,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ["18", "20", "22"]
+        # Keep in sync with package.json "engines" (>=20). vitest 4's std-env
+        # dep is ESM-only and cannot even load on Node 18.
+        node: ["20", "22", "24"]
     steps:
       - uses: actions/checkout@v7
 
