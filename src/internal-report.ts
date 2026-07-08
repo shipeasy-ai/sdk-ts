@@ -40,7 +40,7 @@ const INGEST_URL = "https://api.shipeasy.ai/collect";
 //     --name "SDK internal error self-reporting" --scopes events:write
 // then replace the INGEST_KEY initializer below with the returned value.
 const PLACEHOLDER_KEY = "sdk_client_REPLACE_WITH_SHIPEASY_INTERNAL_ERROR_KEY";
-let INGEST_KEY = PLACEHOLDER_KEY;
+let INGEST_KEY = "sdk_client_00bd4608a03e4084922978f9522614d5";
 
 /** True once a real key has been baked in (not the placeholder sentinel). */
 function keyConfigured(): boolean {
