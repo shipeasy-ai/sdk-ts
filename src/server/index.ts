@@ -3,6 +3,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
+import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import {
   buildSeeEvent,
   isExpected,
@@ -30,6 +31,8 @@ export type {
   SeeViolationChain,
   Violation,
 };
+export { LOG_LEVELS } from "../logger";
+export type { LogLevel };
 
 export const version = "4.0.0";
 
@@ -415,6 +418,16 @@ export interface EngineOptions {
   /** Override the telemetry beacon host. Defaults to {@link DEFAULT_TELEMETRY_URL}. */
   telemetryUrl?: string;
   /**
+   * How chatty the SDK is on `console` when it catches an error internally.
+   * Every public runtime method (getFlag/getConfig/getExperiment/getKillswitch/
+   * track/logExposure/see) fails silently — it returns a safe default rather
+   * than throwing — and surfaces the swallowed error through this level so you
+   * still find out. Ordering: `silent` < `error` < `warn` < `info` < `debug`.
+   * Defaults to `"warn"` (prints `error` + `warn`). Pass `"silent"` to mute the
+   * SDK entirely. See {@link LogLevel}.
+   */
+  logLevel?: LogLevel;
+  /**
    * Attribute names usable for targeting but never persisted in analytics
    * (LD/Statsig `privateAttributes`). The server evaluates locally so private
    * attrs never leave for evaluation at all; the only egress is `/collect`, and
@@ -471,6 +484,9 @@ export class Engine {
   private readonly changeListeners = new Set<() => void>();
 
   constructor(opts: EngineOptions) {
+    // Apply the log level first so anything the constructor (or an early
+    // fire-and-forget fetch) logs already honours the caller's preference.
+    setLogLevel(opts.logLevel);
     this.apiKey = opts.apiKey;
     this.baseUrl = (opts.baseUrl ?? "https://cdn.shipeasy.ai").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
@@ -613,7 +629,7 @@ export class Engine {
       try {
         l();
       } catch (err) {
-        console.warn("[shipeasy] onChange listener threw:", String(err));
+        logger.warn("[shipeasy] onChange listener threw:", String(err));
       }
     }
   }
@@ -621,7 +637,7 @@ export class Engine {
   private startPoll(): void {
     this.timer = setInterval(() => {
       this.fetchAll(true).catch((err) =>
-        console.warn("[shipeasy] background poll failed:", String(err)),
+        logger.warn("[shipeasy] background poll failed:", String(err)),
       );
     }, this.pollInterval * 1000);
   }
@@ -723,7 +739,14 @@ export class Engine {
       return ("defaultValue" in opts ? opts.defaultValue : undefined) as T;
     }
     if (!opts.decode) return raw as T;
-    return opts.decode(raw);
+    // A user-supplied decode callback is the one place a plain getConfig can
+    // throw — never let it into the caller; log and fall back to the default.
+    try {
+      return opts.decode(raw);
+    } catch (err) {
+      logger.warn(`[shipeasy] getConfig('${name}') decode failed:`, String(err));
+      return ("defaultValue" in opts ? opts.defaultValue : undefined) as T;
+    }
   }
 
   getExperiment<P extends Record<string, unknown>>(
@@ -744,7 +767,7 @@ export class Engine {
       try {
         return { inExperiment: true, group: ov.group, params: decode(ov.params) };
       } catch (err) {
-        console.warn(`[shipeasy] getExperiment('${name}') override decode failed:`, String(err));
+        logger.warn(`[shipeasy] getExperiment('${name}') override decode failed:`, String(err));
         return notIn;
       }
     }
@@ -778,7 +801,7 @@ export class Engine {
       try {
         return { inExperiment: true, group: g.name, params: decode(g.params) };
       } catch (err) {
-        console.warn(`[shipeasy] getExperiment('${name}') decode failed:`, String(err));
+        logger.warn(`[shipeasy] getExperiment('${name}') decode failed:`, String(err));
         return notIn;
       }
     };
@@ -844,7 +867,7 @@ export class Engine {
         headers: { "X-SDK-Key": this.apiKey, "Content-Type": "text/plain" },
         body,
       })
-      .catch((err) => console.warn("[shipeasy] track failed:", String(err)));
+      .catch((err) => logger.warn("[shipeasy] track failed:", String(err)));
   }
 
   /**
@@ -878,7 +901,7 @@ export class Engine {
         headers: { "X-SDK-Key": this.apiKey, "Content-Type": "text/plain" },
         body,
       })
-      .catch((err) => console.warn("[shipeasy] logExposure failed:", String(err)));
+      .catch((err) => logger.warn("[shipeasy] logExposure failed:", String(err)));
   }
 
   /**
@@ -908,7 +931,7 @@ export class Engine {
           headers: { "X-SDK-Key": this.apiKey, "Content-Type": "text/plain" },
           body: JSON.stringify({ events: [ev] }),
         })
-        .catch((err) => console.warn("[shipeasy] see() send failed:", String(err)));
+        .catch((err) => logger.warn("[shipeasy] see() send failed:", String(err)));
     } catch {
       /* error reporting must never throw into product code */
     }
@@ -1291,6 +1314,13 @@ export interface ShipeasyServerConfig {
   /** i18n profile to load for SSR translations, e.g. "en:prod". Defaults to "en:prod". */
   i18nDefaultProfile?: string;
   /**
+   * How chatty the SDK is on `console` when it swallows an internal error.
+   * `silent` < `error` < `warn` < `info` < `debug`; defaults to `"warn"`. Every
+   * runtime read/track/see call fails silently to a safe default and reports the
+   * cause at this level. See {@link EngineOptions.logLevel}.
+   */
+  logLevel?: LogLevel;
+  /**
    * Disable per-evaluation usage telemetry. ON by default. On Cloudflare
    * Workers each beacon is an outbound subrequest, so disable on hot SSR paths
    * that evaluate many flags per request. See {@link EngineOptions.disableTelemetry}.
@@ -1342,7 +1372,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   // error rather than firing a doomed request.
   const serverKey = opts.serverKey ?? "";
   if (!serverKey) {
-    console.error(
+    logger.error(
       "[shipeasy] No server key — flags, experiments and SSR i18n skipped. Pass " +
         "`serverKey` to shipeasy() from @shipeasy/sdk/server with your server key " +
         "(SHIPEASY_SERVER_KEY). Set it as a Worker secret with " +
@@ -1355,6 +1385,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
     apiKey: serverKey,
     disableTelemetry: opts.disableTelemetry,
     privateAttributes: opts.privateAttributes,
+    logLevel: opts.logLevel,
   });
   // Resolve URL overrides: explicit opts.urlOverrides wins; otherwise try
   // (a) the x-se-search header (injected by middleware when one is wired up)
@@ -1607,18 +1638,22 @@ export const flags = {
     _server?.destroy();
   },
   get(name: string, user: User, defaultValue = false): boolean {
-    return _server?.getFlag(name, user, defaultValue) ?? defaultValue;
+    return safeRun("flags.get", defaultValue, () => _server?.getFlag(name, user, defaultValue) ?? defaultValue);
   },
   /** Evaluate a gate and report why (value + reason). See {@link FlagDetail}. */
   getDetail(name: string, user: User): FlagDetail {
-    return _server?.getFlagDetail(name, user) ?? { value: false, reason: "CLIENT_NOT_READY" };
+    return safeRun<FlagDetail>("flags.getDetail", { value: false, reason: "CLIENT_NOT_READY" }, () =>
+      _server?.getFlagDetail(name, user) ?? { value: false, reason: "CLIENT_NOT_READY" },
+    );
   },
   getConfig<T = unknown>(
     name: string,
     decodeOrOpts?: ((raw: unknown) => T) | GetConfigOptions<T>,
   ): T | undefined {
     // Forward the legacy decode callback OR the options object unchanged.
-    return _server?.getConfig(name, decodeOrOpts as GetConfigOptions<T>);
+    return safeRun<T | undefined>("flags.getConfig", undefined, () =>
+      _server?.getConfig(name, decodeOrOpts as GetConfigOptions<T>),
+    );
   },
   getExperiment<P extends Record<string, unknown>>(
     name: string,
@@ -1626,12 +1661,9 @@ export const flags = {
     defaultParams: P,
     decode?: (raw: unknown) => P,
   ): ExperimentResult<P> {
-    return (
-      _server?.getExperiment(name, user, defaultParams, decode) ?? {
-        inExperiment: false,
-        group: "control",
-        params: defaultParams,
-      }
+    const notIn: ExperimentResult<P> = { inExperiment: false, group: "control", params: defaultParams };
+    return safeRun("flags.getExperiment", notIn, () =>
+      _server?.getExperiment(name, user, defaultParams, decode) ?? notIn,
     );
   },
   /**
@@ -1640,15 +1672,15 @@ export const flags = {
    * switch is on. Unknown killswitches / switches return false.
    */
   ks(name: string, switchKey?: string): boolean {
-    return _server?.getKillswitch(name, switchKey) ?? false;
+    return safeRun("flags.ks", false, () => _server?.getKillswitch(name, switchKey) ?? false);
   },
   track(userId: string, eventName: string, props?: Record<string, unknown>): void {
-    _server?.track(userId, eventName, props);
+    safeRun("flags.track", undefined, () => _server?.track(userId, eventName, props));
   },
   /** Emit an exposure for an enrolled experiment at the decision point. See
    *  {@link Engine.logExposure}. No-op before configure(). */
   logExposure(user: string | User, name: string): void {
-    _server?.logExposure(user, name);
+    safeRun("flags.logExposure", undefined, () => _server?.logExposure(user, name));
   },
   /**
    * Evaluate all flags / configs / experiments for a user against the locally
@@ -1656,14 +1688,8 @@ export const flags = {
    * overrides. Returns an empty payload when the blob hasn't been fetched yet.
    */
   evaluate(user: User, rawUrl?: string): BootstrapPayload {
-    return (
-      _server?.evaluate(user, rawUrl) ?? {
-        flags: {},
-        configs: {},
-        experiments: {},
-        killswitches: {},
-      }
-    );
+    const empty: BootstrapPayload = { flags: {}, configs: {}, experiments: {}, killswitches: {} };
+    return safeRun("flags.evaluate", empty, () => _server?.evaluate(user, rawUrl) ?? empty);
   },
 };
 
@@ -1917,11 +1943,15 @@ export class Client<U = unknown> {
   }
 
   getFlag(name: string, defaultValue = false): boolean {
-    return this.engine.getFlag(name, this.attributes, defaultValue);
+    return safeRun("Client.getFlag", defaultValue, () =>
+      this.engine.getFlag(name, this.attributes, defaultValue),
+    );
   }
 
   getFlagDetail(name: string): FlagDetail {
-    return this.engine.getFlagDetail(name, this.attributes);
+    return safeRun<FlagDetail>("Client.getFlagDetail", { value: false, reason: "CLIENT_NOT_READY" }, () =>
+      this.engine.getFlagDetail(name, this.attributes),
+    );
   }
 
   getConfig<T = unknown>(name: string, decode?: (raw: unknown) => T): T | undefined;
@@ -1930,7 +1960,9 @@ export class Client<U = unknown> {
     name: string,
     decodeOrOpts?: ((raw: unknown) => T) | GetConfigOptions<T>,
   ): T | undefined {
-    return this.engine.getConfig(name, decodeOrOpts as GetConfigOptions<T>);
+    return safeRun<T | undefined>("Client.getConfig", undefined, () =>
+      this.engine.getConfig(name, decodeOrOpts as GetConfigOptions<T>),
+    );
   }
 
   getExperiment<P extends Record<string, unknown>>(
@@ -1938,12 +1970,15 @@ export class Client<U = unknown> {
     defaultParams: P,
     decode?: (raw: unknown) => P,
   ): ExperimentResult<P> {
-    return this.engine.getExperiment(name, this.attributes, defaultParams, decode);
+    const notIn: ExperimentResult<P> = { inExperiment: false, group: "control", params: defaultParams };
+    return safeRun("Client.getExperiment", notIn, () =>
+      this.engine.getExperiment(name, this.attributes, defaultParams, decode),
+    );
   }
 
   /** Read a killswitch (not user-bound; mirrors {@link Engine.getKillswitch}). */
   getKillswitch(name: string, switchKey?: string): boolean {
-    return this.engine.getKillswitch(name, switchKey);
+    return safeRun("Client.getKillswitch", false, () => this.engine.getKillswitch(name, switchKey));
   }
 
   /**
@@ -1954,9 +1989,11 @@ export class Client<U = unknown> {
    * mode.
    */
   track(eventName: string, props?: Record<string, unknown>): void {
-    const id = this.attributes.user_id ?? this.attributes.anonymous_id;
-    if (id === undefined) return;
-    this.engine.track(String(id), eventName, props);
+    safeRun("Client.track", undefined, () => {
+      const id = this.attributes.user_id ?? this.attributes.anonymous_id;
+      if (id === undefined) return;
+      this.engine.track(String(id), eventName, props);
+    });
   }
 
   /**
@@ -1966,7 +2003,7 @@ export class Client<U = unknown> {
    * in test mode).
    */
   logExposure(name: string): void {
-    this.engine.logExposure(this.attributes, name);
+    safeRun("Client.logExposure", undefined, () => this.engine.logExposure(this.attributes, name));
   }
 }
 
@@ -2024,7 +2061,7 @@ function dispatchSee(
   kind?: SeeKind,
 ): void {
   if (!_server) {
-    console.warn("[shipeasy] see() called before shipeasy({ serverKey }) — error dropped");
+    logger.warn("[shipeasy] see() called before shipeasy({ serverKey }) — error dropped");
     return;
   }
   _server.reportError(problem, consequence, extras, kind);

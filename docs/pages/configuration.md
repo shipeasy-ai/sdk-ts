@@ -47,6 +47,36 @@ The browser is single-user: `new Client(user)` runs the transform and
 `identify()`s the result, merging browser context (`locale`, `timezone`,
 `path`, `referrer`, `screen_*`, `user_agent`) and a persisted `anonymous_id`.
 
+## Fail-safe reads & the `logLevel` option
+
+Every **runtime** method the SDK exposes — `getFlag`, `getFlagDetail`,
+`getConfig`, `getExperiment`, `getKillswitch`, `track`, `logExposure`, and
+`see()` — is guaranteed to **never throw** into your code. If anything goes wrong
+internally (a bad `decode` callback, a malformed value, an unexpected state) the
+call fails silently: it returns the documented safe default (`false` /
+`undefined` / the not-enrolled result) and reports the swallowed error on
+`console` so you still find out. A feature-flag read can never take down a
+request.
+
+`logLevel` controls how loud that reporting is:
+
+```ts
+configure({
+  apiKey: process.env.SHIPEASY_SERVER_KEY!,
+  logLevel: "warn", // default — "silent" | "error" | "warn" | "info" | "debug"
+});
+```
+
+Ordering is `silent < error < warn < info < debug`; a level prints everything at
+or below it. The default `"warn"` prints `error` + `warn` and stays quiet
+otherwise. Pass `"silent"` to mute the SDK entirely. The same option exists on
+the browser `configure({ clientKey, logLevel })` and on the SSR
+`shipeasy({ serverKey, logLevel })` helper.
+
+> Setup is deliberately still loud: constructing `new Client(user)` before
+> `configure()`, or loading a bad offline snapshot, throws — those are boot-time
+> misconfigurations you want to see immediately, not per-request runtime reads.
+
 ## The `attributes` transform
 
 `attributes` maps **your** user object into the Shipeasy attribute bag that

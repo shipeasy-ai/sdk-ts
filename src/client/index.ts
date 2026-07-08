@@ -1,6 +1,7 @@
 // ShipEasy browser SDK — calls /sdk/evaluate on identify(), logs exposures + events via /collect.
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
+import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import {
   buildSeeEvent,
   causesThe,
@@ -30,6 +31,8 @@ export type {
   SeeViolationChain,
   Violation,
 };
+export { LOG_LEVELS } from "../logger";
+export type { LogLevel };
 
 declare global {
   interface Window {
@@ -758,6 +761,14 @@ export interface EngineOptions {
   /** Override the telemetry beacon host. Defaults to {@link DEFAULT_TELEMETRY_URL}. */
   telemetryUrl?: string;
   /**
+   * How chatty the SDK is on `console` when it catches an error internally.
+   * Every public runtime method (getFlag/getConfig/getExperiment/getKillswitch/
+   * track/logExposure/see) fails silently — returning a safe default instead of
+   * throwing — and surfaces the swallowed error through this level. Ordering:
+   * `silent` < `error` < `warn` < `info` < `debug`. Defaults to `"warn"`.
+   */
+  logLevel?: LogLevel;
+  /**
    * Suppress automatic exposure logging in `getExperiment` (Statsig's
    * `disableExposureLogging`). Default false — reading an enrolled variant
    * auto-logs a deduped exposure. When true, no exposure fires unless you call
@@ -985,6 +996,9 @@ export class Engine {
   };
 
   constructor(opts: EngineOptions) {
+    // Apply the log level first so anything logged during construction (or the
+    // auto-identify kicked off right after) honours the caller's preference.
+    setLogLevel(opts.logLevel);
     this.sdkKey = opts.sdkKey;
     this.baseUrl = (opts.baseUrl ?? "https://edge.shipeasy.dev").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
@@ -1165,7 +1179,7 @@ export class Engine {
       try {
         l();
       } catch (err) {
-        console.warn("[shipeasy] subscriber threw:", String(err));
+        logger.warn("[shipeasy] subscriber threw:", String(err));
       }
     }
   }
@@ -1267,7 +1281,7 @@ export class Engine {
     try {
       return opts.decode(raw);
     } catch (err) {
-      console.warn(`[shipeasy] getConfig('${name}') decode failed:`, String(err));
+      logger.warn(`[shipeasy] getConfig('${name}') decode failed:`, String(err));
       return undefined;
     }
   }
@@ -1334,7 +1348,7 @@ export class Engine {
     try {
       return { inExperiment: true, group: entry.group, params: decode(entry.params) };
     } catch (err) {
-      console.warn(`[shipeasy] getExperiment('${name}') decode failed:`, String(err));
+      logger.warn(`[shipeasy] getExperiment('${name}') decode failed:`, String(err));
       return notIn;
     }
   }
@@ -1679,6 +1693,13 @@ export interface ShipeasyClientConfig {
    */
   autoCollect?: boolean | (Partial<AutoCollectGroups> & { always?: boolean });
   /**
+   * How chatty the SDK is on `console` when it swallows an internal error.
+   * `silent` < `error` < `warn` < `info` < `debug`; defaults to `"warn"`. Every
+   * runtime read/track/see call fails silently to a safe default and reports the
+   * cause at this level. See {@link EngineOptions.logLevel}.
+   */
+  logLevel?: LogLevel;
+  /**
    * Disable per-evaluation usage telemetry. Telemetry is ON by default — every
    * flag/config/experiment/killswitch read fires one fire-and-forget beacon
    * counted by Cloudflare's native per-path analytics. Pass `true` to opt out.
@@ -1726,6 +1747,7 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
   const client = configureShipeasy({
     sdkKey: opts.clientKey,
     baseUrl,
+    logLevel: opts.logLevel,
     autoGuardrails: blanket,
     autoGuardrailGroups: groups,
     autoCollectAlways: acObj?.always === true,
@@ -1741,7 +1763,7 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
   flags.notifyMounted();
   if (opts.autoIdentify !== false) {
     void client.identify({}).catch((err) => {
-      console.warn("[shipeasy] auto-identify failed:", String(err));
+      logger.warn("[shipeasy] auto-identify failed:", String(err));
     });
   }
   return attachDevtools(client, { adminUrl: opts.adminUrl });
@@ -1899,7 +1921,7 @@ export const flags = {
   },
   identify(user: User): Promise<void> {
     if (!_client) {
-      console.warn("[shipeasy] flags.identify called before configureShipeasy()");
+      logger.warn("[shipeasy] flags.identify called before configureShipeasy()");
       return Promise.resolve();
     }
     return _client.identify(user);
@@ -1912,20 +1934,25 @@ export const flags = {
    * force-static pages where SSR has no flag data.
    */
   get(name: string, defaultValue = false): boolean {
-    const bs = getBootstrap();
-    if (bs !== null && name in bs.flags) return bs.flags[name];
-    if (!_mountedAndReady) return defaultValue;
-    if (_client) return _client.getFlag(name, defaultValue); // includes URL overrides + evalResult
-    return readGateOverride(name) ?? defaultValue;
+    return safeRun("flags.get", defaultValue, () => {
+      const bs = getBootstrap();
+      if (bs !== null && name in bs.flags) return bs.flags[name];
+      if (!_mountedAndReady) return defaultValue;
+      if (_client) return _client.getFlag(name, defaultValue); // includes URL overrides + evalResult
+      return readGateOverride(name) ?? defaultValue;
+    });
   },
   /** Evaluate a gate and report why (value + reason). See {@link FlagDetail}. */
   getDetail(name: string): FlagDetail {
-    if (_client) return _client.getFlagDetail(name);
-    const ov = readGateOverride(name);
-    if (ov !== null) return { value: ov, reason: "OVERRIDE" };
-    return { value: false, reason: "CLIENT_NOT_READY" };
+    return safeRun<FlagDetail>("flags.getDetail", { value: false, reason: "CLIENT_NOT_READY" }, () => {
+      if (_client) return _client.getFlagDetail(name);
+      const ov = readGateOverride(name);
+      if (ov !== null) return { value: ov, reason: "OVERRIDE" };
+      return { value: false, reason: "CLIENT_NOT_READY" };
+    });
   },
   getConfig<T = unknown>(name: string, decode?: (raw: unknown) => T): T | undefined {
+    return safeRun<T | undefined>("flags.getConfig", undefined, () => {
     const bs = getBootstrap();
     if (bs !== null && name in bs.configs) {
       const raw = bs.configs[name];
@@ -1946,6 +1973,7 @@ export const flags = {
     } catch {
       return undefined;
     }
+    });
   },
   getExperiment<P extends Record<string, unknown>>(
     name: string,
@@ -1958,18 +1986,20 @@ export const flags = {
       group: "control",
       params: defaultParams,
     };
-    if (!_client) return fallback;
-    return typeof decodeOrOpts === "function"
-      ? _client.getExperiment(name, defaultParams, decodeOrOpts, variants)
-      : _client.getExperiment(name, defaultParams, decodeOrOpts ?? {});
+    return safeRun("flags.getExperiment", fallback, () => {
+      if (!_client) return fallback;
+      return typeof decodeOrOpts === "function"
+        ? _client.getExperiment(name, defaultParams, decodeOrOpts, variants)
+        : _client.getExperiment(name, defaultParams, decodeOrOpts ?? {});
+    });
   },
   /** Manually log an exposure for an enrolled experiment. See
    *  {@link Engine.logExposure}. No-op before configure(). */
   logExposure(name: string): void {
-    _client?.logExposure(name);
+    safeRun("flags.logExposure", undefined, () => _client?.logExposure(name));
   },
   track(eventName: string, props?: Record<string, unknown>): void {
-    _client?.track(eventName, props);
+    safeRun("flags.track", undefined, () => _client?.track(eventName, props));
   },
   /**
    * Read a killswitch. Without `switchKey`, returns true when the killswitch is
@@ -1981,15 +2011,17 @@ export const flags = {
    * available synchronously on first render.
    */
   ks(name: string, switchKey?: string): boolean {
-    const bs = getBootstrap();
-    if (bs !== null && bs.killswitches && name in bs.killswitches) {
-      const ks = bs.killswitches[name];
-      if (typeof ks === "boolean") return switchKey === undefined ? ks : false;
-      if (switchKey === undefined) return false;
-      return ks[switchKey] === true;
-    }
-    if (!_mountedAndReady) return false;
-    return _client?.getKillswitch(name, switchKey) ?? false;
+    return safeRun("flags.ks", false, () => {
+      const bs = getBootstrap();
+      if (bs !== null && bs.killswitches && name in bs.killswitches) {
+        const ks = bs.killswitches[name];
+        if (typeof ks === "boolean") return switchKey === undefined ? ks : false;
+        if (switchKey === undefined) return false;
+        return ks[switchKey] === true;
+      }
+      if (!_mountedAndReady) return false;
+      return _client?.getKillswitch(name, switchKey) ?? false;
+    });
   },
   flush(): Promise<void> {
     return _client?.flush() ?? Promise.resolve();
@@ -2130,7 +2162,7 @@ export class Client<U = unknown> {
     // is async, getFlag reflects the latest resolved eval). Callers who need the
     // first round-trip can `await client.ready()`.
     this._identify = this.engine.identify(this.attributes).catch((err) => {
-      console.warn("[shipeasy] Client identify failed:", String(err));
+      logger.warn("[shipeasy] Client identify failed:", String(err));
     });
   }
 
@@ -2140,11 +2172,13 @@ export class Client<U = unknown> {
   }
 
   getFlag(name: string, defaultValue = false): boolean {
-    return this.engine.getFlag(name, defaultValue);
+    return safeRun("Client.getFlag", defaultValue, () => this.engine.getFlag(name, defaultValue));
   }
 
   getFlagDetail(name: string): FlagDetail {
-    return this.engine.getFlagDetail(name);
+    return safeRun<FlagDetail>("Client.getFlagDetail", { value: false, reason: "CLIENT_NOT_READY" }, () =>
+      this.engine.getFlagDetail(name),
+    );
   }
 
   getConfig<T = unknown>(name: string, decode?: (raw: unknown) => T): T | undefined;
@@ -2153,7 +2187,9 @@ export class Client<U = unknown> {
     name: string,
     decodeOrOpts?: ((raw: unknown) => T) | GetConfigOptions<T>,
   ): T | undefined {
-    return this.engine.getConfig(name, decodeOrOpts as GetConfigOptions<T>);
+    return safeRun<T | undefined>("Client.getConfig", undefined, () =>
+      this.engine.getConfig(name, decodeOrOpts as GetConfigOptions<T>),
+    );
   }
 
   getExperiment<P extends Record<string, unknown>>(
@@ -2161,12 +2197,15 @@ export class Client<U = unknown> {
     defaultParams: P,
     decode?: (raw: unknown) => P,
   ): ExperimentResult<P> {
-    return this.engine.getExperiment(name, defaultParams, decode);
+    const notIn: ExperimentResult<P> = { inExperiment: false, group: "control", params: defaultParams };
+    return safeRun("Client.getExperiment", notIn, () =>
+      this.engine.getExperiment(name, defaultParams, decode),
+    );
   }
 
   /** Read a killswitch (not user-bound; mirrors {@link Engine.getKillswitch}). */
   getKillswitch(name: string, switchKey?: string): boolean {
-    return this.engine.getKillswitch(name, switchKey);
+    return safeRun("Client.getKillswitch", false, () => this.engine.getKillswitch(name, switchKey));
   }
 
   /**
@@ -2176,7 +2215,7 @@ export class Client<U = unknown> {
    * test mode.
    */
   track(eventName: string, props?: Record<string, unknown>): void {
-    this.engine.track(eventName, props);
+    safeRun("Client.track", undefined, () => this.engine.track(eventName, props));
   }
 
   /**
@@ -2186,7 +2225,7 @@ export class Client<U = unknown> {
    * `disableAutoExposure` to log exposure exactly when you render.
    */
   logExposure(name: string): void {
-    this.engine.logExposure(name);
+    safeRun("Client.logExposure", undefined, () => this.engine.logExposure(name));
   }
 }
 
@@ -2247,7 +2286,7 @@ function dispatchSee(
   kind?: SeeKind,
 ): void {
   if (!_client) {
-    console.warn("[shipeasy] see() called before shipeasy({ clientKey }) — error dropped");
+    logger.warn("[shipeasy] see() called before shipeasy({ clientKey }) — error dropped");
     return;
   }
   _client.reportError(problem, consequence, extras, kind);

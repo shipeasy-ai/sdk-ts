@@ -1,5 +1,28 @@
 # Changelog
 
+## 6.3.0 (2026-07-07)
+
+Fail-safe reads and a configurable log level.
+
+### Added
+
+- **`configure({ logLevel })`** (server, browser, and the SSR `shipeasy()`
+  helper) — controls how loud the SDK is on `console` when it swallows an
+  internal error. Ordering `silent < error < warn < info < debug`; defaults to
+  `"warn"`. Also exported: the `LogLevel` type and the `LOG_LEVELS` array.
+
+### Changed
+
+- **Runtime methods never throw.** `getFlag`, `getFlagDetail`, `getConfig`,
+  `getExperiment`, `getKillswitch`, `track`, `logExposure`, and `see()` are now
+  guaranteed to never throw into product code — on any internal error they log at
+  the configured level and return the documented safe default (a bad `decode`
+  callback no longer escapes `getConfig`, for one). Setup/lifecycle calls
+  (`new Client()` before `configure()`, offline snapshot loading) still throw so
+  boot-time misconfiguration stays obvious.
+- Every internal diagnostic now routes through the leveled logger, so
+  `logLevel: "silent"` mutes the SDK entirely.
+
 ## 6.2.0 (2026-06-27)
 
 The uniform SDK DX standard (experiment-platform doc 23). The documented surface
