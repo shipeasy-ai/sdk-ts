@@ -32,8 +32,10 @@ jobs:
 
       # npm Trusted Publishing (OIDC, no token) requires npm >= 11.5.1.
       # Node 22 ships with npm 10.x which falls back to NODE_AUTH_TOKEN.
+      # Pinned, not @latest: npm 11.6.x ships without its sigstore dep, so
+      # `npm publish --provenance` dies with "Cannot find module 'sigstore'".
       - name: Upgrade npm
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.5.2
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm run type-check
