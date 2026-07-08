@@ -224,6 +224,22 @@ function onDocument(
   } catch {}
 }
 
+/** `window.dispatchEvent(new CustomEvent(type))`, a no-op when there is no DOM.
+ *  React Native's bare `window` has neither `dispatchEvent` nor `CustomEvent`,
+ *  so both are feature-detected — dispatching a state-change event that only the
+ *  browser devtools/framework adapters listen for is meaningless off-DOM. */
+function dispatchWindow(type: string): void {
+  try {
+    if (
+      hasDomEvents() &&
+      typeof window.dispatchEvent === "function" &&
+      typeof CustomEvent === "function"
+    ) {
+      window.dispatchEvent(new CustomEvent(type));
+    }
+  } catch {}
+}
+
 // ---- EventBuffer ----
 
 const FLUSH_INTERVAL_MS = 5_000;
@@ -1561,7 +1577,7 @@ export class Engine {
       getConfig: (n) => this.getConfig(n),
     };
     (window as unknown as { __shipeasy?: ShipeasySdkBridge }).__shipeasy = bridge;
-    window.dispatchEvent(new CustomEvent("se:state:update"));
+    dispatchWindow("se:state:update");
     return bridge;
   }
 
@@ -2228,9 +2244,7 @@ export const flags = {
    */
   notifyMounted(): void {
     _mountedAndReady = true;
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("se:override:change"));
-    }
+    dispatchWindow("se:override:change");
   },
   /** Subscribe for change notifications (identify/override). Used by framework adapters. */
   subscribe(listener: () => void): () => void {

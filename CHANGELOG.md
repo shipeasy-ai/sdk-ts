@@ -1,5 +1,26 @@
 # Changelog
 
+## 7.1.1 (2026-07-08)
+
+### Fix — browser client no longer crashes under React Native
+
+`notifyMounted()` (and the devtools bridge's `installBridge()`) dispatched a
+`window.dispatchEvent(new CustomEvent(...))` guarded only by
+`typeof window !== "undefined"`. React Native / Expo define a **bare `window`**
+(truthy, but with no `dispatchEvent`) and have no `CustomEvent`, so that guard
+passed and the call threw `undefined is not a function` — taking down
+`shipeasy({ clientKey })` at configure time on-device. Both sites now go through
+a feature-detected `dispatchWindow()` helper (checks `window.dispatchEvent` and
+`CustomEvent` are real functions) and no-op off-DOM, matching the existing
+`onWindow`/`onDocument` helpers.
+
+With this, the browser entry (`@shipeasy/sdk/client`) runs on React Native with
+**no polyfills** — every DOM-only path (event dispatch/listeners, cookie/storage
+persistence, `sendBeacon`, `window.location`) either feature-detects or degrades
+via `try/catch`; evaluation, `track()`, exposure logging and `see()` all still go
+out over `fetch`. Added React-Native regression tests covering `flags.notifyMounted()`
+and a full `shipeasy()` bootstrap with `window.dispatchEvent`/`CustomEvent` absent.
+
 ## 7.1.0 (2026-07-08)
 
 ### Environment-derived network & telemetry defaults

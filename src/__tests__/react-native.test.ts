@@ -30,6 +30,9 @@ function stubReactNativeEnv(fetchMock = vi.fn().mockResolvedValue({ ok: true, js
   vi.stubGlobal("sessionStorage", undefined);
   vi.stubGlobal("PerformanceObserver", undefined);
   vi.stubGlobal("crypto", undefined);
+  // Hermes/RN has no `CustomEvent` constructor — code that dispatches DOM events
+  // (notifyMounted / the devtools bridge) must feature-detect it, not assume it.
+  vi.stubGlobal("CustomEvent", undefined);
   return fetchMock;
 }
 
@@ -108,6 +111,28 @@ describe("client entry under React Native (no DOM on window)", () => {
     const { Engine, attachDevtools } = await import("../client/index");
     const client = new Engine({ sdkKey: "k", baseUrl: "http://x" });
     const teardown = attachDevtools(client);
+    expect(typeof teardown).toBe("function");
+    expect(() => teardown()).not.toThrow();
+  });
+
+  it("flags.notifyMounted() does not throw without window.dispatchEvent/CustomEvent", async () => {
+    stubReactNativeEnv();
+    const { flags } = await import("../client/index");
+    // notifyMounted dispatches a window CustomEvent for browser subscribers; on
+    // RN both are absent, so it must feature-detect and skip, never throw.
+    expect(() => flags.notifyMounted()).not.toThrow();
+  });
+
+  it("shipeasy() configures end-to-end under RN without throwing", async () => {
+    stubReactNativeEnv();
+    const { shipeasy } = await import("../client/index");
+    // shipeasy() builds the Engine, injects the i18n loader, calls
+    // notifyMounted() and attachDevtools() — every one of which touches a
+    // browser global that RN lacks. The whole bootstrap must be crash-free.
+    let teardown!: () => void;
+    expect(() => {
+      teardown = shipeasy({ clientKey: "ck", baseUrl: "http://x", autoCollect: false });
+    }).not.toThrow();
     expect(typeof teardown).toBe("function");
     expect(() => teardown()).not.toThrow();
   });
