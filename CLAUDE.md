@@ -18,8 +18,8 @@ Users are taught exactly **two** things, and the docs must never drift from them
 1. **`configure()`** — and its siblings `configureForTesting()` /
    `configureForOffline()` — for setup.
 2. **`new Client(user)`** — the cheap, user-bound handle for *all* reads
-   (`getFlag` / `getFlagDetail` / `getConfig` / `getKillswitch` / `getExperiment`
-   / `logExposure` / `track`).
+   (`getFlag` / `getFlagDetail` / `getConfig` / `getKillswitch` / `track`, plus
+   universe assignment via `universe(name).assign()`).
 
 Plus the package-level helpers that let users avoid the heavyweight object:
 `overrideFlag` / `overrideConfig` / `overrideExperiment` / `clearOverrides`,
