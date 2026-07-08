@@ -4,6 +4,14 @@
 
 Fail-safe reads and a configurable log level.
 
+### Fixed
+
+- CI/build toolchain rot that had left `main` red (and blocked publishing): pin
+  `vite` to a `vitest`-4-compatible major, silence the TypeScript 6 `baseUrl`
+  deprecation in the dts build, compile example JSX with the automatic runtime,
+  scope the test runner to `src/`, and make the "missing server key" test robust
+  against unrelated fire-and-forget telemetry from earlier tests.
+
 ### Added
 
 - **`configure({ logLevel })`** (server, browser, and the SSR `shipeasy()`

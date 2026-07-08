@@ -715,7 +715,12 @@ describe("server shipeasy() — single server key, no client key", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { shipeasy } = await import("../server");
     await shipeasy({});
-    expect(calls.length).toBe(0);
+    // Assert on the endpoints this test is about — no flags / experiments / i18n
+    // fetch. A global `calls.length === 0` is fragile: prior tests fire
+    // fire-and-forget telemetry beacons (t.shipeasy.ai/.../ks/…) that can resolve
+    // into this test's fetch stub and are unrelated to shipeasy()'s behaviour.
+    const dataFetches = calls.filter((c) => /\/sdk\/(flags|experiments|i18n)/.test(c.url));
+    expect(dataFetches).toEqual([]);
     expect(errSpy.mock.calls.flat().join(" ")).toContain("No server key");
   });
 
