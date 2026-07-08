@@ -1,5 +1,16 @@
 # Changelog
 
+## 6.3.2 (2026-07-07)
+
+### Fixed
+
+- **Default API host now resolves.** The default `baseUrl` pointed at the
+  unregistered domain `https://edge.shipeasy.dev`, so every `configure()`
+  one-shot fetch and every `getFlag`/`getConfig`/`getExperiment`/`track`/`see()`
+  call failed with a DNS error unless `baseUrl` was passed explicitly. Corrected
+  to the real edge origin `https://api.shipeasy.ai` — the host the docs, CLI, and
+  curl snippets already use. Explicit `baseUrl` overrides are unaffected.
+
 ## 6.3.1 (2026-07-07)
 
 ### Fixed

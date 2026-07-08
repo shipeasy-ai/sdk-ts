@@ -1000,7 +1000,7 @@ export class Engine {
     // auto-identify kicked off right after) honours the caller's preference.
     setLogLevel(opts.logLevel);
     this.sdkKey = opts.sdkKey;
-    this.baseUrl = (opts.baseUrl ?? "https://edge.shipeasy.dev").replace(/\/$/, "");
+    this.baseUrl = (opts.baseUrl ?? "https://api.shipeasy.ai").replace(/\/$/, "");
     this.env = opts.env ?? "prod";
     this.testMode = opts.testMode === true;
     // Auto web vitals + error capture defaults ON. Vitals/engagement emit
