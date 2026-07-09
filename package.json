@@ -1,6 +1,6 @@
 {
   "name": "@shipeasy/sdk",
-  "version": "7.2.0",
+  "version": "7.3.0",
   "description": "Shipeasy SDK — feature gates, runtime configs, experiments, and metrics for the Shipeasy hosted service.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://shipeasy.ai",
@@ -25,6 +25,12 @@
       ],
       "next": [
         "./dist/next/index.d.ts"
+      ],
+      "devtools": [
+        "./dist/devtools/index.d.ts"
+      ],
+      "react-native-devtools": [
+        "./dist/react-native-devtools/index.d.ts"
       ]
     }
   },
@@ -59,6 +65,16 @@
       "import": "./dist/openfeature-web/index.mjs",
       "default": "./dist/openfeature-web/index.js"
     },
+    "./devtools": {
+      "types": "./dist/devtools/index.d.ts",
+      "import": "./dist/devtools/index.mjs",
+      "default": "./dist/devtools/index.js"
+    },
+    "./react-native-devtools": {
+      "types": "./dist/react-native-devtools/index.d.ts",
+      "import": "./dist/react-native-devtools/index.mjs",
+      "default": "./dist/react-native-devtools/index.js"
+    },
     "./templates/*": "./templates/*.js"
   },
   "bin": {
@@ -70,6 +86,8 @@
     "dist/next/",
     "dist/openfeature-server/",
     "dist/openfeature-web/",
+    "dist/devtools/",
+    "dist/react-native-devtools/",
     "dist/skill-cli.js",
     "docs/skill/SKILL.md",
     "templates/",
@@ -92,7 +110,14 @@
   "peerDependencies": {
     "@openfeature/server-sdk": ">=1.13.0",
     "@openfeature/web-sdk": ">=1.2.0",
-    "next": ">=13"
+    "expo-crypto": ">=13",
+    "expo-secure-store": ">=13",
+    "expo-sensors": ">=13",
+    "expo-web-browser": ">=13",
+    "next": ">=13",
+    "react": ">=18",
+    "react-native": ">=0.73",
+    "zod": ">=4"
   },
   "peerDependenciesMeta": {
     "@openfeature/server-sdk": {
@@ -101,7 +126,28 @@
     "@openfeature/web-sdk": {
       "optional": true
     },
+    "expo-crypto": {
+      "optional": true
+    },
+    "expo-secure-store": {
+      "optional": true
+    },
+    "expo-sensors": {
+      "optional": true
+    },
+    "expo-web-browser": {
+      "optional": true
+    },
     "next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },

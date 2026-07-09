@@ -1,5 +1,35 @@
 # Changelog
 
+## 7.3.0 (2026-07-09)
+
+### React Native devtools overlay
+
+New optional entry points:
+
+- **`@shipeasy/sdk/react-native-devtools`** — a shake-to-open on-device devtools
+  overlay for RN/Expo apps: `<ShipeasyDevtools scheme="myapp://se-auth"
+  clientKey={…}/>`. Shake several times fast to open (expo-sensors; imperative
+  `ref.open()` fallback). Offers **Log in to Shipeasy** (device-auth in the
+  system browser via the app's OWN deep-link scheme — PKCE code-exchange, the
+  deep link never carries the token, so any scheme works with no registration)
+  unlocking live **Gates / Configs / Experiments / Feedback** panels, and a
+  **Report a bug** button on the logged-out home screen when the project has
+  opted into public tickets. Hooks (`useDevtoolsAuth`, `useGates`,
+  `useBugForm`, `useShakeToOpen`, …) are exported for custom surfaces. All
+  Expo modules are optional peers; each missing one degrades a single
+  capability.
+- **`@shipeasy/sdk/devtools`** — the framework-agnostic core underneath:
+  `DevtoolsClient` (admin API), `startDeviceAuth` (PKCE), `submitPublicBug`
+  (`/cli/report` with the public client key; typed `PublicTicketsDisabled` on
+  403), and the bug/feature form zod schemas generated from the admin OpenAPI
+  contract. `zod` is an optional peer used only by these subpaths.
+
+The browser client now surfaces project devtools capabilities from
+`/sdk/evaluate` (`devtools.allow_public_tickets`) via
+`getDevtoolsCapabilities()` / `subscribeDevtoolsCapabilities()` and publishes a
+`globalThis` bridge the overlay reads — requires worker flags-blob format 6;
+older workers simply read as `false`.
+
 ## 7.2.0 (2026-07-08)
 
 ### Server exposure now fires on read, not at `assign()`

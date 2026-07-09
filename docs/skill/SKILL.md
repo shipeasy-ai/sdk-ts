@@ -154,3 +154,20 @@ Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/openfeature.md>
 `onChange(cb)` (requires `configure({ poll: true })`) / browser `subscribe()`.
 Devtools overlay: `Shift+Alt+S` or `?se=1`. Full reference:
 <https://shipeasy-ai.github.io/sdk-ts/pages/advanced.md>
+
+## React Native devtools
+
+Shake-to-open on-device devtools for RN/Expo apps — mount once at the root:
+
+```tsx
+import { ShipeasyDevtools } from "@shipeasy/sdk/react-native-devtools";
+
+// scheme = YOUR app's registered deep-link scheme; clientKey enables the
+// public "Report a bug" path (project must enable Allow public tickets).
+<ShipeasyDevtools scheme="myapp://se-auth" clientKey={CLIENT_KEY} />;
+```
+
+Shake several times fast to open (expo-sensors; or `ref.open()`). Login runs
+device-auth via the app's own scheme (PKCE — the deep link never carries the
+token) and unlocks Gates / Configs / Experiments / Feedback panels. Full
+reference: <https://shipeasy-ai.github.io/sdk-ts/pages/react-native-devtools.md>

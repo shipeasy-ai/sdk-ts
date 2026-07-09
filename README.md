@@ -75,6 +75,7 @@ Constructing `new Client(user)` before `configure()` throws.
 | [Error reporting](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/error-reporting.md) | `see()` structured error reporting. |
 | [Testing](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/testing.md) | `configureForTesting` / `configureForOffline`, overrides. |
 | [OpenFeature](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/openfeature.md) | `ShipeasyProvider` (OpenFeature server provider). |
+| [react native devtools](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/react-native-devtools.md) | The SDK ships a shake-to-open devtools overlay for React Native / Expo apps: inspect th… |
 | [Advanced](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/advanced.md) | Anon-id middleware, private attributes, sticky bucketing, SSR. |
 
 Copy-paste snippets live under [`docs/snippets/`](https://github.com/shipeasy-ai/sdk/blob/main/docs/snippets)

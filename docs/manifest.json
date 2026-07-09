@@ -23,6 +23,7 @@
     "error-reporting": "pages/error-reporting.md",
     "testing": "pages/testing.md",
     "openfeature": "pages/openfeature.md",
+    "react-native-devtools": "pages/react-native-devtools.md",
     "advanced": "pages/advanced.md"
   },
   "snippets": {
