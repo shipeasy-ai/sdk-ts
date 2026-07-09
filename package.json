@@ -82,6 +82,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "gen:readme": "node scripts/gen-readme.mjs",
+    "gen:devtools": "openapi-ts",
+    "refresh:spec": "node scripts/refresh-devtools-spec.mjs",
     "publish-loader": "wrangler r2 object put shipeasy-sdk/loader-v$npm_package_version.js --file=dist/loader/loader.global.js --content-type 'application/javascript; charset=utf-8' --cache-control 'public, max-age=31536000, immutable' --remote && wrangler r2 object put shipeasy-sdk/loader.js --file=dist/loader/loader.global.js --content-type 'application/javascript; charset=utf-8' --cache-control 'public, max-age=300' --remote"
   },
   "dependencies": {
@@ -104,6 +106,7 @@
     }
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "^0.99.0",
     "@openfeature/server-sdk": "^1.22.0",
     "@openfeature/web-sdk": "^1.9.0",
     "@types/murmurhash-js": "^1.0.6",
@@ -113,7 +116,8 @@
     "typescript": "^6.0.3",
     "vite": "^6.4.3",
     "vitest": "^4.1.9",
-    "wrangler": "^4.83.0"
+    "wrangler": "^4.83.0",
+    "zod": "^4.3.6"
   },
   "publishConfig": {
     "access": "public"
