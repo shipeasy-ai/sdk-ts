@@ -201,6 +201,19 @@ interface Experiment {
   hashVersion?: number;
   /** Attribute to bucket on (e.g. company_id); defaults to user_id/anonymous_id. */
   bucketBy?: string | null;
+  /**
+   * Durable per-unit overrides (spec step 1, tier 1): bucketing-unit value → the
+   * forced group. Forced-but-gated — the unit still has to pass targeting and not
+   * be held out, else it sees universe defaults. Bypasses allocation + the
+   * weighted pick only. Applies on every hash_version. Mirrors @shipeasy/core.
+   */
+  idOverrides?: Record<string, string> | null;
+  /**
+   * Durable cohort/GK overrides (spec step 1, tier 2): priority-ordered
+   * `{ gate, group }`. First entry whose gate passes forces that group (again
+   * forced-but-gated). ID overrides win over cohort overrides. Mirrors @shipeasy/core.
+   */
+  cohortOverrides?: { gate: string; group: string; priority?: number }[] | null;
 }
 
 /** One param the universe owns: a name, a type, and the default a variant
@@ -436,6 +449,26 @@ interface ExpStanding {
  * caller supplies `evalGate` (a gate-name → boolean lookup over the flags blob)
  * so the two gate checks reuse the SDK's real gate evaluation.
  */
+/** Resolve a forced override group for `uid` (spec step 1): ID overrides (tier 1)
+ *  beat cohort/GK overrides (tier 2); within cohort overrides the first (pre-sorted
+ *  by priority) gate that passes wins. Returns the forced group name or null. The
+ *  caller applies eligibility + group-existence (forced-but-gated). Mirrors
+ *  @shipeasy/core `resolveForcedGroup`, but evaluates cohort gates via `evalGate`. */
+function resolveForcedGroupLocal(
+  exp: Experiment,
+  uid: string,
+  evalGate: (name: string) => boolean,
+): string | null {
+  const byId = exp.idOverrides?.[uid];
+  if (byId) return byId;
+  if (exp.cohortOverrides) {
+    for (const co of exp.cohortOverrides) {
+      if (evalGate(co.gate)) return co.group;
+    }
+  }
+  return null;
+}
+
 function classifyExperimentLocal(
   exp: Experiment,
   user: User,
@@ -468,6 +501,22 @@ function classifyExperimentLocal(
   if (exp.holdoutGate && evalGate(exp.holdoutGate)) return { state: "holdout" };
 
   const salt8 = exp.salt.slice(0, 8);
+
+  // Durable overrides (spec step 1, forced-but-gated). Reached only once the unit
+  // has passed targeting and is not held out, so an override may now pin the group
+  // — bypassing allocation + the weighted pick but NOT the gates above. ID
+  // overrides (tier 1) beat cohort/GK overrides (tier 2); a forced group that no
+  // longer exists falls through to normal allocation. No-op when unconfigured, so
+  // v1/v2 stay byte-identical. Mirrors @shipeasy/core `classifyExperiment`.
+  const forced = resolveForcedGroupLocal(exp, uid, evalGate);
+  if (forced) {
+    const g = exp.groups.find((x) => x.name === forced);
+    if (g) {
+      sticky?.set({ g: g.name, s: salt8 });
+      return asGroup(g);
+    }
+  }
+
   if (sticky) {
     const entry = sticky.get();
     if (entry && entry.s === salt8) {
@@ -514,36 +563,53 @@ function classifyExperimentLocal(
  * The result of `universe(name).assign(user)` — a user's standing in a universe.
  * A universe is a mutual-exclusion pool, so a unit lands in **at most one**
  * experiment. Never throws: an un-enrolled unit still resolves `get()` to the
- * universe defaults (or your fallback). Reading is side-effect free — the single
- * exposure is logged once by `assign()` when the unit is enrolled.
+ * universe defaults (or your fallback).
+ *
+ * Exposure is logged **on read** (spec step 7): the single exposure fires the
+ * first time an enrolled unit's param is actually read via `get()`, not at
+ * `assign()` time — so an assignment that is computed but never read logs
+ * nothing. Deduped per process; the durable per-(unit, experiment, group) dedup
+ * lives server-side. Pass `{ exposure: false }` to read without logging (peek).
  */
 export interface Assignment {
   /** The experiment the unit landed in, or `null` when not enrolled. */
   readonly name: string | null;
   /** The assigned variant/group name, or `null` when not enrolled. */
   readonly group: string | null;
-  /** True iff the unit is enrolled in an experiment in this universe. */
+  /** True iff the unit is enrolled in an experiment in this universe. Reading it
+   *  does NOT log an exposure (only `get()` of a param does). */
   readonly enrolled: boolean;
   /**
    * Read a resolved param: the assigned variant's override, else the universe
    * default, else `fallback`. Works even when not enrolled (variant layer is
-   * absent, so you get `universeDefault ?? fallback`).
+   * absent, so you get `universeDefault ?? fallback`). The first enrolled read
+   * logs the single exposure; pass `{ exposure: false }` to suppress it (peek).
    */
-  get<T = unknown>(field: string, fallback?: T): T | undefined;
+  get<T = unknown>(field: string, fallback?: T, opts?: { exposure?: boolean }): T | undefined;
 }
 
 class AssignmentImpl implements Assignment {
+  private exposed = false;
   constructor(
     readonly name: string | null,
     readonly group: string | null,
     // Already merged (universeDefaults ⊕ variantOverride) when enrolled;
     // defaults-only (or {}) when not.
     private readonly params: Record<string, unknown>,
+    // Fires the single exposure the first time an enrolled param is read.
+    // Undefined when not enrolled (nothing to expose). Deduped downstream.
+    private readonly onExpose?: () => void,
   ) {}
   get enrolled(): boolean {
     return this.group !== null;
   }
-  get<T = unknown>(field: string, fallback?: T): T | undefined {
+  get<T = unknown>(field: string, fallback?: T, opts?: { exposure?: boolean }): T | undefined {
+    // On-read exposure: the first param read of an enrolled assignment logs one
+    // exposure, unless the caller opted out with { exposure: false }.
+    if (opts?.exposure !== false && !this.exposed && this.onExpose) {
+      this.exposed = true;
+      this.onExpose();
+    }
     const v = this.params[field];
     return v === undefined ? fallback : (v as T);
   }
@@ -1082,8 +1148,12 @@ export class Engine {
     for (const [name, exp] of candidates) {
       const c = this.evalExperiment(name, exp, user);
       if (c.state === "group") {
-        this.postExposure(user, name, c.group as string);
-        return new AssignmentImpl(name, c.group as string, c.params ?? {});
+        const group = c.group as string;
+        // On-read exposure (spec step 7): defer the single exposure to the first
+        // param read via the callback, instead of firing it here at assign time.
+        return new AssignmentImpl(name, group, c.params ?? {}, () =>
+          this.postExposure(user, name, group),
+        );
       }
       // "holdout"/"out": try the next candidate — under pooling only one slice
       // can match, so the loop naturally lands on the winner (or falls through).

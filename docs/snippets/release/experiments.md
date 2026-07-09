@@ -11,9 +11,10 @@ const flags = new Client(currentUser);
 //   .name     — the experiment the unit landed in, or null when not enrolled
 //   .group    — the assigned variant, or null when not enrolled
 //   .enrolled — === (group !== null)
-//   .get(field, fallback) — variant override ?? universe default ?? fallback
-// Server: assign() takes no arg (user bound at construction).
-// Browser: assign(opts?) — opts.logExposure to force/suppress the exposure beacon.
+//   .get(field, fallback, opts?) — variant override ?? universe default ?? fallback
+// Server: assign() takes no arg (user bound at construction); the exposure fires
+//   on the first get() read. Peek without logging: get(field, fallback, { exposure: false }).
+// Browser: assign(opts?) — opts.logExposure to force/suppress the exposure beacon at assign.
 const exp = flags.universe("{{EXPERIMENT_KEY}}").assign();
 
 render(exp.get("primary_label", "Sign up")); // always safe — falls back when not enrolled

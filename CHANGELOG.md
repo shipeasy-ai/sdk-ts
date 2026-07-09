@@ -1,5 +1,37 @@
 # Changelog
 
+## 7.2.0 (2026-07-08)
+
+### Server exposure now fires on read, not at `assign()`
+
+The server `Assignment` now logs its single (deduped) exposure the **first time a
+param is read** via `get()`, not eagerly at `assign()` time — so an assignment
+that is computed but never read logs nothing (matching the canonical evaluation
+spec, step 7). `assign()` is now side-effect free on the server. Read without
+logging (peek) by passing the new opt-out:
+
+```ts
+const exp = flags.universe("hero_cta").assign();
+exp.get("primary_label", "Sign up", { exposure: false }); // peek — no exposure
+exp.get("primary_label", "Sign up");                       // logs the single exposure
+```
+
+`get<T>(field, fallback?, opts?: { exposure?: boolean })` gains the optional third
+argument; the change is source-compatible. The **browser** entrypoint is
+unchanged — it still logs at `assign()` time (`assign({ logExposure: false })` to
+suppress). Exposure remains deduped per session and, new in this release, durably
+per `(unit, experiment, group)` on the server via the `exposure_log` surface.
+
+### Durable, forced-but-gated experiment overrides
+
+Assignment now honours durable **ID overrides** (force a specific unit into a
+group) and **cohort/gate overrides** (force units passing a gate into a group)
+carried on the experiments blob (KV format 5). Overrides are *forced but still
+gated*: a matched override pins the group only if the unit passes targeting and
+isn't held out, and ID overrides beat cohort overrides. Running experiments are
+untouched — the new resolution order rides `hash_version: 3`; `v1`/`v2`
+assignments are byte-identical.
+
 ## 7.1.1 (2026-07-08)
 
 ### Fix — browser client no longer crashes under React Native

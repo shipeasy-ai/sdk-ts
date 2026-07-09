@@ -139,10 +139,10 @@ describe("eval-parity golden vectors — experiment evaluation", () => {
 
   for (const v of expVectors) {
     it(`experiment: ${v.note}`, () => {
-      // Reproduce the targeting-gate outcome the fixture states directly.
+      // Reproduce every gate outcome the fixture states directly — targeting AND
+      // any cohort-override gate the vector references via `flags`.
       const gates: Record<string, object> = {};
-      const tg = v.experiment.targetingGate;
-      if (tg) gates[tg] = constantGate(v.flags[tg] ?? false);
+      for (const [name, val] of Object.entries(v.flags)) gates[name] = constantGate(val);
 
       const universes: Record<string, { holdout_range: [number, number] | null }> = {
         [v.experiment.universe]: { holdout_range: v.holdoutRange },

@@ -2,9 +2,10 @@
 
 Experiments are read by **universe**. A universe is a mutual-exclusion pool: a
 unit lands in **at most one** experiment in it. `assign()` picks that experiment
-(if any), returns the assigned group plus its resolved parameters, and auto-logs
-a single exposure. You read parameters with `assign(...).get(field, fallback)`
-and record a conversion with `track`.
+(if any) and returns the assigned group plus its resolved parameters. You read
+parameters with `assign(...).get(field, fallback)` — and on the **server** that
+first `get()` is what auto-logs the single exposure (see
+[Exposure logging](#exposure-logging)). Record a conversion with `track`.
 
 ## Read an experiment
 
@@ -22,8 +23,10 @@ render(cta.get("primary_label", "Sign up"));
 ```
 
 On the **server** the user is bound at construction, so `assign()` takes no
-argument. In the **browser** the identified visitor is global, so `assign()` also
-takes no user (optionally `assign({ logExposure: false })`).
+argument, and the exposure fires on the first param `get()` (peek with
+`get(field, fallback, { exposure: false })`). In the **browser** the identified
+visitor is global, so `assign()` also takes no user, and the exposure fires at
+assign time (suppress with `assign({ logExposure: false })`).
 
 ## `Assignment`
 
@@ -31,8 +34,10 @@ takes no user (optionally `assign({ logExposure: false })`).
 interface Assignment {
   name: string | null;   // the experiment the unit landed in, or null when not enrolled
   group: string | null;  // the assigned variant, or null when not enrolled
-  enrolled: boolean;     // === (group !== null)
-  get<T>(field: string, fallback?: T): T | undefined; // variant ?? universe default ?? fallback
+  enrolled: boolean;     // === (group !== null) — reading it does NOT log an exposure
+  // variant ?? universe default ?? fallback. On the server, the first read of an
+  // enrolled assignment logs the single exposure; pass { exposure: false } to peek.
+  get<T>(field: string, fallback?: T, opts?: { exposure?: boolean }): T | undefined;
 }
 ```
 
@@ -81,7 +86,20 @@ for (const user of users) {
 
 ## Exposure logging
 
-By default `assign()` auto-logs a single (deduped) exposure when the unit is
-enrolled. To control exactly when the exposure fires — e.g. suppress it on read
-and log it on render of the treatment — see
+Exposure is logged **on read**: on the **server** the single (deduped) exposure
+fires the first time you read a param of an enrolled assignment via `get()` — so
+an assignment that is computed but never read logs nothing. `assign()` itself is
+side-effect free. Read without logging (peek) by passing `{ exposure: false }`:
+
+```ts
+const cta = flags.universe("hero_cta").assign();
+const label = cta.get("primary_label", "Sign up", { exposure: false }); // peek — no exposure
+// ... later, at the real decision point:
+render(cta.get("primary_label", "Sign up")); // this read logs the single exposure
+```
+
+In the **browser** the exposure fires at `assign()` time instead (the visitor is
+already resolved); suppress it with `assign({ logExposure: false })`. Either way
+exposure is deduped per session and durably per `(unit, experiment, group)`
+server-side. For finer control see
 [Advanced → exposure control](./advanced.md).

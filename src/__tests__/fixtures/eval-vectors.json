@@ -708,6 +708,292 @@
         "inExperiment": true,
         "group": "c"
       }
+    },
+    {
+      "note": "ID override forces treatment despite allocationPct=0 (would be OUT naturally)",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 0,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running",
+        "idOverrides": {
+          "user_beta": "treatment"
+        }
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "treatment"
+      }
+    },
+    {
+      "note": "ID override is forced-but-gated: fails targeting gate → OUT (universe defaults)",
+      "experiment": {
+        "universe": "universe_pricing",
+        "targetingGate": "beta_users",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running",
+        "idOverrides": {
+          "user_beta": "treatment"
+        }
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {
+        "beta_users": false
+      },
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "ID override is forced-but-gated: universe holdout covers segment (1069) → OUT",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running",
+        "idOverrides": {
+          "user_beta": "treatment"
+        }
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": [
+        1069,
+        1069
+      ],
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "cohort/GK override forces treatment when its gate passes, bypassing allocationPct=0",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 0,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running",
+        "cohortOverrides": [
+          {
+            "gate": "vip_cohort",
+            "group": "treatment",
+            "priority": 0
+          }
+        ]
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {
+        "vip_cohort": true
+      },
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "treatment"
+      }
+    },
+    {
+      "note": "cohort override does NOT force when its gate fails → natural allocationPct=0 → OUT",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 0,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running",
+        "cohortOverrides": [
+          {
+            "gate": "vip_cohort",
+            "group": "treatment",
+            "priority": 0
+          }
+        ]
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {
+        "vip_cohort": false
+      },
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": false,
+        "group": null
+      }
+    },
+    {
+      "note": "ID override beats a matching cohort override (tier 1 wins) → control",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 0,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 5000,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 5000,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running",
+        "idOverrides": {
+          "user_beta": "control"
+        },
+        "cohortOverrides": [
+          {
+            "gate": "vip_cohort",
+            "group": "treatment",
+            "priority": 0
+          }
+        ]
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {
+        "vip_cohort": true
+      },
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "control"
+      }
+    },
+    {
+      "note": "forced group name that no longer exists falls through to normal allocation → control",
+      "experiment": {
+        "universe": "universe_pricing",
+        "allocationPct": 10000,
+        "salt": "exp_pricing_42",
+        "groups": [
+          {
+            "name": "control",
+            "weight": 9086,
+            "params": {
+              "variant": "a"
+            }
+          },
+          {
+            "name": "treatment",
+            "weight": 914,
+            "params": {
+              "variant": "b"
+            }
+          }
+        ],
+        "status": "running",
+        "idOverrides": {
+          "user_beta": "ghost_group_removed"
+        }
+      },
+      "user": {
+        "user_id": "user_beta"
+      },
+      "flags": {},
+      "holdoutRange": null,
+      "result": {
+        "inExperiment": true,
+        "group": "control"
+      }
     }
   ]
 }

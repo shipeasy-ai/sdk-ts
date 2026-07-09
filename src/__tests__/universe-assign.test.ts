@@ -230,3 +230,64 @@ describe("universe().assign() — holdoutGate (§B3)", () => {
     expect(a.group).toBeNull();
   });
 });
+
+describe("universe().assign() — durable overrides (v3, forced-but-gated)", () => {
+  // An experiment allocated 0% (nobody enrolls naturally) with an ID override for
+  // one unit + a cohort override keyed on a gate. Proves the override is what
+  // enrolls, and that gates still filter forced units.
+  const pass = { rules: [], rolloutPct: 10000, salt: "g", enabled: 1 as const };
+  const fail = { rules: [], rolloutPct: 0, salt: "g", enabled: 1 as const };
+  const build = (gates: Record<string, unknown>, expExtra: Record<string, unknown>) =>
+    makeEngine(
+      { gates } as never,
+      {
+        universes: { u: { holdout_range: null } },
+        experiments: {
+          exp: {
+            universe: "u",
+            allocationPct: 0, // nobody enrolls naturally
+            salt: "s",
+            status: "running",
+            groups: [
+              { name: "control", weight: 5000, params: { c: "A" } },
+              { name: "treatment", weight: 5000, params: { c: "B" } },
+            ],
+            ...expExtra,
+          },
+        },
+      } as never,
+    );
+
+  it("ID override forces the group despite 0% allocation", () => {
+    const e = build({}, { idOverrides: { forced_unit: "treatment" } });
+    expect(e.universe("u").assign({ user_id: "someone_else" }).enrolled).toBe(false);
+    const a = e.universe("u").assign({ user_id: "forced_unit" });
+    expect(a.group).toBe("treatment");
+    expect(a.get("c")).toBe("B");
+  });
+
+  it("ID override is forced-but-gated: a failing targeting gate → not enrolled", () => {
+    const e = build({ beta: fail }, { targetingGate: "beta", idOverrides: { forced_unit: "treatment" } });
+    expect(e.universe("u").assign({ user_id: "forced_unit" }).enrolled).toBe(false);
+  });
+
+  it("ID override is forced-but-gated: a passing targeting gate → forced group", () => {
+    const e = build({ beta: pass }, { targetingGate: "beta", idOverrides: { forced_unit: "treatment" } });
+    expect(e.universe("u").assign({ user_id: "forced_unit" }).group).toBe("treatment");
+  });
+
+  it("cohort/GK override forces the group when its gate passes, not when it fails", () => {
+    const passing = build({ vip: pass }, { cohortOverrides: [{ gate: "vip", group: "treatment", priority: 0 }] });
+    expect(passing.universe("u").assign({ user_id: "anyone" }).group).toBe("treatment");
+    const failing = build({ vip: fail }, { cohortOverrides: [{ gate: "vip", group: "treatment", priority: 0 }] });
+    expect(failing.universe("u").assign({ user_id: "anyone" }).enrolled).toBe(false);
+  });
+
+  it("ID override (tier 1) beats a matching cohort override (tier 2)", () => {
+    const e = build(
+      { vip: pass },
+      { idOverrides: { forced_unit: "control" }, cohortOverrides: [{ gate: "vip", group: "treatment", priority: 0 }] },
+    );
+    expect(e.universe("u").assign({ user_id: "forced_unit" }).group).toBe("control");
+  });
+});

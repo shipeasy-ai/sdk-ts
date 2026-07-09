@@ -171,6 +171,16 @@ describe("server assign() auto-exposure", () => {
     const a = live.universe("u").assign({ user_id: "user_abc" });
     expect(a.enrolled).toBe(true);
     expect(a.group).toBe("test");
+    // On-read exposure (spec step 7): assign() alone logs NOTHING — reading the
+    // `.group`/`.enrolled` standing is side-effect free.
+    expect(collectBodies).toHaveLength(0);
+
+    // A peek ({ exposure: false }) reads the param without logging.
+    expect(a.get("color", undefined, { exposure: false })).toBe("blue");
+    expect(collectBodies).toHaveLength(0);
+
+    // The first real param read fires the single exposure.
+    expect(a.get("color")).toBe("blue");
     expect(collectBodies).toHaveLength(1);
     const parsed = JSON.parse(collectBodies[0]) as {
       events: { type: string; experiment: string; group: string; user_id?: string }[];
@@ -182,12 +192,16 @@ describe("server assign() auto-exposure", () => {
       user_id: "user_abc",
     });
 
-    // Repeat assign for the same (user, exp, group) is deduped per process.
-    live.universe("u").assign({ user_id: "user_abc" });
+    // A second read of the same assignment does not re-fire.
+    expect(a.get("color")).toBe("blue");
+    expect(collectBodies).toHaveLength(1);
+
+    // A fresh assign + read for the same (user, exp, group) is deduped per process.
+    live.universe("u").assign({ user_id: "user_abc" }).get("color");
     expect(collectBodies).toHaveLength(1); // no new POST
 
-    // A not-enrolled read (unknown universe) never posts.
-    live.universe("missing_universe").assign({ user_id: "user_abc" });
+    // A not-enrolled read (unknown universe) never posts, even when get() is called.
+    live.universe("missing_universe").assign({ user_id: "user_abc" }).get("color");
     expect(collectBodies).toHaveLength(1);
   });
 });

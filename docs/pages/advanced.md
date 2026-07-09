@@ -5,26 +5,41 @@ LaunchDarkly / Statsig parity features. All are set as options on `configure()`
 
 ## Exposure control
 
-By default `universe(name).assign()` fires one (deduped) exposure beacon when the
-unit is enrolled. In the **browser** you can suppress that beacon so the exposure
-only counts when the treatment actually renders — read without auto-exposure, then
-re-`assign()` (with logging on) at render:
+One (deduped) exposure beacon is logged per enrolled unit. **When** it fires
+differs by entrypoint, and both give you a way to suppress it:
 
-```ts
-const flags = new Client(visitor); // construct once per callsite
+- **Server** — exposure fires on the **first `get()` read** of an enrolled
+  assignment, not at `assign()` time. To read without logging (peek), pass
+  `{ exposure: false }`; the exposure then fires on the next real read.
 
-// Read the params WITHOUT logging an exposure:
-const cta = flags.universe("hero_cta").assign({ logExposure: false });
-render(cta.get("primary_label", "Sign up"));
+  ```ts
+  const flags = new Client(user); // construct once per callsite
 
-// …at the moment you actually render the treatment, log the exposure:
-flags.universe("hero_cta").assign(); // auto-logs (deduped per session)
-```
+  const cta = flags.universe("hero_cta").assign();
+  // Peek the params WITHOUT logging an exposure:
+  const preview = cta.get("primary_label", "Sign up", { exposure: false });
 
-To make suppression the default for **every** browser read, set
-`disableAutoExposure: true` on `configure()` and pass `assign({ logExposure: true })`
-at the callsites where you do want the exposure. On the server, `assign()` always
-auto-logs a single deduped exposure (there is no read-without-exposure form).
+  // …at the moment you actually render the treatment, read normally to log it:
+  render(cta.get("primary_label", "Sign up")); // logs the single exposure (deduped)
+  ```
+
+- **Browser** — exposure fires at `assign()` time (the visitor is already
+  resolved). Suppress it with `assign({ logExposure: false })` and re-`assign()`
+  with logging on at render, or make suppression the default for **every** read
+  with `disableAutoExposure: true` on `configure()` and opt back in per callsite
+  with `assign({ logExposure: true })`.
+
+  ```ts
+  const flags = new Client(visitor); // construct once per callsite
+
+  const cta = flags.universe("hero_cta").assign({ logExposure: false });
+  render(cta.get("primary_label", "Sign up"));
+
+  flags.universe("hero_cta").assign(); // …log the exposure at render (deduped per session)
+  ```
+
+Either way the exposure is deduped per session and durably per
+`(unit, experiment, group)` server-side.
 
 ## Private attributes
 

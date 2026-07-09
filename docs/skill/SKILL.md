@@ -60,7 +60,8 @@ snippets <https://shipeasy-ai.github.io/sdk-ts/snippets/release/flags.md> ·
 const flags = new Client(currentUser); // construct once per callsite
 
 // Read experiments by UNIVERSE (a mutual-exclusion pool — the unit lands in ≤1
-// experiment). assign() auto-logs one deduped exposure when enrolled.
+// experiment). Server: the first get() read auto-logs one deduped exposure
+// (peek with get(field, fallback, { exposure: false })). Browser: assign() logs it.
 const exp = flags.universe("hero_cta").assign();
 render(exp.get("primary_label", "Sign up")); // variant ?? universe default ?? fallback
 
