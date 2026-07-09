@@ -2,6 +2,8 @@
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
 import { isProductionEnv } from "../env";
+import { CAPABILITIES_BRIDGE_KEY, type CapabilitiesBridge } from "../devtools/capabilities";
+import type { DevtoolsCapabilities } from "../devtools/types";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
@@ -142,7 +144,15 @@ interface EvalResponse {
    * sticky bucketing is on and at least one assignment was made/refreshed.
    */
   sticky?: Record<string, StickyCookieEntry>;
+  /**
+   * Project capability flags for the devtools overlays (worker blob format ≥6).
+   * `allow_public_tickets` drives the "file a public bug" affordance — absent on
+   * older workers, so readers must treat missing as false.
+   */
+  devtools?: { allow_public_tickets?: boolean };
 }
+
+export type { DevtoolsCapabilities } from "../devtools/types";
 
 /**
  * The result of `universe(name).assign()` — the visitor's standing in a universe.
@@ -480,23 +490,27 @@ export function sameOrigin(rawUrl: string): boolean {
  * existing headers across all three arg shapes (string / URL / Request). Never
  * mutates the caller's objects. Best-effort: on any failure the original args
  * pass through unchanged (correlation is optional, never breaks the fetch).
+ *
+ * Generic over the tuple (not `Parameters<typeof fetch>`) because DOM's and
+ * react-native's global fetch signatures differ — pinning either breaks the
+ * other's type-check when both libs are in the program (the RN devtools entry).
  */
-export function injectCorrelationHeader(
-  args: Parameters<typeof fetch>,
+export function injectCorrelationHeader<A extends [unknown, (RequestInit | undefined)?]>(
+  args: A,
   corr: string,
-): Parameters<typeof fetch> {
+): A {
   try {
     const input = args[0];
     if (typeof Request !== "undefined" && input instanceof Request) {
       const headers = new Headers(input.headers);
       headers.set("X-SE-Correlation", corr);
-      return [new Request(input, { headers }), ...args.slice(1)] as Parameters<typeof fetch>;
+      return [new Request(input, { headers }), ...args.slice(1)] as A;
     }
     const init = { ...(args[1] ?? {}) };
     const headers = new Headers(init.headers ?? undefined);
     headers.set("X-SE-Correlation", corr);
     init.headers = headers;
-    return [input, init] as Parameters<typeof fetch>;
+    return [input, init] as unknown as A;
   } catch {
     return args;
   }
@@ -592,7 +606,9 @@ function installAutoGuardrails(
       }
       let res: Response;
       try {
-        res = await origFetch.apply(this, args);
+        // apply() through a loose view: DOM's and react-native's global fetch
+        // param tuples differ, and this wrapper must type-check under both.
+        res = await (origFetch as (...a: typeof args) => Promise<Response>).apply(this, args);
       } catch (err) {
         // Network-level failure (DNS, offline, CORS, abort) — never reaches a status.
         if (!ignored && !isExpected(err)) {
@@ -1227,6 +1243,20 @@ export class Engine {
     } else {
       void this.buffer.flushPendingAlias();
     }
+    // Publish the capabilities bridge on globalThis (works in RN too — no
+    // window). The devtools overlays ship as separate bundles and read project
+    // capabilities through this instead of importing the client (which would
+    // inline a second Engine singleton). Last-constructed engine wins,
+    // matching the `_client` singleton semantics.
+    try {
+      const bridge: CapabilitiesBridge = {
+        get: () => this.devtoolsCapabilities,
+        subscribe: (listener) => this.subscribe(listener),
+      };
+      (globalThis as Record<string, unknown>)[CAPABILITIES_BRIDGE_KEY] = bridge;
+    } catch {
+      /* publishing the bridge must never break construction */
+    }
   }
 
   /**
@@ -1389,6 +1419,13 @@ export class Engine {
 
   get ready(): boolean {
     return this.evalResult !== null;
+  }
+
+  /** Project devtools capabilities from the last eval, or `null` before the
+   *  first eval lands. Reactive via {@link subscribe}. */
+  get devtoolsCapabilities(): DevtoolsCapabilities | null {
+    if (this.evalResult === null) return null;
+    return { allowPublicTickets: this.evalResult.devtools?.allow_public_tickets === true };
   }
 
   private notify(): void {
@@ -2122,6 +2159,39 @@ function wireStandaloneOverride(): void {
   window.addEventListener("se:override:change", () => {
     for (const cb of _standaloneListeners) cb();
   });
+}
+
+/**
+ * Project devtools capabilities from the configured client's last eval, or
+ * `null` before configure()/the first eval. The devtools overlays read this to
+ * decide which affordances to render (e.g. the public bug button). Subscribe
+ * to changes with {@link subscribeDevtoolsCapabilities}.
+ */
+export function getDevtoolsCapabilities(): DevtoolsCapabilities | null {
+  return _client?.devtoolsCapabilities ?? null;
+}
+
+/**
+ * Notify `listener` whenever the configured client's state changes (eval landed,
+ * identify resolved). Safe to call before configure() — the listener is wired to
+ * the singleton lazily on the next state change; returns an unsubscribe.
+ */
+export function subscribeDevtoolsCapabilities(listener: () => void): () => void {
+  if (_client) return _client.subscribe(listener);
+  // Not configured yet: poll for the singleton, then attach. Cheap (1 Hz) and
+  // self-terminating — devtools overlays are the only expected caller.
+  let unsub: (() => void) | null = null;
+  const timer = setInterval(() => {
+    if (_client) {
+      clearInterval(timer);
+      unsub = _client.subscribe(listener);
+      listener();
+    }
+  }, 1000);
+  return () => {
+    clearInterval(timer);
+    unsub?.();
+  };
 }
 
 /**

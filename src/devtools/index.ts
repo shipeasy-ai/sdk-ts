@@ -30,6 +30,10 @@ export type {
 export { AuthError, DevtoolsClient } from "./api";
 export type { DevtoolsClientOptions } from "./api";
 
+export { readDevtoolsCapabilities, watchDevtoolsCapabilities } from "./capabilities";
+export type { CapabilitiesBridge } from "./capabilities";
+export type { DevtoolsCapabilities } from "./types";
+
 export { LoginCancelled, parseDeepLinkQuery, startDeviceAuth } from "./auth";
 export type { AuthSessionResult, DeviceAuthAdapters, DeviceAuthOptions } from "./auth";
 

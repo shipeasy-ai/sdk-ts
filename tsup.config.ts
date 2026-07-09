@@ -40,6 +40,28 @@ export default defineConfig([
     dts: true,
     external: ["@openfeature/server-sdk", "@openfeature/web-sdk"],
   },
+  // Headless devtools core (admin API client, PKCE device auth, public bug
+  // intake, form schemas). `zod` is an optional peer of this subpath — external
+  // so it resolves from the consumer's install.
+  {
+    entry: { index: "src/devtools/index.ts" },
+    outDir: "dist/devtools",
+    format: ["cjs", "esm"],
+    dts: true,
+    external: ["zod"],
+  },
+  // React Native devtools overlay. React / react-native / the expo-* modules
+  // are optional peers — external, resolved (or not) in the consumer app. The
+  // overlay never imports the client module (that would inline a second Engine
+  // singleton); project capabilities arrive via the globalThis bridge the
+  // client Engine publishes (src/devtools/capabilities.ts).
+  {
+    entry: { index: "src/react-native-devtools/index.ts" },
+    outDir: "dist/react-native-devtools",
+    format: ["cjs", "esm"],
+    dts: true,
+    external: ["react", "react/jsx-runtime", "react-native", /^expo-/, "zod"],
+  },
   // `shipeasy-skill` CLI — the opt-in installer that copies the bundled agent
   // skill (docs/skill/SKILL.md) into a consumer's project. A Node bin (CJS +
   // shebang); SKILL.md ships via the package `files` list and is read at runtime.

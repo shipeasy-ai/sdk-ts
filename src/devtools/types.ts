@@ -6,6 +6,13 @@
 export const DEFAULT_ADMIN_BASE_URL = "https://shipeasy.ai";
 export const DEFAULT_EDGE_BASE_URL = "https://api.shipeasy.ai";
 
+/** Project capabilities the devtools overlays render against. */
+export interface DevtoolsCapabilities {
+  /** True when the project opted into public bug intake (Settings →
+   *  "Allow public tickets") — shows the "file a public bug" button. */
+  allowPublicTickets: boolean;
+}
+
 /** A completed device-auth login: the minted admin key + the project it binds. */
 export interface DevtoolsSession {
   /** Raw admin SDK key (`sdk_admin_*`). Store securely (Keychain/Keystore). */

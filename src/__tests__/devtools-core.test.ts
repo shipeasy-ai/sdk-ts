@@ -100,7 +100,12 @@ describe("DevtoolsClient", () => {
     });
 
     await client.bugs();
-    await client.createBug({ title: "It broke" });
+    await client.createBug({
+      title: "It broke",
+      stepsToReproduce: "",
+      actualResult: "",
+      expectedResult: "",
+    });
     const post = calls.find((c) => c.body);
     expect(post?.body).toMatchObject({ title: "It broke", type: "bug" });
 

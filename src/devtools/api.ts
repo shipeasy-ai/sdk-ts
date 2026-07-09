@@ -322,7 +322,14 @@ export class DevtoolsClient {
     fd.append("reportId", args.reportId);
     fd.append("kind", args.kind);
     fd.append("filename", args.filename);
-    fd.append("file", args.blob, args.filename);
+    // DOM FormData takes (name, blob, filename); react-native's TYPES declare a
+    // 2-arg append even though its runtime accepts the filename too. Call
+    // through a 3-arg view so both type-check programs accept it.
+    (fd.append as (name: string, value: Blob, fileName?: string) => void)(
+      "file",
+      args.blob,
+      args.filename,
+    );
     const path = "/api/admin/reports/attachments";
     const res = await this.fetchImpl(`${this.adminBaseUrl}${path}`, {
       method: "POST",
