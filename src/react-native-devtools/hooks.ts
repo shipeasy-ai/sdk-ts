@@ -3,23 +3,40 @@
 // styled overlay in ./components is one consumer.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useForm } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { DevtoolsClient } from "../devtools/api";
 import { startDeviceAuth, LoginCancelled } from "../devtools/auth";
 import type { DeviceAuthAdapters } from "../devtools/auth";
 import { submitPublicBug, PublicTicketsDisabled } from "../devtools/public-report";
-import { bugFormToPublicInput, validateBugForm } from "../devtools/forms";
-import type { BugFormValues, FormErrors } from "../devtools/forms";
+import { bugFormSchema, bugFormToPublicInput, featureFormSchema } from "../devtools/forms";
 import type {
+  BugFormInput,
+  BugFormValues,
+  FeatureFormInput,
+  FeatureFormValues,
+} from "../devtools/forms";
+import type {
+  BugDetail,
   BugRecord,
   ConfigRecord,
   DevtoolsSession,
   ExperimentRecord,
+  FeatureRequestDetail,
+  FeatureRequestRecord,
   GateRecord,
+  KeyRecord,
+  ProfileRecord,
+  ProjectRecord,
+  UniverseRecord,
 } from "../devtools/types";
 import {
   readDevtoolsCapabilities,
   watchDevtoolsCapabilities,
 } from "../devtools/capabilities";
+import { readEngineBridge, watchEngineBridge } from "../devtools/bridge";
+import type { DevtoolsEngineBridge, DevtoolsStateEvent } from "../devtools/bridge";
 import type { DevtoolsCapabilities } from "../devtools/types";
 import { makeExpoAuthAdapters, makeSessionStorage, getAccelerometer } from "./expo-adapters";
 import type { SessionStorage } from "./expo-adapters";
@@ -48,6 +65,76 @@ export function useDevtoolsCapabilities(): DevtoolsCapabilities | null {
     readDevtoolsCapabilities,
     readDevtoolsCapabilities,
   );
+}
+
+// ── engine bridge (live values / user / overrides) ──────────────────────────
+
+/** The configured `@shipeasy/sdk/client` singleton's devtools bridge, read via
+ *  `globalThis` (no client import — that would inline a second Engine).
+ *  `null` when the host app hasn't configured the client SDK; the overlay
+ *  hides live-state UI then. Re-renders on every engine state change. */
+export function useEngineBridge(): DevtoolsEngineBridge | null {
+  const [bridge, setBridge] = useState<DevtoolsEngineBridge | null>(readEngineBridge);
+  const [, setGen] = useState(0);
+  useEffect(
+    () =>
+      watchEngineBridge(() => {
+        setBridge(readEngineBridge());
+        // The bridge object is stable across state changes — bump a counter so
+        // panels re-read live values after identify()/override mutations.
+        setGen((g) => g + 1);
+      }),
+    [],
+  );
+  return bridge;
+}
+
+// ── events feed ──────────────────────────────────────────────────────────────
+
+const EVENT_RING_SIZE = 200;
+// Module-level ring so events captured while the overlay is CLOSED still show
+// when it opens (mirrors the web overlay's window-listener-at-import).
+const eventRing: DevtoolsStateEvent[] = [];
+const eventListeners = new Set<() => void>();
+let eventCaptureStarted = false;
+
+/** Start capturing engine events into the shared ring. Idempotent; attaches
+ *  lazily when the client SDK configures after us. */
+export function ensureEventCapture(): void {
+  if (eventCaptureStarted) return;
+  eventCaptureStarted = true;
+  const attach = (bridge: DevtoolsEngineBridge) =>
+    bridge.onEvent((event) => {
+      eventRing.push(event);
+      if (eventRing.length > EVENT_RING_SIZE) eventRing.shift();
+      for (const l of eventListeners) l();
+    });
+  const now = readEngineBridge();
+  if (now) {
+    attach(now);
+    return;
+  }
+  const timer = setInterval(() => {
+    const late = readEngineBridge();
+    if (late) {
+      clearInterval(timer);
+      attach(late);
+    }
+  }, 1000);
+}
+
+/** Snapshot of the captured event feed, newest last. Re-renders per event. */
+export function useEventLog(): DevtoolsStateEvent[] {
+  ensureEventCapture();
+  const [snapshot, setSnapshot] = useState<DevtoolsStateEvent[]>(() => eventRing.slice());
+  useEffect(() => {
+    const listener = () => setSnapshot(eventRing.slice());
+    eventListeners.add(listener);
+    return () => {
+      eventListeners.delete(listener);
+    };
+  }, []);
+  return snapshot;
 }
 
 // ── auth ─────────────────────────────────────────────────────────────────────
@@ -163,10 +250,13 @@ export interface QueryState<T> {
   refresh(): void;
 }
 
-/** Load `run(client)` once per client (+ per refresh). Null client → idle. */
+/** Load `run(client)` once per client (+ per refresh, + per `key` change —
+ *  pass the query's parameters as `key` so a new argument refetches). Null
+ *  client → idle. */
 function useClientQuery<T>(
   client: DevtoolsClient | null,
   run: (client: DevtoolsClient) => Promise<T>,
+  key = "",
 ): QueryState<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
@@ -199,7 +289,7 @@ function useClientQuery<T>(
     return () => {
       alive = false;
     };
-  }, [client, generation]);
+  }, [client, generation, key]);
 
   const refresh = useCallback(() => {
     client?.invalidate();
@@ -207,6 +297,10 @@ function useClientQuery<T>(
   }, [client]);
 
   return { data, loading, error, refresh };
+}
+
+export function useProject(client: DevtoolsClient | null): QueryState<ProjectRecord> {
+  return useClientQuery(client, (c) => c.project());
 }
 
 export function useGates(client: DevtoolsClient | null): QueryState<GateRecord[]> {
@@ -221,16 +315,54 @@ export function useExperiments(client: DevtoolsClient | null): QueryState<Experi
   return useClientQuery(client, (c) => c.experiments());
 }
 
+export function useUniverses(client: DevtoolsClient | null): QueryState<UniverseRecord[]> {
+  return useClientQuery(client, (c) => c.universes());
+}
+
 export function useFeedback(client: DevtoolsClient | null): QueryState<BugRecord[]> {
   return useClientQuery(client, (c) => c.bugs());
 }
 
+export function useFeatureRequests(
+  client: DevtoolsClient | null,
+): QueryState<FeatureRequestRecord[]> {
+  return useClientQuery(client, (c) => c.featureRequests());
+}
+
+export function useBugDetail(
+  client: DevtoolsClient | null,
+  id: string | null,
+): QueryState<BugDetail> {
+  return useClientQuery(id ? client : null, (c) => c.bug(id as string), id ?? "");
+}
+
+export function useFeatureDetail(
+  client: DevtoolsClient | null,
+  id: string | null,
+): QueryState<FeatureRequestDetail> {
+  return useClientQuery(id ? client : null, (c) => c.featureRequest(id as string), id ?? "");
+}
+
+export function useProfiles(client: DevtoolsClient | null): QueryState<ProfileRecord[]> {
+  return useClientQuery(client, (c) => c.profiles());
+}
+
+export function useI18nKeys(
+  client: DevtoolsClient | null,
+  profileId: string | null,
+): QueryState<KeyRecord[]> {
+  return useClientQuery(client, (c) => c.keys(profileId ?? undefined), profileId ?? "");
+}
+
 // ── bug form ─────────────────────────────────────────────────────────────────
+//
+// Form state is react-hook-form; validation is the GENERATED zod schema
+// (`bugFormSchema`, from the admin OpenAPI contract) via `zodResolver` — the
+// hooks add only what RHF can't know: which endpoint a submit goes to.
 
 export interface BugFormState {
-  values: Partial<BugFormValues>;
-  setField(field: keyof BugFormValues & string, value: string): void;
-  errors: FormErrors<BugFormValues>;
+  /** react-hook-form instance — drive fields with `<Controller control={…}>`. */
+  form: UseFormReturn<BugFormInput, unknown, BugFormValues>;
   submitting: boolean;
   /** Set after a successful submit (public path carries the ticket number). */
   result: { number?: number; deduped?: boolean } | null;
@@ -250,63 +382,115 @@ export function useBugForm(args: {
   client: DevtoolsClient | null;
   context?: Record<string, unknown>;
 }): BugFormState {
-  const [values, setValues] = useState<Partial<BugFormValues>>({});
-  const [errors, setErrors] = useState<FormErrors<BugFormValues>>({});
-  const [submitting, setSubmitting] = useState(false);
+  const form = useForm<BugFormInput, unknown, BugFormValues>({
+    resolver: zodResolver(bugFormSchema),
+    defaultValues: { title: "", stepsToReproduce: "", actualResult: "", expectedResult: "" },
+  });
   const [result, setResult] = useState<{ number?: number; deduped?: boolean } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [publicDisabled, setPublicDisabled] = useState(false);
-
-  const setField = useCallback((field: keyof BugFormValues & string, value: string) => {
-    setValues((v) => ({ ...v, [field]: value }));
-    setErrors((e) => (field in e ? { ...e, [field]: undefined } : e));
-  }, []);
-
-  const reset = useCallback(() => {
-    setValues({});
-    setErrors({});
-    setResult(null);
-    setSubmitError(null);
-    setPublicDisabled(false);
-  }, []);
 
   const { config, client, context } = args;
 
   const submit = useCallback(async () => {
     setSubmitError(null);
-    const v = validateBugForm(values);
-    if (!v.ok) {
-      setErrors(v.errors);
-      return;
-    }
-    setSubmitting(true);
-    try {
-      if (client) {
-        await client.createBug({ ...v.value, context: { ...v.value.context, ...context } });
-        setResult({});
-      } else {
-        if (!config.clientKey) {
-          throw new Error("Public bug reporting needs a clientKey on <ShipeasyDevtools>.");
+    await form.handleSubmit(async (value) => {
+      try {
+        if (client) {
+          await client.createBug({ ...value, context: { ...value.context, ...context } });
+          setResult({});
+        } else {
+          if (!config.clientKey) {
+            throw new Error("Public bug reporting needs a clientKey on <ShipeasyDevtools>.");
+          }
+          const r = await submitPublicBug(bugFormToPublicInput(value, { context }), {
+            clientKey: config.clientKey,
+            edgeBaseUrl: config.edgeBaseUrl,
+          });
+          setResult(r);
         }
-        const r = await submitPublicBug(bugFormToPublicInput(v.value, { context }), {
-          clientKey: config.clientKey,
-          edgeBaseUrl: config.edgeBaseUrl,
+      } catch (e) {
+        if (e instanceof PublicTicketsDisabled) {
+          setPublicDisabled(true);
+          setSubmitError("Public bug reporting is not enabled for this project.");
+        } else {
+          setSubmitError(e instanceof Error ? e.message : "Submit failed. Please try again.");
+        }
+      }
+    })();
+  }, [client, config.clientKey, config.edgeBaseUrl, context, form]);
+
+  const reset = useCallback(() => {
+    form.reset();
+    setResult(null);
+    setSubmitError(null);
+    setPublicDisabled(false);
+  }, [form]);
+
+  return {
+    form,
+    submitting: form.formState.isSubmitting,
+    result,
+    submitError,
+    publicDisabled,
+    submit,
+    reset,
+  };
+}
+
+// ── feature-request form ─────────────────────────────────────────────────────
+
+export interface FeatureFormState {
+  /** react-hook-form instance — drive fields with `<Controller control={…}>`. */
+  form: UseFormReturn<FeatureFormInput, unknown, FeatureFormValues>;
+  submitting: boolean;
+  result: { id: string } | null;
+  submitError: string | null;
+  submit(): Promise<void>;
+  reset(): void;
+}
+
+/** Authed-only counterpart of {@link useBugForm} — the public intake takes
+ *  bugs only, so the feature form renders only for a logged-in session. */
+export function useFeatureForm(args: {
+  client: DevtoolsClient | null;
+  context?: Record<string, unknown>;
+}): FeatureFormState {
+  const form = useForm<FeatureFormInput, unknown, FeatureFormValues>({
+    resolver: zodResolver(featureFormSchema),
+    defaultValues: { title: "", description: "", useCase: "" },
+  });
+  const [result, setResult] = useState<{ id: string } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const { client, context } = args;
+
+  const submit = useCallback(async () => {
+    setSubmitError(null);
+    await form.handleSubmit(async (value) => {
+      if (!client) {
+        setSubmitError("Log in to request a feature.");
+        return;
+      }
+      try {
+        const r = await client.createFeatureRequest({
+          ...value,
+          context: { ...value.context, ...context },
         });
         setResult(r);
-      }
-    } catch (e) {
-      if (e instanceof PublicTicketsDisabled) {
-        setPublicDisabled(true);
-        setSubmitError("Public bug reporting is not enabled for this project.");
-      } else {
+      } catch (e) {
         setSubmitError(e instanceof Error ? e.message : "Submit failed. Please try again.");
       }
-    } finally {
-      setSubmitting(false);
-    }
-  }, [client, config.clientKey, config.edgeBaseUrl, context, values]);
+    })();
+  }, [client, context, form]);
 
-  return { values, setField, errors, submitting, result, submitError, publicDisabled, submit, reset };
+  const reset = useCallback(() => {
+    form.reset();
+    setResult(null);
+    setSubmitError(null);
+  }, [form]);
+
+  return { form, submitting: form.formState.isSubmitting, result, submitError, submit, reset };
 }
 
 // ── shake-to-open ────────────────────────────────────────────────────────────

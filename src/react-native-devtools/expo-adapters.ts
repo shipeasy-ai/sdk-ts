@@ -10,6 +10,8 @@
 //     the session lives in memory for the app run only.
 //   • expo-sensors      — shake-to-open. Without it use the imperative
 //     `ref.open()` handle.
+//   • expo-image-picker — attach screenshots to bug reports / feedback items.
+//     Without it the attach button is hidden.
 
 import type { AuthSessionResult, DeviceAuthAdapters } from "../devtools/auth";
 
@@ -36,6 +38,17 @@ export interface AccelerometerSubscription {
 export interface AccelerometerModule {
   setUpdateInterval(ms: number): void;
   addListener(cb: (data: { x: number; y: number; z: number }) => void): AccelerometerSubscription;
+}
+export interface PickedImage {
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+}
+export interface ImagePickerModule {
+  launchImageLibraryAsync(options: {
+    mediaTypes: string[];
+    quality: number;
+  }): Promise<{ canceled: boolean; assets?: PickedImage[] | null }>;
 }
 
 // Static `require("expo-…")` literals, one per module: Metro only resolves
@@ -68,10 +81,41 @@ try {
 } catch {
   /* optional — imperative open() only */
 }
+let imagePicker: ImagePickerModule | null = null;
+try {
+  imagePicker = require("expo-image-picker") as ImagePickerModule;
+} catch {
+  /* optional — the attach button hides */
+}
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 export function getAccelerometer(): AccelerometerModule | null {
   return expoSensors?.Accelerometer ?? null;
+}
+
+export function getImagePicker(): ImagePickerModule | null {
+  return imagePicker;
+}
+
+/** Pick an image from the library and materialize it as an upload-ready blob.
+ *  Returns null when the module is absent or the user cancels. */
+export async function pickImageAttachment(): Promise<{
+  blob: Blob;
+  filename: string;
+} | null> {
+  if (!imagePicker) return null;
+  const result = await imagePicker.launchImageLibraryAsync({
+    mediaTypes: ["images"],
+    quality: 0.8,
+  });
+  if (result.canceled || !result.assets?.length) return null;
+  const asset = result.assets[0];
+  // RN's fetch resolves local file:// URIs to a Blob — the same object the
+  // shared core's uploadAttachment() appends to FormData.
+  const blob = await (await fetch(asset.uri)).blob();
+  const filename =
+    asset.fileName || `screenshot-${Date.now()}.${(asset.mimeType ?? "image/png").split("/")[1] ?? "png"}`;
+  return { blob, filename };
 }
 
 function base64ToBase64Url(b64: string): string {

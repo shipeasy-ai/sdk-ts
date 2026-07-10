@@ -4,18 +4,31 @@
 //   logged out → [ Log in to Shipeasy ]  (device-auth via the app's own scheme)
 //                [ Report a bug ]        (only when the project opted into
 //                                         public tickets — devtools.allow_public_tickets)
-//   logged in  → Gates / Configs / Experiments / Feedback panels + Report a bug
+//   logged in  → User / Gates / Configs / Experiments / Feedback / I18n /
+//                Events panels (gated by the project's enabled modules) +
+//                Report a bug
 //
 // Hosts without expo-sensors (or wanting a menu entry) call `ref.open()`.
 
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import type { ProjectModules } from "../devtools/types";
 import { BugForm } from "./bug-form";
-import { GatesPanel, ConfigsPanel, ExperimentsPanel, FeedbackPanel } from "./panels";
+import { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
+import { FeedbackPanel } from "./feedback-panel";
+import { UserPanel } from "./user-panel";
+import { EventsPanel } from "./events-panel";
+import { I18nPanel } from "./i18n-panel";
 import { resolveTheme } from "./theme";
 import type { DevtoolsTheme } from "./theme";
-import { useDevtoolsAuth, useDevtoolsCapabilities, useShakeToOpen } from "./hooks";
+import {
+  ensureEventCapture,
+  useDevtoolsAuth,
+  useDevtoolsCapabilities,
+  useProject,
+  useShakeToOpen,
+} from "./hooks";
 import type { DevtoolsConfig, ShakeOptions } from "./hooks";
 import { Button, Muted, ThemeContext, Title, useTheme } from "./ui";
 
@@ -45,13 +58,25 @@ export interface ShipeasyDevtoolsProps {
   bugContext?: Record<string, unknown>;
 }
 
-type Screen = "home" | "bug" | "gates" | "configs" | "experiments" | "feedback";
+type Screen =
+  | "home"
+  | "bug"
+  | "user"
+  | "gates"
+  | "configs"
+  | "experiments"
+  | "feedback"
+  | "i18n"
+  | "events";
 
-const TABS: Array<{ key: Screen; label: string }> = [
-  { key: "gates", label: "Gates" },
-  { key: "configs", label: "Configs" },
-  { key: "experiments", label: "Experiments" },
-  { key: "feedback", label: "Feedback" },
+const TABS: Array<{ key: Screen; label: string; module: keyof ProjectModules }> = [
+  { key: "user", label: "User", module: "user" },
+  { key: "gates", label: "Gates", module: "gates" },
+  { key: "configs", label: "Configs", module: "configs" },
+  { key: "experiments", label: "Experiments", module: "experiments" },
+  { key: "feedback", label: "Feedback", module: "feedback" },
+  { key: "i18n", label: "I18n", module: "translations" },
+  { key: "events", label: "Events", module: "events" },
 ];
 
 export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps>(
@@ -59,6 +84,9 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
     const [visible, setVisible] = useState(false);
     const [screen, setScreen] = useState<Screen>("home");
     const theme = useMemo(() => resolveTheme(props.theme), [props.theme]);
+
+    // Start the events ring at mount so activity before the first open shows.
+    ensureEventCapture();
 
     const open = useCallback(() => {
       setScreen("home");
@@ -111,12 +139,21 @@ function Sheet(props: {
   const t = useTheme();
   const auth = useDevtoolsAuth(props.config);
   const capabilities = useDevtoolsCapabilities();
+  const project = useProject(auth.client);
   const { screen, setScreen } = props;
 
   // The public bug button renders ONLY when the project opted in (surfaced via
   // /sdk/evaluate). A logged-in session can always file (authed path).
   const canFileBug =
     auth.session !== null || (capabilities?.allowPublicTickets === true && !!props.config.clientKey);
+
+  // Module-gated tabs (hidden, not greyed — same as the web overlay). Until
+  // the project record lands, show everything rather than flash-hide tabs.
+  const modules = project.data?.modules ?? null;
+  const tabs = TABS.filter((tab) => modules === null || modules[tab.module]);
+  const activeTab: Screen = tabs.some((tab) => tab.key === screen)
+    ? screen
+    : (tabs[0]?.key ?? "gates");
 
   return (
     <View style={styles.sheetInner}>
@@ -146,39 +183,54 @@ function Sheet(props: {
             </Pressable>
           </View>
           <View style={[styles.tabs, { borderBottomColor: t.border }]}>
-            {TABS.map((tab) => {
-              const active = screen === tab.key || (screen === "home" && tab.key === "gates");
-              return (
-                <Pressable
-                  key={tab.key}
-                  accessibilityRole="tab"
-                  onPress={() => setScreen(tab.key)}
-                  style={[styles.tab, active && { borderBottomColor: t.accent }]}
-                >
-                  <Text style={[styles.tabLabel, { color: active ? t.fg : t.fgMuted }]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
+              {tabs.map((tab) => {
+                const active = activeTab === tab.key;
+                return (
+                  <Pressable
+                    key={tab.key}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setScreen(tab.key)}
+                    style={[styles.tab, active && { borderBottomColor: t.accent }]}
+                  >
+                    <Text style={[styles.tabLabel, { color: active ? t.fg : t.fgMuted }]}>
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
           <View style={styles.panel}>
-            {screen === "configs" ? (
+            {activeTab === "user" ? (
+              <UserPanel />
+            ) : activeTab === "configs" ? (
               <ConfigsPanel client={auth.client} />
-            ) : screen === "experiments" ? (
+            ) : activeTab === "experiments" ? (
               <ExperimentsPanel client={auth.client} />
-            ) : screen === "feedback" ? (
-              <FeedbackPanel client={auth.client} />
+            ) : activeTab === "feedback" ? (
+              <FeedbackPanel
+                client={auth.client}
+                config={props.config}
+                bugContext={props.bugContext}
+              />
+            ) : activeTab === "i18n" ? (
+              <I18nPanel client={auth.client} />
+            ) : activeTab === "events" ? (
+              <EventsPanel />
             ) : (
               <GatesPanel client={auth.client} />
             )}
           </View>
-          <Button
-            title="Report a bug"
-            variant="secondary"
-            onPress={() => setScreen("bug")}
-            style={styles.footerButton}
-          />
+          {activeTab !== "feedback" ? (
+            <Button
+              title="Report a bug"
+              variant="secondary"
+              onPress={() => setScreen("bug")}
+              style={styles.footerButton}
+            />
+          ) : null}
         </>
       ) : (
         <View style={styles.home}>
@@ -242,11 +294,6 @@ const styles = StyleSheet.create({
   sheetInner: { flex: 1 },
   tab: { borderBottomColor: "transparent", borderBottomWidth: 2, paddingBottom: 8 },
   tabLabel: { fontSize: 14, fontWeight: "600" },
-  tabs: {
-    borderBottomWidth: 1,
-    flexDirection: "row",
-    gap: 18,
-    paddingHorizontal: 16,
-    paddingTop: 4,
-  },
+  tabs: { borderBottomWidth: 1, paddingTop: 4 },
+  tabsRow: { flexDirection: "row", gap: 18, paddingHorizontal: 16 },
 });
