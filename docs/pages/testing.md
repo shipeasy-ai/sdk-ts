@@ -163,3 +163,12 @@ gate's `rolloutPct` is **basis points** (`10000` = 100%); `enabled` is `1`/`0`.
   }
 }
 ```
+
+## i18n keys in tests
+
+Assertions on translated copy are brittle — they break when the copy is edited.
+Under `env==test` (`SHIPEASY_ENV` / `NODE_ENV`, i.e. jest/vitest) the SDK
+defaults to **`renderKeysOnly`**, so `i18n.t("checkout.cta", "Place order")`
+returns the key `"checkout.cta"` and your tests assert against stable data with
+no setup. Force it on/off with `configure({ i18n: { renderKeysOnly } })` or
+`i18n.configure({ renderKeysOnly })` — see [i18n → Render keys only](./i18n.md).

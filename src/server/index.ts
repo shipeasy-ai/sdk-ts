@@ -3,7 +3,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
-import { isProductionEnv } from "../env";
+import { isProductionEnv, setI18nRenderKeysOnly } from "../env";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
@@ -1665,6 +1665,16 @@ export interface ShipeasyServerConfig {
   user?: User;
   /** i18n profile to load for SSR translations, e.g. "en:prod". Defaults to "en:prod". */
   i18nDefaultProfile?: string;
+  /** i18n behaviour toggles (shared process-wide with the browser `i18n.t()`). */
+  i18n?: {
+    /**
+     * Render each i18n key verbatim instead of resolving its translated value,
+     * so tests/snapshots assert against stable data. Defaults to `true` when the
+     * runtime env is `"test"` (`SHIPEASY_ENV` / `NODE_ENV`), `false` otherwise.
+     * Applies to `i18n.t()` calls in SSR'd "use client" components too.
+     */
+    renderKeysOnly?: boolean;
+  };
   /**
    * How chatty the SDK is on `console` when it swallows an internal error.
    * `silent` < `error` < `warn` < `info` < `debug`; defaults to `"warn"`. Every
@@ -1748,6 +1758,9 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
     );
   }
   const profile = opts.i18nDefaultProfile ?? "en:prod";
+  // Honour an explicit renderKeysOnly override (else it defaults to env==test);
+  // the flag is shared with the client-module i18n.t() used during SSR.
+  setI18nRenderKeysOnly(opts.i18n?.renderKeysOnly);
   flags.configure({
     apiKey: serverKey,
     isNetworkEnabled: opts.isNetworkEnabled,

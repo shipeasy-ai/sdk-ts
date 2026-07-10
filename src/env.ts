@@ -29,6 +29,41 @@ export function isProductionEnv(configuredEnv?: string): boolean {
   return (configuredEnv ?? "prod").toLowerCase() === "prod";
 }
 
+/** True when the host runtime looks like a test run — the native `SHIPEASY_ENV`
+ * / `NODE_ENV` is exactly `"test"` (what jest/vitest set by default). Browsers
+ * and edge runtimes with no `process.env` read as not-test. Used to default
+ * i18n `renderKeysOnly` on under test. */
+export function isTestEnv(): boolean {
+  return readNativeEnv() === "test";
+}
+
+// ---- i18n renderKeysOnly toggle (shared across the server + client bundles) ----
+//
+// A process-wide test toggle: when on, `i18n.t()` renders the KEY instead of
+// resolving its translated value, so snapshot/assertion tests run against
+// stable data. Stored on a global symbol so the two separately-bundled
+// entrypoints (@shipeasy/sdk/server and /client) observe one source of truth —
+// e.g. a server `configure({ i18n: { renderKeysOnly } })` is honoured by the
+// client-module `i18n.t()` that runs during SSR. Defaults to {@link isTestEnv}.
+
+const _I18N_RENDER_KEYS_SYM = Symbol.for("@shipeasy/sdk:i18n-render-keys");
+
+/** True when i18n should render keys instead of resolving values. Explicit
+ * config (via `setI18nRenderKeysOnly`) wins; otherwise defaults to env==test. */
+export function i18nRenderKeysOnly(): boolean {
+  const override = (globalThis as Record<symbol, unknown>)[_I18N_RENDER_KEYS_SYM];
+  if (typeof override === "boolean") return override;
+  return isTestEnv();
+}
+
+/** Set (or, with `undefined`, leave at the env-derived default) the process-wide
+ * i18n renderKeysOnly toggle. Called from the `configure()` / `shipeasy()`
+ * entrypoints when the caller passes `i18n: { renderKeysOnly }`. */
+export function setI18nRenderKeysOnly(value: boolean | undefined): void {
+  if (value === undefined) return;
+  (globalThis as Record<symbol, unknown>)[_I18N_RENDER_KEYS_SYM] = value;
+}
+
 /** Read the native runtime environment string, lowercased, or null when the host
  * exposes no `process.env` (browsers, some edge runtimes) or the vars are unset. */
 function readNativeEnv(): string | null {
