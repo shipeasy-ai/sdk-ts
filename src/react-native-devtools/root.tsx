@@ -128,6 +128,9 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
             <SafeAreaView
               style={[styles.sheet, { backgroundColor: theme.bg, borderColor: theme.border }]}
             >
+              <View style={styles.handleRow}>
+                <View style={[styles.handle, { backgroundColor: theme.border }]} />
+              </View>
               <Sheet
                 config={config}
                 screen={screen}
@@ -278,6 +281,8 @@ function Sheet(props: {
 const styles = StyleSheet.create({
   backdrop: { backgroundColor: "rgba(0,0,0,0.55)", flex: 1, justifyContent: "flex-end" },
   closeGlyph: { fontSize: 18, padding: 4 },
+  handle: { borderRadius: 999, height: 4, width: 36 },
+  handleRow: { alignItems: "center", paddingBottom: 2, paddingTop: 8 },
   footerButton: { marginHorizontal: 16, marginVertical: 10 },
   header: {
     alignItems: "center",

@@ -2,7 +2,7 @@
 // from ThemeContext (set once by <ShipeasyDevtools>), so the overlay is
 // self-contained and never inherits the host app's styling.
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -96,20 +96,34 @@ export function Field(props: {
   onChangeText: (v: string) => void;
   onBlur?: () => void;
   placeholder?: string;
+  /** Muted single-line helper under the input (hidden while an error shows). */
+  hint?: string;
+  /** Tiny de-emphasized suffix after the label, e.g. "optional". */
+  labelHint?: string;
   error?: string;
   multiline?: boolean;
   autoCapitalize?: "none" | "sentences";
   keyboardType?: "default" | "email-address";
 }): ReactNode {
   const t = useTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.fieldWrap}>
-      <Text style={[styles.fieldLabel, { color: t.fgMuted }]}>{props.label}</Text>
+      <Text style={[styles.fieldLabel, { color: t.fgMuted }]}>
+        {props.label}
+        {props.labelHint ? (
+          <Text style={[styles.fieldLabelHint, { color: t.fgMuted }]}>  {props.labelHint}</Text>
+        ) : null}
+      </Text>
       <TextInput
         accessibilityLabel={props.label}
         value={props.value}
         onChangeText={props.onChangeText}
-        onBlur={props.onBlur}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          props.onBlur?.();
+        }}
         placeholder={props.placeholder}
         placeholderTextColor={t.fgMuted}
         multiline={props.multiline}
@@ -118,17 +132,19 @@ export function Field(props: {
         style={[
           styles.input,
           {
-            backgroundColor: t.surface,
-            borderColor: props.error ? t.danger : t.border,
+            backgroundColor: focused ? t.bg : t.surface,
+            borderColor: props.error ? t.danger : focused ? t.accent : t.border,
             borderRadius: t.radius,
             color: t.fg,
-            minHeight: props.multiline ? 88 : 44,
+            minHeight: props.multiline ? 96 : 44,
             textAlignVertical: props.multiline ? "top" : "center",
           },
         ]}
       />
       {props.error ? (
         <Text style={[styles.fieldError, { color: t.danger }]}>{props.error}</Text>
+      ) : props.hint ? (
+        <Text style={[styles.fieldHint, { color: t.fgMuted }]}>{props.hint}</Text>
       ) : null}
     </View>
   );
@@ -311,10 +327,18 @@ const styles = StyleSheet.create({
   buttonText: { fontSize: 15, fontWeight: "600" },
   title: { fontSize: 17, fontWeight: "700" },
   muted: { fontSize: 13 },
-  fieldWrap: { marginBottom: 14 },
-  fieldLabel: { fontSize: 12, fontWeight: "600", marginBottom: 6, textTransform: "uppercase" },
+  fieldWrap: { marginBottom: 16 },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    textTransform: "uppercase",
+  },
+  fieldLabelHint: { fontWeight: "400", letterSpacing: 0.2, textTransform: "none" },
   input: { borderWidth: 1, fontSize: 15, paddingHorizontal: 12, paddingVertical: 10 },
-  fieldError: { fontSize: 12, marginTop: 4 },
+  fieldError: { fontSize: 12, marginTop: 5 },
+  fieldHint: { fontSize: 12, marginTop: 5, opacity: 0.8 },
   row: {
     alignItems: "center",
     borderWidth: 1,

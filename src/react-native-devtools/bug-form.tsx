@@ -28,7 +28,9 @@ export function ControlledField<T extends FieldValues>(props: {
   control: Control<T>;
   name: FieldPath<T>;
   label: string;
+  labelHint?: string;
   placeholder?: string;
+  hint?: string;
   multiline?: boolean;
   autoCapitalize?: "none" | "sentences";
   keyboardType?: "default" | "email-address";
@@ -40,10 +42,12 @@ export function ControlledField<T extends FieldValues>(props: {
       render={({ field, fieldState }) => (
         <Field
           label={props.label}
+          labelHint={props.labelHint}
           value={typeof field.value === "string" ? field.value : ""}
           onChangeText={field.onChange}
           onBlur={field.onBlur}
           placeholder={props.placeholder}
+          hint={props.hint}
           error={fieldState.error?.message}
           multiline={props.multiline}
           autoCapitalize={props.autoCapitalize}
@@ -71,12 +75,20 @@ export function BugForm(props: {
   if (state.result) {
     return (
       <View style={styles.done}>
+        <View style={[styles.doneMark, { backgroundColor: t.accentSoft }]}>
+          <Text style={[styles.doneGlyph, { color: t.ok }]}>✓</Text>
+        </View>
         <Title>Thanks — bug filed</Title>
+        {state.result.number !== undefined ? (
+          <View style={[styles.doneTicket, { borderColor: t.border, backgroundColor: t.surface }]}>
+            <Text style={[styles.doneTicketNo, { color: t.accent }]}>#{state.result.number}</Text>
+          </View>
+        ) : null}
         <Muted style={styles.doneDetail}>
           {state.result.number !== undefined
             ? state.result.deduped
-              ? `Matched existing report #${state.result.number}.`
-              : `Filed as report #${state.result.number}. It'll be reviewed shortly.`
+              ? "This matches a report already in the queue — we bumped it instead of duplicating."
+              : "It's in the project's triage queue and will be reviewed shortly."
             : "Your report was filed."}
         </Muted>
         <Button title="Done" onPress={props.onDone} style={styles.doneButton} />
@@ -85,7 +97,18 @@ export function BugForm(props: {
   }
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      contentContainerStyle={styles.form}
+      showsVerticalScrollIndicator={false}
+    >
+      <Title style={styles.heading}>Report a bug</Title>
+      <Muted style={styles.blurb}>
+        Goes straight to the project's triage queue — the more you can tell us, the faster it's
+        fixed.
+      </Muted>
+
       <ControlledField
         control={form.control}
         name="title"
@@ -96,6 +119,7 @@ export function BugForm(props: {
         control={form.control}
         name="actualResult"
         label="What happened?"
+        labelHint="optional"
         placeholder="The error or wrong behaviour you saw"
         multiline
       />
@@ -103,24 +127,34 @@ export function BugForm(props: {
         control={form.control}
         name="stepsToReproduce"
         label="Steps to reproduce"
+        labelHint="optional"
         placeholder={"1. Open …\n2. Tap …"}
         multiline
       />
       {identityEmail ? (
         // The app already identified this user — don't ask for what we know.
-        <Muted style={styles.reporterNote}>Follow-ups go to {identityEmail}.</Muted>
+        <View style={[styles.identityRow, { backgroundColor: t.surface, borderColor: t.border, borderRadius: t.radius }]}>
+          <View style={[styles.identityDot, { backgroundColor: t.ok }]} />
+          <Muted style={styles.identityText} numberOfLines={1}>
+            Follow-ups go to {identityEmail}
+          </Muted>
+        </View>
       ) : (
         <ControlledField
           control={form.control}
           name="reporterEmail"
-          label="Your email (optional)"
-          placeholder="So we can follow up"
+          label="Your email"
+          labelHint="optional"
+          placeholder="you@example.com"
+          hint="Only used to follow up on this report."
           autoCapitalize="none"
           keyboardType="email-address"
         />
       )}
       {state.submitError ? (
-        <Text style={[styles.submitError, { color: t.danger }]}>{state.submitError}</Text>
+        <View style={[styles.submitError, { backgroundColor: t.surface, borderColor: t.danger, borderRadius: t.radius }]}>
+          <Text style={[styles.submitErrorText, { color: t.danger }]}>{state.submitError}</Text>
+        </View>
       ) : null}
       <Button
         title="Submit bug report"
@@ -134,11 +168,40 @@ export function BugForm(props: {
 }
 
 const styles = StyleSheet.create({
-  cancel: { marginTop: 8 },
-  done: { alignItems: "center", gap: 8, padding: 24 },
-  doneButton: { alignSelf: "stretch", marginTop: 16 },
-  doneDetail: { textAlign: "center" },
-  form: { paddingBottom: 32 },
-  reporterNote: { marginBottom: 14 },
-  submitError: { fontSize: 13, marginBottom: 10 },
+  blurb: { marginBottom: 18 },
+  cancel: { marginTop: 6 },
+  done: { alignItems: "center", gap: 10, padding: 24, paddingTop: 40 },
+  doneButton: { alignSelf: "stretch", marginTop: 18 },
+  doneDetail: { paddingHorizontal: 12, textAlign: "center" },
+  doneGlyph: { fontSize: 26, fontWeight: "700" },
+  doneMark: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 56,
+    justifyContent: "center",
+    marginBottom: 4,
+    width: 56,
+  },
+  doneTicket: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 3 },
+  doneTicketNo: { fontSize: 13, fontVariant: ["tabular-nums"], fontWeight: "700" },
+  form: { paddingBottom: 32, paddingTop: 6 },
+  heading: { marginBottom: 4 },
+  identityDot: { borderRadius: 999, height: 8, width: 8 },
+  identityRow: {
+    alignItems: "center",
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  identityText: { flex: 1 },
+  submitError: {
+    borderWidth: 1,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  submitErrorText: { fontSize: 13 },
 });

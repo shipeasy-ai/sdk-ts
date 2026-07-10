@@ -1,5 +1,20 @@
 # Changelog
 
+## 7.5.1 (2026-07-10)
+
+### React Native devtools overlay — visual redesign of the report forms
+
+- Bug and feature-request forms rebuilt: screen heading + explainer, field
+  hints and "optional" label suffixes, focus ring on inputs (accent border),
+  identity row (a quiet "follow-ups go to …" card instead of bare text),
+  boxed submit errors, and a proper success state (check mark, ticket number
+  chip, dedupe explanation).
+- `Field` gains `hint` / `labelHint` props and a focused style; multiline
+  inputs grow to 96pt min-height.
+- The devtools sheet gets a grab handle.
+- Form scroll views dismiss the keyboard interactively
+  (`keyboardDismissMode="interactive"`).
+
 ## 7.5.0 (2026-07-10)
 
 ### Fixes: React Native devtools overlay
