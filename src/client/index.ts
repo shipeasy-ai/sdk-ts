@@ -14,13 +14,12 @@ import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
   buildSeeEvent,
-  causesThe,
   isExpected,
+  markCorrelated,
   SeeLimiter,
   startControlFlowChain,
   startSeeChain,
   startSeeViolationChain,
-  violation,
   type Consequence,
   type SeeChain,
   type SeeControlFlowChain,
@@ -443,44 +442,6 @@ export interface AutoCollectGroups {
   engagement: boolean;
 }
 
-/** Callback the auto-capture handlers report through — bound to the client's see() path. */
-type SeeReporter = (
-  problem: unknown,
-  consequence: Consequence,
-  extras: SeeExtras | undefined,
-  kind: SeeKind,
-  correlationId?: string,
-) => void;
-
-/**
- * Collapse a URL to a stable, low-cardinality endpoint template for network
- * consequence subjects: drop query/hash, drop a same-origin host, and replace
- * id-like path segments (numbers, uuids, hex runs) with ":id" — so the issue
- * title names the endpoint ("request to /api/orders/:id") without minting one
- * issue per id. The consequence feeds the issue fingerprint RAW (only the
- * message is normalized server-side), so this must never embed variable data.
- */
-function endpointTemplate(rawUrl: string): string {
-  const isIdSegment = (seg: string) =>
-    /^\d+$/.test(seg) ||
-    /^0x[0-9a-f]+$/i.test(seg) ||
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) ||
-    /^[0-9a-f]{8,}$/i.test(seg) ||
-    (seg.length >= 12 && /\d/.test(seg) && /[a-z]/i.test(seg));
-  let u: URL;
-  try {
-    u = new URL(rawUrl, typeof location !== "undefined" ? location.href : undefined);
-  } catch {
-    return (rawUrl.split(/[?#]/)[0] ?? "").slice(0, 120);
-  }
-  const path = u.pathname
-    .split("/")
-    .map((seg) => (seg && isIdSegment(seg) ? ":id" : seg))
-    .join("/");
-  const sameOrigin = typeof location !== "undefined" && u.origin === location.origin;
-  return ((sameOrigin ? "" : u.host) + path).slice(0, 120);
-}
-
 /** True when `rawUrl` resolves to the page's own origin (relative URLs included). */
 export function sameOrigin(rawUrl: string): boolean {
   if (typeof location === "undefined") return false;
@@ -522,12 +483,77 @@ export function injectCorrelationHeader<A extends [unknown, (RequestInit | undef
   }
 }
 
+const XHR_PATCHED_SYM = Symbol.for("@shipeasy/sdk:xhr-correlated");
+
+/**
+ * Instrument `XMLHttpRequest` for the same cross-network correlation the fetch
+ * wrapper does, so XHR-based clients (axios's default adapter, superagent,
+ * jQuery.ajax…) are covered too. On a same-origin request we mint a token,
+ * send it on the `X-SE-Correlation` header, and — on a terminal failure —
+ * stamp it on the `XMLHttpRequest` instance. That instance is exactly what a
+ * wrapping error exposes as `.request` / `.response.request`, so app code that
+ * catches the failure and reports it with see() links across the wire (see
+ * findCorrelation). Idempotent (guarded against double-patching) and fully
+ * best-effort: any failure here leaves the request untouched.
+ */
+export function installXhrCorrelation(ignoreUrlPrefixes: string[]): void {
+  if (typeof XMLHttpRequest === "undefined") return;
+  const ctor = XMLHttpRequest as unknown as Record<symbol, unknown>;
+  if (ctor[XHR_PATCHED_SYM]) return;
+  try {
+    Object.defineProperty(ctor, XHR_PATCHED_SYM, { value: true, configurable: true });
+  } catch {
+    /* frozen ctor — best effort */
+  }
+
+  const proto = XMLHttpRequest.prototype;
+  const state = new WeakMap<XMLHttpRequest, string | undefined>();
+  const origOpen = proto.open;
+  const origSend = proto.send;
+
+  proto.open = function (this: XMLHttpRequest, method: string, url: string | URL, ...rest: unknown[]) {
+    try {
+      const u = typeof url === "string" ? url : String(url);
+      const ignored = ignoreUrlPrefixes.some((p) => p && u.startsWith(p));
+      let corr: string | undefined;
+      if (!ignored && sameOrigin(u) && typeof crypto !== "undefined" && crypto.randomUUID) {
+        corr = crypto.randomUUID();
+      }
+      state.set(this, corr);
+    } catch {
+      /* best effort */
+    }
+    return (origOpen as (...a: unknown[]) => void).apply(this, [method, url, ...rest]);
+  };
+
+  proto.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
+    const corr = state.get(this);
+    if (corr) {
+      try {
+        this.setRequestHeader("X-SE-Correlation", corr);
+      } catch {
+        /* header already sent / invalid state — best effort */
+      }
+      // `loadend` fires for success, error, abort, and timeout alike, with the
+      // final status available. status 0 = network-level failure (no response),
+      // >=500 = server error — the two cases app code would report with see().
+      this.addEventListener("loadend", () => {
+        try {
+          if (this.status === 0 || this.status >= 500) markCorrelated(this, corr);
+        } catch {
+          /* best effort */
+        }
+      });
+    }
+    return (origSend as (b?: Document | XMLHttpRequestBodyInit | null) => void).apply(this, [body]);
+  };
+}
+
 function installAutoGuardrails(
   buffer: EventBuffer,
   userId: string,
   anonId: string,
   groups: AutoCollectGroups,
-  reportSee: SeeReporter,
   ignoreUrlPrefixes: string[],
   always = false,
 ): void {
@@ -581,30 +607,28 @@ function installAutoGuardrails(
     } catch {}
   }
 
-  // ---- Errors: report into the errors primitive via the see() path. ----
-  // Caps + 30s dedup live in the client's SeeLimiter; expected control-flow
-  // exceptions (see.ControlFlowException(err).because("because …")) are skipped.
-  //
-  // Auto-capture only reports problems with a SPECIFIC subject and a SPECIFIC
-  // outcome — here, a named endpoint failing with a server error / no response.
-  // It deliberately does NOT blanket-report uncaught errors or unhandled
-  // promise rejections: those carry no actionable consequence ("the page hit an
-  // error" names the plumbing, not the feature), so they would mint one
-  // unactionable, double-counted issue for every unrelated failure. Code that
-  // knows the consequence reports it explicitly with see() at the catch site.
+  // ---- Errors: cross-network correlation only (no auto-report). ----
+  // Neither wrapper mints issues of its own. A bare "request to /x failed with a
+  // server error" names the transport, not what broke for the user, so it's
+  // unactionable — code that knows the consequence reports it with see() at the
+  // catch site. All this does is thread a per-request correlation token so that,
+  // WHEN app code reports the failure, its see() links to the server-side issue
+  // for the same request across the wire. We patch BOTH transports so it works
+  // regardless of the app's HTTP client: `fetch` (our generated client, native
+  // callers) and `XMLHttpRequest` (axios's default adapter, superagent,
+  // jQuery.ajax, and every other XHR-based library).
   if (groups.errors) {
+    installXhrCorrelation(ignoreUrlPrefixes);
     const origFetch = window.fetch;
     window.fetch = async function (...args) {
-      const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
       const url = typeof args[0] === "string" ? args[0] : (args[0] as Request | URL).toString();
-      // Never report the SDK's own collector/telemetry requests — a failing
-      // collector would otherwise feed errors back into itself.
+      // Never touch the SDK's own collector/telemetry requests.
       const ignored = ignoreUrlPrefixes.some((p) => p && url.startsWith(p));
       // Per-request correlation token, SAME-ORIGIN ONLY. Sent up on the request
-      // header so a server boundary that reports the matching uncaught error
-      // can echo it; the backend joins the two issues by it. Cross-origin is
-      // skipped on purpose — a custom header would force a CORS preflight on
-      // otherwise-simple third-party fetches and break them.
+      // header so a server boundary that reports an error for this request can
+      // echo it; the backend joins the two issues by it. Cross-origin is skipped
+      // on purpose — a custom header would force a CORS preflight on otherwise-
+      // simple third-party fetches and break them.
       let corr: string | undefined;
       if (!ignored && sameOrigin(url) && typeof crypto !== "undefined" && crypto.randomUUID) {
         corr = crypto.randomUUID();
@@ -616,35 +640,18 @@ function installAutoGuardrails(
         // param tuples differ, and this wrapper must type-check under both.
         res = await (origFetch as (...a: typeof args) => Promise<Response>).apply(this, args);
       } catch (err) {
-        // Network-level failure (DNS, offline, CORS, abort) — never reaches a status.
-        if (!ignored && !isExpected(err)) {
-          // Endpoint template in the subject (not the raw URL — the consequence
-          // is fingerprinted raw, so it must stay id-free): the issue title
-          // names what's broken ("request to /api/orders/:id") instead of the
-          // unactionable "a network request".
-          reportSee(
-            violation("NetworkError"),
-            causesThe(`request to ${endpointTemplate(url)}`).to("get no response"),
-            { status: 0, url: url.slice(0, 200) },
-            "network",
-          );
-        }
+        // Network-level failure (offline, DNS, CORS, abort) — never reaches a
+        // status. Stamp the token on the thrown error so app code that catches
+        // it and reports a real consequence via see() links to any server
+        // occurrence for the same request (see markCorrelated / findCorrelation).
+        if (!ignored && corr && !isExpected(err)) markCorrelated(err, corr);
         throw err;
       }
-      if (!ignored && res.status >= 500) {
-        const elapsed = typeof performance !== "undefined" ? performance.now() - startedAt : 0;
-        // Status code stays OUT of the outcome (it rides in extras): interpolating
-        // it minted a separate issue per status (500/502/503…). The endpoint
-        // template in the subject keeps per-endpoint grouping; the full URL is
-        // in extras for debugging.
-        reportSee(
-          violation("Http5xx"),
-          causesThe(`request to ${endpointTemplate(url)}`).to("fail with a server error"),
-          { status: res.status, url: url.slice(0, 200), duration_ms: Math.round(elapsed) },
-          "network",
-          corr,
-        );
-      }
+      // On a 5xx the server ran and errored, but fetch RETURNS (never throws),
+      // so we can't stamp a thrown error — stamp the Response instead. A fetcher
+      // that throws `new Error(msg, { cause: res })` (or otherwise reports this
+      // failure) then links via findCorrelation walking the .cause chain.
+      if (!ignored && corr && res.status >= 500) markCorrelated(res, corr);
       return res;
     };
   }
@@ -1471,8 +1478,6 @@ export class Engine {
         this.userId,
         this.anonId,
         this.autoGuardrailGroups,
-        (problem, consequence, extras, kind, correlationId) =>
-          this.reportError(problem, consequence, extras, kind, correlationId),
         [`${this.baseUrl}/`, DEFAULT_TELEMETRY_URL],
         this.autoCollectAlways,
       );

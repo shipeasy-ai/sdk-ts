@@ -249,6 +249,78 @@ export function markReported(problem: unknown, ev: SeeErrorEvent): void {
   }
 }
 
+// ---- Correlation linkage (network boundary) ----
+//
+// The client's fetch auto-capture mints a per-request token and sends it up on
+// the `X-SE-Correlation` header. It also stamps that same token onto the object
+// that surfaces the failure — the thrown error (network failure) or the returned
+// Response (5xx) — with this symbol. So when app code later catches that failure
+// and reports it with a real consequence via see(), the report auto-carries the
+// token and the backend joins it to the server-side issue reported under the
+// header. This is the cross-network analogue of the caused_by stamp above: the
+// in-process `.cause` chain can't cross the wire, but this token can. The stamp
+// is non-enumerable (no JSON/serialize side effects) and best-effort.
+
+const CORRELATED_SYM = Symbol.for("@shipeasy/sdk:see-correlated");
+
+/**
+ * Stamp a correlation token on an Error or Response so a later see() that
+ * reports it — directly, or via `{ cause }` — picks the token up (see
+ * {@link findCorrelation}). No-op for non-objects and frozen/sealed targets
+ * (best effort, like {@link markReported}).
+ */
+export function markCorrelated(target: unknown, correlationId: string): void {
+  if (typeof target !== "object" || target === null) return;
+  try {
+    Object.defineProperty(target, CORRELATED_SYM, {
+      value: String(correlationId),
+      enumerable: false,
+      configurable: true,
+      writable: true,
+    });
+  } catch {
+    /* frozen/sealed target — best effort */
+  }
+}
+
+/** Read the correlation stamp directly off one object (no traversal). */
+function correlationStamp(o: unknown): string | undefined {
+  if (typeof o !== "object" || o === null) return undefined;
+  const v = (o as Record<symbol, unknown>)[CORRELATED_SYM];
+  return typeof v === "string" ? v : undefined;
+}
+
+/**
+ * Find the nearest correlation token on `problem`, its `.cause` chain, or the
+ * transport object a wrapping HTTP-client error hangs off. The `fetch` wrapper
+ * stamps the failing Response (which app code may attach as `{ cause }` when it
+ * throws); the XHR wrapper stamps the `XMLHttpRequest` itself, which axios (and
+ * most XHR wrappers) expose on the thrown error as `.request` and
+ * `.response.request` — probed here so those clients link without a `.cause`.
+ * Cycle-guarded and depth-bounded, mirroring {@link findCausedBy}.
+ */
+export function findCorrelation(problem: unknown): string | undefined {
+  let cur: unknown = problem;
+  const seen = new Set<unknown>();
+  for (let depth = 0; depth < SEE_MAX_CAUSE_DEPTH; depth++) {
+    if (typeof cur !== "object" || cur === null || seen.has(cur)) break;
+    seen.add(cur);
+    const direct = correlationStamp(cur);
+    if (direct) return direct;
+    // XHR-wrapper errors (axios et al.) don't chain via `.cause`; the stamped
+    // request object lives on `.request` or `.response.request`.
+    const fromReq = correlationStamp((cur as { request?: unknown }).request);
+    if (fromReq) return fromReq;
+    const resp = (cur as { response?: { request?: unknown } }).response;
+    if (resp && typeof resp === "object") {
+      const fromResp = correlationStamp(resp) ?? correlationStamp(resp.request);
+      if (fromResp) return fromResp;
+    }
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
 // ---- Sanitization ----
 
 function truncate(s: string, max: number): string {
@@ -343,7 +415,12 @@ export function buildSeeEvent(
     ts: Date.now(),
   };
   if (stack) ev.stack = truncate(stack, SEE_MAX_STACK);
-  if (correlationId) ev.correlation_id = truncate(String(correlationId), SEE_MAX_CORRELATION);
+  // Correlation: an explicit token wins (the server passes its per-request ALS
+  // token here). Otherwise pick up a token the client's fetch wrapper stamped on
+  // the problem (or its `.cause` chain) — so a plain see(failedRequestError)
+  // links to the backend across the wire without the caller threading anything.
+  const corr = correlationId ?? findCorrelation(problem);
+  if (corr) ev.correlation_id = truncate(String(corr), SEE_MAX_CORRELATION);
   // Discover the cause BEFORE stamping this problem — otherwise the re-throw
   // case (same object reported twice) would read its own fresh stamp.
   const causedBy = findCausedBy(problem);

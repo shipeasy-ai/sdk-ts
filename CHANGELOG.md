@@ -1,5 +1,70 @@
 # Changelog
 
+## 7.5.0 (2026-07-10)
+
+### Fixes: React Native devtools overlay
+
+- **Crash-loop on mount fixed** (`Maximum update depth exceeded` / "The result
+  of getSnapshot should be cached"): the capabilities bridge mints a fresh
+  object per read, which React's `useSyncExternalStore` rejects as an unstable
+  snapshot. `readDevtoolsCapabilities()` now memoizes by shallow equality, so
+  the snapshot is referentially stable while the values are unchanged.
+
+- **Metro no longer drops the optional Expo modules.** A new `react-native`
+  exports condition pins `@shipeasy/sdk/react-native-devtools` to the CJS
+  build. Metro previously resolved the ESM build, whose bundler-rewritten
+  optional `require("expo-x")` calls it can't follow — expo-sensors /
+  expo-web-browser / expo-secure-store silently fell out of the app bundle, so
+  shake-to-open never armed and devtools login failed.
+
+- The bug form no longer asks for the reporter's email when the app already
+  identified one: `identify()`'s `email` attribute (read via the engine
+  bridge) is used automatically, and the email field only renders when the
+  identity has none. New `useIdentityEmail()` hook exposes the same value.
+- The devtools sheet now lifts above the on-screen keyboard
+  (`KeyboardAvoidingView`), so form inputs stay visible while typing.
+- The logged-out bug form gets the same horizontal padding as the panels.
+
+### Change: fetch auto-capture no longer mints issues — it only threads correlation
+
+The client fetch wrapper (`autoCollect: { errors }`) no longer auto-reports
+failed requests at all. Both the network-failure (`NetworkError`) and 5xx
+(`Http5xx`) auto-reports are removed: a bare "request to /x failed" names the
+transport, not what broke for the user, so it was unactionable and folded every
+endpoint into a couple of noisy issues. **Reporting a failed request is now
+always the caller's job** — `see()` it where you know the consequence.
+
+What the wrapper still does is thread a per-request **correlation token** so
+that report links to the backend across the network boundary: it mints the
+token, sends it up on `X-SE-Correlation`, and stamps it on the object that
+surfaces the failure — the thrown error (network failure) or the returned
+`Response` (5xx). `see()` then picks that token up automatically from the
+problem or its `.cause` chain (new internal `markCorrelated` /
+`findCorrelation`, mirroring the existing `caused_by` stamp), so
+`see(err)` — or `see(new Error(msg, { cause: res }))` for a 5xx — links to the
+server-side issue for the same request with nothing threaded through by hand.
+
+**Migration:** if you relied on the SDK auto-filing `NetworkError` / `Http5xx`
+issues for unhandled fetch failures, add a `see()` at the call site (e.g. your
+fetch wrapper's error path). A 5xx that no code `see()`s now produces no
+client-side issue.
+
+### Change: correlation now covers `XMLHttpRequest` too (axios, superagent, …)
+
+Correlation was `fetch`-only, so an app whose HTTP goes through `XMLHttpRequest`
+— axios's default adapter, superagent, jQuery.ajax — got no `X-SE-Correlation`
+header and no stamp, and its `see()` reports never linked to the backend. The
+client auto-capture now instruments **both** transports: it wraps
+`XMLHttpRequest.open`/`send` to inject the same per-request token on same-origin
+requests and, on a terminal failure (status `0` or `>= 500`), stamp the
+`XMLHttpRequest` instance. Because axios (and most XHR wrappers) expose that
+instance on the thrown error as `.request` / `.response.request`,
+`findCorrelation` now probes those alongside the `.cause` chain — so
+`see(err)` in an axios `catch`/interceptor links across the wire with nothing
+threaded by hand. The XHR patch is idempotent and fully best-effort (any
+failure leaves the request untouched); cross-origin requests are skipped, as
+with `fetch`, to avoid forcing a CORS preflight.
+
 ## 7.4.1 (2026-07-10)
 
 ### Fix: devtools sign-in 404 when the overlay is served from the CDN

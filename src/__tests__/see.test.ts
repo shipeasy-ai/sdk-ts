@@ -3,8 +3,10 @@ import {
   buildSeeEvent,
   causesThe,
   findCausedBy,
+  findCorrelation,
   isExpected,
   isViolation,
+  markCorrelated,
   markExpected,
   markReported,
   sanitizeExtras,
@@ -235,6 +237,64 @@ describe("caused-by linkage (findCausedBy / markReported / buildSeeEvent)", () =
   it("does not link a violation to an unrelated reported error", () => {
     const ev = buildSeeEvent(violation("large query"), causesThe("a").to("b"), undefined, CTX);
     expect(ev.caused_by).toBeUndefined();
+  });
+});
+
+describe("correlation linkage (findCorrelation / markCorrelated / buildSeeEvent)", () => {
+  it("picks up a token stamped on the problem when none is passed", () => {
+    const err = new Error("HTTP 500");
+    markCorrelated(err, "corr-xyz");
+    const ev = buildSeeEvent(err, causesThe("metric chart").to("show no data"), undefined, CTX);
+    expect(ev.correlation_id).toBe("corr-xyz");
+  });
+
+  it("walks the .cause chain (the { cause: res } pattern)", () => {
+    const res = {}; // stands in for a failing Response the fetch wrapper stamped
+    markCorrelated(res, "corr-from-response");
+    const err = new Error("HTTP 502", { cause: res });
+    const ev = buildSeeEvent(err, causesThe("checkout").to("stall"), undefined, CTX);
+    expect(ev.correlation_id).toBe("corr-from-response");
+  });
+
+  it("an explicit token wins over a stamped one", () => {
+    const err = new Error("boom");
+    markCorrelated(err, "stamped");
+    const ev = buildSeeEvent(err, causesThe("a").to("b"), undefined, CTX, undefined, "explicit");
+    expect(ev.correlation_id).toBe("explicit");
+  });
+
+  it("stamps non-enumerably and no-ops on non-objects", () => {
+    const err = new Error("e");
+    markCorrelated(err, "c");
+    expect(Object.keys(err)).toEqual([]);
+    expect(JSON.stringify(err)).toBe("{}");
+    expect(() => markCorrelated("a string", "c")).not.toThrow();
+    expect(findCorrelation("a string")).toBeUndefined();
+    expect(findCorrelation(new Error("no stamp"))).toBeUndefined();
+  });
+
+  it("is cycle-safe on a self-referential cause chain", () => {
+    const a = new Error("a") as Error & { cause?: unknown };
+    a.cause = a;
+    expect(() => findCorrelation(a)).not.toThrow();
+    expect(findCorrelation(a)).toBeUndefined();
+  });
+
+  it("walks axios-shape .request and .response.request (no .cause link)", () => {
+    // XHR-based clients (axios) don't chain via `.cause` — the stamped
+    // XMLHttpRequest hangs off `.request` and `.response.request` instead.
+    const xhr1 = {}; // stands in for the XMLHttpRequest the XHR wrapper stamped
+    markCorrelated(xhr1, "via-request");
+    const e1 = Object.assign(new Error("Request failed with status code 502"), { request: xhr1 });
+    expect(findCorrelation(e1)).toBe("via-request");
+
+    const xhr2 = {};
+    markCorrelated(xhr2, "via-response-request");
+    const e2 = Object.assign(new Error("Request failed with status code 500"), {
+      response: { status: 500, request: xhr2 },
+    });
+    const ev = buildSeeEvent(e2, causesThe("orders").to("be empty"), undefined, CTX);
+    expect(ev.correlation_id).toBe("via-response-request");
   });
 });
 
@@ -510,50 +570,38 @@ describe("client see() wiring", () => {
     expect(sendBeacon).not.toHaveBeenCalled();
   });
 
-  it("auto-capture: fetch 5xx reports kind=network but skips the collector itself", async () => {
+  it("auto-capture: a 5xx no longer auto-reports — the fetch is still wrapped and passes through", async () => {
     const { client, sendBeacon, fetchMock } = await bootClient();
     await client.identify({});
     const w = globalThis.window as unknown as { fetch: typeof fetch };
     expect(w.fetch).not.toBe(fetchMock); // wrapped
 
-    // 5xx from a product URL → reported
+    // A 5xx fires NO beacon — the SDK no longer mints a transport-level issue.
+    // Reporting a failed request is the caller's job (see() at the catch site).
     fetchMock.mockResolvedValueOnce({ ok: false, status: 503, headers: new Headers() });
-    await w.fetch("https://api.test/orders?id=123");
-    expect(sendBeacon).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(await (sendBeacon.mock.calls[0][1] as Blob).text());
-    const ev = body.events[0];
-    expect(ev.kind).toBe("network");
-    expect(ev.error_type).toBe("Http5xx");
-    // The violation name is the message now — the URL rides in extras only.
-    expect(ev.message).toBe("Http5xx");
-    // Consequence names the endpoint (cross-origin → host kept, query dropped)
-    // and never embeds the status code — it would mint one issue per status.
-    expect(ev.subject).toBe("request to api.test/orders");
-    expect(ev.outcome).toBe("fail with a server error");
-    expect(ev.extras).toMatchObject({ status: 503 });
-    expect(ev.extras.url).toContain("https://api.test/orders");
-
-    // 5xx from the SDK's own collector → ignored
-    sendBeacon.mockClear();
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, headers: new Headers() });
-    await w.fetch("https://edge.test/collect");
+    const res = await w.fetch("https://api.test/orders?id=123");
+    await tick();
     expect(sendBeacon).not.toHaveBeenCalled();
+    // The response is returned unchanged.
+    expect((res as Response).status).toBe(503);
   });
 
-  it("auto-capture: network consequence templates id-like path segments", async () => {
+  it("auto-capture: stamps the correlation token on a same-origin 5xx Response", async () => {
     const { client, sendBeacon, fetchMock } = await bootClient();
     await client.identify({});
+    // Make the request same-origin (so a token is minted) and deterministic.
+    vi.stubGlobal("location", { href: "https://app.test/x", origin: "https://app.test" });
+    vi.stubGlobal("crypto", { randomUUID: () => "corr-fixed" });
     const w = globalThis.window as unknown as { fetch: typeof fetch };
 
     fetchMock.mockResolvedValueOnce({ ok: false, status: 500, headers: new Headers() });
-    await w.fetch("https://api.test/orders/123/items/0a1b2c3d-0000-4000-8000-000000000000");
-    expect(sendBeacon).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(await (sendBeacon.mock.calls[0][1] as Blob).text());
-    const ev = body.events[0];
-    // ids never reach the consequence — it feeds the fingerprint raw, so an
-    // embedded id would mint one issue per order.
-    expect(ev.subject).toBe("request to api.test/orders/:id/items/:id");
-    expect(ev.outcome).toBe("fail with a server error");
+    const res = await w.fetch("https://app.test/api/orders");
+    await tick();
+    // Still no auto-report...
+    expect(sendBeacon).not.toHaveBeenCalled();
+    // ...but the Response carries the token, so `see(new Error(msg, { cause: res }))`
+    // links to the server-side issue for the same request.
+    expect(findCorrelation(res)).toBe("corr-fixed");
   });
 });
 
@@ -586,6 +634,60 @@ describe("client correlation helpers (sameOrigin / injectCorrelationHeader)", ()
     expect(req0.headers.get("X-SE-Correlation")).toBe("corr-2");
     expect(req0.headers.get("X-Existing")).toBe("2");
     expect(original.headers.get("X-SE-Correlation")).toBeNull();
+  });
+
+  it("installXhrCorrelation: injects the header + stamps a 5xx XHR (axios path)", async () => {
+    // Minimal XMLHttpRequest good enough to exercise open→send→loadend.
+    class FakeXHR {
+      status = 0;
+      headers: Record<string, string> = {};
+      private listeners: Record<string, Array<() => void>> = {};
+      open(_method: string, _url: string | URL): void {}
+      setRequestHeader(k: string, v: string): void {
+        this.headers[k] = v;
+      }
+      send(_body?: unknown): void {}
+      addEventListener(type: string, cb: () => void): void {
+        (this.listeners[type] ??= []).push(cb);
+      }
+      _finish(status: number): void {
+        this.status = status;
+        for (const cb of this.listeners["loadend"] ?? []) cb();
+      }
+    }
+    vi.stubGlobal("location", { href: "https://app.test/x", origin: "https://app.test" });
+    vi.stubGlobal("crypto", { randomUUID: () => "xhr-corr-1" });
+    vi.stubGlobal("XMLHttpRequest", FakeXHR);
+
+    const { installXhrCorrelation } = await import("../client/index");
+    const { findCorrelation } = await import("../see/core");
+    // The SDK's own collector prefix is ignored — never correlated.
+    installXhrCorrelation(["https://edge.test/collect"]);
+
+    // Same-origin request → header injected.
+    const xhr = new XMLHttpRequest() as unknown as FakeXHR;
+    xhr.open("GET", "/api/orders");
+    xhr.send();
+    expect(xhr.headers["X-SE-Correlation"]).toBe("xhr-corr-1");
+
+    // 500 → the XHR is stamped, so an axios error wrapping it (.request === xhr)
+    // links across the wire.
+    xhr._finish(500);
+    const axiosErr = Object.assign(new Error("Request failed with status code 500"), {
+      request: xhr,
+    });
+    expect(findCorrelation(axiosErr)).toBe("xhr-corr-1");
+
+    // Ignored (collector) + cross-origin requests get no header.
+    const ignored = new XMLHttpRequest() as unknown as FakeXHR;
+    ignored.open("POST", "https://edge.test/collect");
+    ignored.send();
+    expect(ignored.headers["X-SE-Correlation"]).toBeUndefined();
+
+    const cross = new XMLHttpRequest() as unknown as FakeXHR;
+    cross.open("GET", "https://evil.test/api");
+    cross.send();
+    expect(cross.headers["X-SE-Correlation"]).toBeUndefined();
   });
 });
 

@@ -59,13 +59,35 @@ The Shipeasy **errors** primitive — fingerprint-grouped issues
 (open / resolved / ignored, regression auto-reopens) with a near-real-time
 occurrence timeseries.
 
-## Client auto-capture
+## Client auto-capture & cross-network correlation
 
-The client SDK also auto-captures **network failures** (fetch network errors +
-5xx) into the same primitive (`autoCollect: { errors }`, on by default) — each
-names a specific endpoint and outcome. It deliberately does **not** blanket-
-report uncaught exceptions or unhandled promise rejections (those carry no
-actionable consequence). Code that knows the consequence reports it explicitly.
+The client SDK does **not** mint issues of its own for failed requests — a bare
+"request to /x failed" names the transport, not what broke for the user, so it's
+unactionable. Reporting is always yours: `see()` the failure where you know the
+consequence.
+
+What the SDK *does* do (`autoCollect: { errors }`, on by default) is thread a
+per-request **correlation token** so your report links to the backend across the
+wire. This works no matter which HTTP client you use — the SDK instruments both
+`fetch` **and** `XMLHttpRequest`, so axios (its default adapter), superagent,
+jQuery.ajax, and native callers are all covered. On each same-origin request it
+mints a token, sends it up on the `X-SE-Correlation` header (which a server
+`see()` echoes), and stamps it onto the object that surfaces the failure:
+
+- a **network failure** (offline / DNS / CORS) throws — the token is stamped on
+  the thrown error, so `see(err)` picks it up automatically;
+- a **5xx** over `fetch` returns a `Response` — the token is stamped on the
+  `Response`, so a fetcher that throws `new Error(msg, { cause: res })` links via
+  the `.cause` chain;
+- a **5xx** (or network failure) over `XMLHttpRequest` — the token is stamped on
+  the `XMLHttpRequest`, which axios and most wrappers expose on the thrown error
+  as `.request` / `.response.request`, so `see(err)` in your `catch` or axios
+  interceptor picks it up with nothing threaded by hand.
+
+Either way, once you `see()` the failure, that occurrence and the server-side
+issue for the same request fold into one `caused_by` chain. The SDK also
+deliberately does **not** blanket-report uncaught exceptions or unhandled promise
+rejections (no actionable consequence).
 
 ## Rules
 
