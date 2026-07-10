@@ -10,12 +10,15 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import {
   ensureEventCapture,
   useBugForm,
+  useDevtoolsCapabilities,
   useEngineBridge,
   useEventLog,
   useIdentityEmail,
 } from "../react-native-devtools/hooks";
 import { ENGINE_BRIDGE_KEY } from "../devtools/bridge";
 import type { DevtoolsEngineBridge, DevtoolsStateEvent } from "../devtools/bridge";
+import { CAPABILITIES_BRIDGE_KEY } from "../devtools/capabilities";
+import type { CapabilitiesBridge } from "../devtools/capabilities";
 
 function fakeBridge(overrides?: Partial<DevtoolsEngineBridge>): {
   bridge: DevtoolsEngineBridge;
@@ -60,6 +63,7 @@ function fakeBridge(overrides?: Partial<DevtoolsEngineBridge>): {
 
 afterEach(() => {
   delete (globalThis as Record<string, unknown>)[ENGINE_BRIDGE_KEY];
+  delete (globalThis as Record<string, unknown>)[CAPABILITIES_BRIDGE_KEY];
   vi.unstubAllGlobals();
 });
 
@@ -166,6 +170,33 @@ describe("useIdentityEmail", () => {
     fakeBridge({ getUser: () => ({ user_id: "u_1", email: "not-an-email" }) });
     const { result: bad } = renderHook(() => useIdentityEmail());
     expect(bad.current).toBeNull();
+  });
+});
+
+describe("useDevtoolsCapabilities", () => {
+  it("returns a referentially stable snapshot when the bridge mints fresh objects", () => {
+    // The real Engine's `get()` builds a NEW object per call — an uncached
+    // useSyncExternalStore snapshot loops with "Maximum update depth exceeded"
+    // (regression: RN overlay crash-looped at mount on device).
+    const listeners = new Set<() => void>();
+    const capsBridge: CapabilitiesBridge = {
+      get: () => ({ allowPublicTickets: true }),
+      subscribe: (l) => {
+        listeners.add(l);
+        return () => listeners.delete(l);
+      },
+    };
+    (globalThis as Record<string, unknown>)[CAPABILITIES_BRIDGE_KEY] = capsBridge;
+
+    const { result, rerender } = renderHook(() => useDevtoolsCapabilities());
+    const first = result.current;
+    expect(first).toEqual({ allowPublicTickets: true });
+
+    act(() => {
+      for (const l of listeners) l(); // value unchanged — snapshot must not churn
+    });
+    rerender();
+    expect(result.current).toBe(first);
   });
 });
 

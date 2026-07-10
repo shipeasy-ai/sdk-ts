@@ -25,10 +25,31 @@ function bridge(): CapabilitiesBridge | null {
   return (g[CAPABILITIES_BRIDGE_KEY] as CapabilitiesBridge | undefined) ?? null;
 }
 
+// The Engine's bridge `get()` builds a fresh object per call. React's
+// useSyncExternalStore requires a STABLE snapshot (Object.is-equal across
+// calls while the value hasn't changed) or it loops with "The result of
+// getSnapshot should be cached" — so memoize by shallow equality here, on the
+// overlay side, where it protects against any client version.
+let lastCapabilities: DevtoolsCapabilities | null = null;
+
+function shallowEqual<T extends object>(a: T, b: T): boolean {
+  const ra = a as Record<string, unknown>;
+  const rb = b as Record<string, unknown>;
+  const aKeys = Object.keys(ra);
+  return aKeys.length === Object.keys(rb).length && aKeys.every((k) => Object.is(ra[k], rb[k]));
+}
+
 /** Capabilities from the configured client's last eval, or `null` before
- *  configure()/the first eval (or when no client SDK is present at all). */
+ *  configure()/the first eval (or when no client SDK is present at all).
+ *  Referentially stable while the underlying values are unchanged. */
 export function readDevtoolsCapabilities(): DevtoolsCapabilities | null {
-  return bridge()?.get() ?? null;
+  const next = bridge()?.get() ?? null;
+  if (next === null) {
+    lastCapabilities = null;
+  } else if (lastCapabilities === null || !shallowEqual(lastCapabilities, next)) {
+    lastCapabilities = next;
+  }
+  return lastCapabilities;
 }
 
 /**
