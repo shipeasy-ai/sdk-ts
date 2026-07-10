@@ -1493,10 +1493,13 @@ export class Engine {
     this.telemetry.emit("gate", name);
     // 2. No eval result yet.
     if (this.evalResult === null) return { value: false, reason: "CLIENT_NOT_READY" };
-    // 3. Gate absent from the eval result.
-    if (!(name in this.evalResult.flags)) return { value: false, reason: "FLAG_NOT_FOUND" };
+    // 3. Gate absent from the eval result. A partial payload (bootstrap or a
+    //    malformed wire response) can lack the `flags` map entirely — treat
+    //    that like the gate being absent, never crash the `in` lookup.
+    const flags = this.evalResult.flags;
+    if (!flags || !(name in flags)) return { value: false, reason: "FLAG_NOT_FOUND" };
     // 5. (OFF folds into DEFAULT — see doc comment.)
-    const value = this.evalResult.flags[name] ?? false;
+    const value = flags[name] ?? false;
     return { value, reason: value ? "RULE_MATCH" : "DEFAULT" };
   }
 

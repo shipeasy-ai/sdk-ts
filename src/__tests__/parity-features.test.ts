@@ -161,6 +161,15 @@ describe("Feature B — getFlagDetail reasons (browser)", () => {
     expect(client.getFlagDetail("off")).toEqual({ value: false, reason: "DEFAULT" });
     expect(client.getFlagDetail("missing").reason).toBe("FLAG_NOT_FOUND");
   });
+
+  it("a partial bootstrap without a flags map reads as FLAG_NOT_FOUND, not a crash", () => {
+    const client = BrowserEngine.forTesting();
+    // Embedders hand initFromBootstrap arbitrary JSON — a payload missing the
+    // flags map used to crash the `in` lookup ("Cannot use 'in' operator …").
+    client.initFromBootstrap({} as never);
+    expect(client.getFlagDetail("anything")).toEqual({ value: false, reason: "FLAG_NOT_FOUND" });
+    expect(client.getFlag("anything", true)).toBe(true);
+  });
 });
 
 // ---- Feature C — change listeners (server) ----------------------------------

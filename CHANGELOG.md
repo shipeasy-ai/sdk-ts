@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.3.1 (2026-07-10)
+
+### Fixes
+
+- **client:** `getFlagDetail`/`getFlag` no longer throw
+  `Cannot use 'in' operator to search for '<key>' in undefined` when the eval
+  result lacks a `flags` map (partial `initFromBootstrap` payload or malformed
+  wire response) — the lookup now reads as `FLAG_NOT_FOUND` and `getFlag`
+  returns its default. The documented contract is unchanged; this only removes
+  a crash path.
+
 ## 7.3.0 (2026-07-09)
 
 ### React Native devtools overlay
