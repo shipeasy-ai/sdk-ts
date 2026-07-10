@@ -14,12 +14,23 @@ import {
   snapshotOverridesFromStorage,
 } from "../browser-devtools/overrides";
 import { AuthError, DevtoolsApi, DEVTOOLS_UNAUTHED_EVENT } from "../browser-devtools/api";
+import { scriptTagOrigin } from "../browser-devtools/index";
 
 function setSearch(search: string): void {
   window.history.replaceState({}, "", `${window.location.pathname}${search}`);
 }
 
-afterEach(() => setSearch(""));
+function addScript(src: string): HTMLScriptElement {
+  const s = document.createElement("script");
+  s.src = src;
+  document.head.appendChild(s);
+  return s;
+}
+
+afterEach(() => {
+  setSearch("");
+  document.querySelectorAll("script[src]").forEach((s) => s.remove());
+});
 
 describe("URL override codec", () => {
   it("buildOverrideUrl composes params and strips stale se_* from the base", () => {
@@ -85,6 +96,25 @@ describe("URL override codec", () => {
     expect(isDevtoolsRequested()).toBe(true);
     setSearch("?se_edit_labels=1");
     expect(isDevtoolsRequested()).toBe(true);
+  });
+});
+
+describe("scriptTagOrigin — default adminUrl resolution", () => {
+  it("falls back to prod admin (not the CDN) when the bundle loads from cdn.shipeasy.ai", () => {
+    // The overlay is served from the edge Worker's CDN, but /devtools-auth
+    // lives only on the admin app. The CDN origin must not become the adminUrl.
+    addScript("https://cdn.shipeasy.ai/se-devtools.js");
+    expect(scriptTagOrigin()).toBe("https://shipeasy.ai");
+  });
+
+  it("uses a genuine non-local, non-CDN admin origin as-is (staging/self-host)", () => {
+    addScript("https://admin.staging.example.com/se-devtools.js");
+    expect(scriptTagOrigin()).toBe("https://admin.staging.example.com");
+  });
+
+  it("falls back to prod admin when the bundle loads from a local dev origin", () => {
+    addScript("http://localhost:3000/se-devtools.js");
+    expect(scriptTagOrigin()).toBe("https://shipeasy.ai");
   });
 });
 

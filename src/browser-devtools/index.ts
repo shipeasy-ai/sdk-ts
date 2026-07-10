@@ -37,6 +37,23 @@ function isLocalOrigin(origin: string): boolean {
 }
 
 /**
+ * The production bundle (`se-devtools.js`) is served from the ShipEasy CDN
+ * (`cdn.shipeasy.ai`), which is the edge Worker — NOT the admin app. The
+ * `/devtools-auth` device-auth page lives only on the admin app
+ * (`shipeasy.ai`), so defaulting `adminUrl` to the CDN origin makes the popup
+ * open `cdn.shipeasy.ai/devtools-auth`, which the edge Worker 404s
+ * ("No handler for GET /devtools-auth"). Treat the CDN host like a non-admin
+ * origin so we fall through to PROD_ADMIN_URL.
+ */
+function isShipeasyCdnOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).host === "cdn.shipeasy.ai";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Resolve the default admin URL.
  *
  * Order:
@@ -48,13 +65,13 @@ function isLocalOrigin(origin: string): boolean {
  *      hardcoded production endpoint so device-auth + admin API calls always
  *      hit a real ShipEasy backend.
  */
-function scriptTagOrigin(): string {
+export function scriptTagOrigin(): string {
   if (typeof document !== "undefined") {
     const cur = document.currentScript as HTMLScriptElement | null;
     if (cur?.src) {
       try {
         const o = new URL(cur.src).origin;
-        if (!isLocalOrigin(o)) return o;
+        if (!isLocalOrigin(o) && !isShipeasyCdnOrigin(o)) return o;
       } catch {
         /* fall through */
       }
@@ -64,7 +81,7 @@ function scriptTagOrigin(): string {
       if (s.src.includes("se-devtools.js")) {
         try {
           const o = new URL(s.src).origin;
-          if (!isLocalOrigin(o)) return o;
+          if (!isLocalOrigin(o) && !isShipeasyCdnOrigin(o)) return o;
         } catch {
           /* fall through */
         }

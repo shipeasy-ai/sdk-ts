@@ -1,5 +1,19 @@
 # Changelog
 
+## 7.4.1 (2026-07-10)
+
+### Fix: devtools sign-in 404 when the overlay is served from the CDN
+
+- The default `adminUrl` resolution (`scriptTagOrigin`) treated the origin
+  serving `se-devtools.js` as the admin app. In production the bundle ships
+  from `cdn.shipeasy.ai` (the edge Worker), so the device-auth popup opened
+  `https://cdn.shipeasy.ai/devtools-auth` — a route that only exists on the
+  admin app (`shipeasy.ai`) — and the edge Worker returned
+  `{"error":"not_found","message":"No handler for GET /devtools-auth"}`. The
+  CDN host is now recognised as a non-admin origin and falls through to the
+  production admin URL, so sign-in works from the canonical script-tag snippet
+  with no `adminUrl` override. `scriptTagOrigin` is now exported for testing.
+
 ## 7.4.0 (2026-07-10)
 
 ### Devtools: browser overlay moved in, RN overlay at parity, generated-SDK core
