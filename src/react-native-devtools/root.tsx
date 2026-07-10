@@ -12,7 +12,17 @@
 
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import type { ProjectModules } from "../devtools/types";
 import { BugForm } from "./bug-form";
 import { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
@@ -110,7 +120,11 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
     return (
       <ThemeContext.Provider value={theme}>
         <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-          <View style={[styles.backdrop]}>
+          {/* Lift the sheet above the keyboard so form inputs stay visible. */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.backdrop}
+          >
             <SafeAreaView
               style={[styles.sheet, { backgroundColor: theme.bg, borderColor: theme.border }]}
             >
@@ -122,7 +136,7 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
                 bugContext={props.bugContext}
               />
             </SafeAreaView>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </ThemeContext.Provider>
     );
@@ -165,12 +179,14 @@ function Sheet(props: {
       </View>
 
       {screen === "bug" ? (
-        <BugForm
-          config={props.config}
-          client={auth.client}
-          context={props.bugContext}
-          onDone={() => setScreen("home")}
-        />
+        <View style={styles.panel}>
+          <BugForm
+            config={props.config}
+            client={auth.client}
+            context={props.bugContext}
+            onDone={() => setScreen("home")}
+          />
+        </View>
       ) : auth.session && auth.client ? (
         <>
           <View style={styles.sessionRow}>

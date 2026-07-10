@@ -89,6 +89,16 @@ export function useEngineBridge(): DevtoolsEngineBridge | null {
   return bridge;
 }
 
+/** The identified user's email from the engine bridge (the app's `identify()`
+ *  payload), or `null` when the app hasn't identified one. The bug form
+ *  sources its reporter email from here instead of asking the user for what
+ *  the app already told the SDK. Live: re-reads after a late `identify()`. */
+export function useIdentityEmail(): string | null {
+  const bridge = useEngineBridge();
+  const email = bridge?.getUser()?.["email"];
+  return typeof email === "string" && email.includes("@") ? email : null;
+}
+
 // ── events feed ──────────────────────────────────────────────────────────────
 
 const EVENT_RING_SIZE = 200;
@@ -389,12 +399,16 @@ export function useBugForm(args: {
   const [result, setResult] = useState<{ number?: number; deduped?: boolean } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [publicDisabled, setPublicDisabled] = useState(false);
+  const identityEmail = useIdentityEmail();
 
   const { config, client, context } = args;
 
   const submit = useCallback(async () => {
     setSubmitError(null);
-    await form.handleSubmit(async (value) => {
+    await form.handleSubmit(async (raw) => {
+      // Reporter email is sourced from identify() when the app provided one —
+      // the form only asks when the identity has no email.
+      const value = { ...raw, reporterEmail: raw.reporterEmail || identityEmail || undefined };
       try {
         if (client) {
           await client.createBug({ ...value, context: { ...value.context, ...context } });
@@ -418,7 +432,7 @@ export function useBugForm(args: {
         }
       }
     })();
-  }, [client, config.clientKey, config.edgeBaseUrl, context, form]);
+  }, [client, config.clientKey, config.edgeBaseUrl, context, form, identityEmail]);
 
   const reset = useCallback(() => {
     form.reset();

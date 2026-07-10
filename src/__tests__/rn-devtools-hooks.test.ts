@@ -12,6 +12,7 @@ import {
   useBugForm,
   useEngineBridge,
   useEventLog,
+  useIdentityEmail,
 } from "../react-native-devtools/hooks";
 import { ENGINE_BRIDGE_KEY } from "../devtools/bridge";
 import type { DevtoolsEngineBridge, DevtoolsStateEvent } from "../devtools/bridge";
@@ -101,6 +102,70 @@ describe("useBugForm (react-hook-form + generated zod schema)", () => {
     await waitFor(() => expect(result.current.result).toEqual({ number: 41, deduped: true }));
     const [url] = fetchStub.mock.calls[0] as unknown as [string, RequestInit];
     expect(String(url)).toContain("/cli/report");
+  });
+
+  it("sources the reporter email from the identified user instead of asking", async () => {
+    fakeBridge({ getUser: () => ({ user_id: "u_1", email: "dev@acme.io" }) });
+    const fetchStub = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ number: 7, deduped: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    const { result } = renderHook(() => useBugForm({ config, client: null }));
+
+    act(() => {
+      result.current.form.setValue("title", "Crash on open");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    const [, init] = fetchStub.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(init?.body)).toContain("dev@acme.io");
+  });
+
+  it("a hand-typed reporter email beats the identity email", async () => {
+    fakeBridge({ getUser: () => ({ user_id: "u_1", email: "dev@acme.io" }) });
+    const fetchStub = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ number: 8, deduped: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    const { result } = renderHook(() => useBugForm({ config, client: null }));
+
+    act(() => {
+      result.current.form.setValue("title", "Crash on open");
+      result.current.form.setValue("reporterEmail", "typed@acme.io");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    const [, init] = fetchStub.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(init?.body)).toContain("typed@acme.io");
+  });
+});
+
+describe("useIdentityEmail", () => {
+  it("returns the identify() email, or null when absent/invalid", () => {
+    const { result: none } = renderHook(() => useIdentityEmail());
+    expect(none.current).toBeNull();
+
+    fakeBridge({ getUser: () => ({ user_id: "u_1", email: "dev@acme.io" }) });
+    const { result } = renderHook(() => useIdentityEmail());
+    expect(result.current).toBe("dev@acme.io");
+
+    fakeBridge({ getUser: () => ({ user_id: "u_1", email: "not-an-email" }) });
+    const { result: bad } = renderHook(() => useIdentityEmail());
+    expect(bad.current).toBeNull();
   });
 });
 

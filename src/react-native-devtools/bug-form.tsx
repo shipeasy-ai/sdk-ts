@@ -8,7 +8,7 @@ import { Controller } from "react-hook-form";
 import type { Control, FieldPath, FieldValues } from "react-hook-form";
 import type { ReactNode } from "react";
 import type { DevtoolsClient } from "../devtools/api";
-import { useBugForm } from "./hooks";
+import { useBugForm, useIdentityEmail } from "./hooks";
 import type { DevtoolsConfig } from "./hooks";
 import { Button, Field, Muted, Title, useTheme } from "./ui";
 
@@ -61,6 +61,7 @@ export function BugForm(props: {
   onDone: () => void;
 }): ReactNode {
   const t = useTheme();
+  const identityEmail = useIdentityEmail();
   const { form, ...state } = useBugForm({
     config: props.config,
     client: props.client,
@@ -105,14 +106,19 @@ export function BugForm(props: {
         placeholder={"1. Open …\n2. Tap …"}
         multiline
       />
-      <ControlledField
-        control={form.control}
-        name="reporterEmail"
-        label="Your email (optional)"
-        placeholder="So we can follow up"
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
+      {identityEmail ? (
+        // The app already identified this user — don't ask for what we know.
+        <Muted style={styles.reporterNote}>Follow-ups go to {identityEmail}.</Muted>
+      ) : (
+        <ControlledField
+          control={form.control}
+          name="reporterEmail"
+          label="Your email (optional)"
+          placeholder="So we can follow up"
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+      )}
       {state.submitError ? (
         <Text style={[styles.submitError, { color: t.danger }]}>{state.submitError}</Text>
       ) : null}
@@ -133,5 +139,6 @@ const styles = StyleSheet.create({
   doneButton: { alignSelf: "stretch", marginTop: 16 },
   doneDetail: { textAlign: "center" },
   form: { paddingBottom: 32 },
+  reporterNote: { marginBottom: 14 },
   submitError: { fontSize: 13, marginBottom: 10 },
 });

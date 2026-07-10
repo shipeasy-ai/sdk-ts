@@ -112,7 +112,10 @@ also submit **feature requests** from the Feedback panel.
 
 The forms are react-hook-form over the same generated schemas the web devtools
 overlay validates with (`title` required; steps / actual result / email
-optional).
+optional). The reporter email is sourced from the app's `identify()` payload
+(its `email` attribute, read via the engine bridge — also exposed as the
+`useIdentityEmail()` hook): when the app has identified an email the form
+doesn't ask for it, and only shows the email field otherwise.
 
 ## Hooks
 

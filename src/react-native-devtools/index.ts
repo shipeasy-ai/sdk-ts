@@ -29,6 +29,7 @@ export {
   useFeedback,
   useGates,
   useI18nKeys,
+  useIdentityEmail,
   useProfiles,
   useProject,
   useShakeToOpen,
