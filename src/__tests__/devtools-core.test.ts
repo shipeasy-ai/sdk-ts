@@ -112,6 +112,22 @@ describe("DevtoolsClient", () => {
     expect(fetchStub).toHaveBeenCalledTimes(4);
   });
 
+  it("drains a bare-array list body as the complete list (stubbed/legacy endpoints)", async () => {
+    // The browser-overlay e2e mocks (and legacy admin builds) fulfill list
+    // routes with raw arrays instead of the { data, next_cursor } envelope —
+    // the pre-generated-client drainList accepted both, so drain() must too.
+    const fetchStub = vi.fn(async () => jsonResponse([{ id: "g1" }, { id: "g2" }]));
+    const client = new DevtoolsClient({
+      token: "t",
+      projectId: "p",
+      adminBaseUrl: "https://admin.test",
+      fetch: fetchStub as unknown as typeof fetch,
+    });
+    const gates = await client.gates();
+    expect(gates.map((g) => g.id)).toEqual(["g1", "g2"]);
+    expect(fetchStub).toHaveBeenCalledTimes(1); // no cursor walk on a bare array
+  });
+
   it("fires onUnauthed and rejects with AuthError on a 401", async () => {
     const onUnauthed = vi.fn();
     const client = new DevtoolsClient({

@@ -206,6 +206,10 @@ export class DevtoolsClient {
     let cursor: string | undefined;
     do {
       const body = this.unwrap(path, await page({ limit, ...(cursor ? { cursor } : {}) }));
+      // Tolerate a bare-array body like the pre-generated-client drainList did
+      // (the spec is the contract, but stubbed/legacy endpoints return raw
+      // arrays — a bare array is by definition the complete list).
+      if (Array.isArray(body)) return body as TItem[];
       out.push(...(body.data as TItem[]));
       cursor = body.next_cursor ?? undefined;
     } while (cursor);

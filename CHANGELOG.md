@@ -14,6 +14,14 @@
   production admin URL, so sign-in works from the canonical script-tag snippet
   with no `adminUrl` override. `scriptTagOrigin` is now exported for testing.
 
+### Fix: devtools list drain rejected bare-array bodies
+
+- `DevtoolsClient`'s paginated list drain (gates / configs / experiments /
+  universes) only accepted the `{ data, next_cursor }` envelope after the move
+  to the generated client; a bare-array body (stubbed and legacy admin
+  endpoints) made the overlays' list panels error out instead of rendering.
+  Restored the pre-7.4.0 tolerance: a bare array is the complete list.
+
 ## 7.4.0 (2026-07-10)
 
 ### Devtools: browser overlay moved in, RN overlay at parity, generated-SDK core
