@@ -11,6 +11,9 @@ importers:
       expo-crypto:
         specifier: '>=13'
         version: 57.0.0(expo@57.0.4)
+      expo-image-picker:
+        specifier: '>=15'
+        version: 57.0.2(expo@57.0.4)
       expo-secure-store:
         specifier: '>=13'
         version: 57.0.0(expo@57.0.4)
@@ -2672,6 +2675,16 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-image-loader@57.0.0:
+    resolution: {integrity: sha512-EhwnoPC4T/EMdB7Nsg7qITzhO/qB0hUnmVghmtAKQwwDVaLWWYCGE4NLkes3zk9Ub451SmS/swgPp4PCPzOlnw==}
+    peerDependencies:
+      expo: '*'
+
+  expo-image-picker@57.0.2:
+    resolution: {integrity: sha512-XW+C5weIthkOLCJZzExeRJf9pcWfaXNHSDm76gmZVhDUVIHdi9IS3eihAIF0WA0fBo9ogIfQs/iep/c6CzIMKg==}
+    peerDependencies:
+      expo: '*'
+
   expo-keep-awake@57.0.0:
     resolution: {integrity: sha512-WqEoyDNSmUeAI9Gu7UaWKDjOhfaV+jGcms7N0hh/EAr7sqJrI2s0HpLSC3P9cWfXFUZCL1zZjd22m/NbsJYCKg==}
     peerDependencies:
@@ -5267,7 +5280,7 @@ snapshots:
       progress: 2.0.3
       prompts: 2.4.2
       resolve-from: 5.0.0
-      semver: 7.7.4
+      semver: 7.8.4
       send: 0.19.2
       slugify: 1.6.9
       stacktrace-parser: 0.1.11
@@ -5307,7 +5320,7 @@ snapshots:
       debug: 4.4.3
       getenv: 2.0.0
       glob: 13.0.6
-      semver: 7.7.4
+      semver: 7.8.4
       slugify: 1.6.9
       xcode: 3.0.1
       xml2js: 0.6.0
@@ -5327,7 +5340,7 @@ snapshots:
       getenv: 2.0.0
       glob: 13.0.6
       resolve-workspace-root: 2.0.1
-      semver: 7.7.4
+      semver: 7.8.4
       slugify: 1.6.9
     transitivePeerDependencies:
       - supports-color
@@ -5375,7 +5388,7 @@ snapshots:
       ignore: 5.3.2
       minimatch: 10.2.5
       resolve-from: 5.0.0
-      semver: 7.7.4
+      semver: 7.8.4
     transitivePeerDependencies:
       - supports-color
 
@@ -5387,7 +5400,7 @@ snapshots:
       getenv: 2.0.0
       jimp-compact: 0.16.1
       parse-png: 2.1.0
-      semver: 7.7.4
+      semver: 7.8.4
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -5516,7 +5529,7 @@ snapshots:
       debug: 4.4.3
       expo-modules-autolinking: 57.0.5(typescript@6.0.3)
       resolve-from: 5.0.0
-      semver: 7.7.4
+      semver: 7.8.4
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -6958,6 +6971,15 @@ snapshots:
       react: 19.2.7
       react-native: 0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7)
 
+  expo-image-loader@57.0.0(expo@57.0.4):
+    dependencies:
+      expo: 57.0.4(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(react-dom@19.2.7(react@19.2.7))(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
+
+  expo-image-picker@57.0.2(expo@57.0.4):
+    dependencies:
+      expo: 57.0.4(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(react-dom@19.2.7(react@19.2.7))(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
+      expo-image-loader: 57.0.0(expo@57.0.4)
+
   expo-keep-awake@57.0.0(expo@57.0.4)(react@19.2.7):
     dependencies:
       expo: 57.0.4(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(react-dom@19.2.7(react@19.2.7))(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
@@ -7947,7 +7969,7 @@ snapshots:
     dependencies:
       hosted-git-info: 7.0.2
       proc-log: 4.2.0
-      semver: 7.7.4
+      semver: 7.8.4
       validate-npm-package-name: 5.0.1
 
   nullthrows@1.1.1: {}
