@@ -5,14 +5,15 @@ import { defineConfig } from "@hey-api/openapi-ts";
  *
  * Input is `spec/admin-openapi.yaml` — a vendored snapshot of the bundled
  * `@shipeasy/openapi` admin contract (the same spec the dashboard, CLI, and the
- * in-browser devtools overlay are generated from). Refresh it with
+ * devtools overlays are generated from). Refresh it with
  * `pnpm run refresh:spec` when working inside the shipeasy monorepo, then
  * re-run `pnpm run gen:devtools` and commit both.
  *
- * We deliberately emit ONLY types + zod schemas — no generated runtime client.
- * The devtools core (`src/devtools/api.ts`) owns its fetch transport (session
- * admin key, configurable base URL, memo cache, typed errors), mirroring how
- * the web devtools overlay consumes this same spec. Generated output is
+ * Emits types + zod schemas + the per-operation SDK and fetch client. The
+ * devtools core (`src/devtools/api.ts`) is a thin session wrapper over the
+ * generated operations: it owns what codegen can't (per-session bearer key,
+ * memo cache, cursor draining, 401 → onUnauthed, record projections) and calls
+ * a generated function for every endpoint the spec covers. Generated output is
  * machine-written — never hand-edit; consume it through `src/devtools/`.
  */
 export default defineConfig({
@@ -28,5 +29,10 @@ export default defineConfig({
         types: { infer: { enabled: true, case: "PascalCase", name: "{{name}}Input" } },
       },
     },
+    // Per-operation SDK functions (tree-shakeable) over the fetch client.
+    // DevtoolsClient passes its own per-session `client` instance to every
+    // call — the module-level default client is never used.
+    "@hey-api/sdk",
+    "@hey-api/client-fetch",
   ],
 });

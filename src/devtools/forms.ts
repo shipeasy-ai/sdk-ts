@@ -8,6 +8,7 @@
 //     no priority — the public endpoint doesn't take them), or
 //   • `DevtoolsClient.createBug` (admin key → /api/admin/ops; full shape).
 
+import type { z } from "zod";
 import { zCreateBugRequest, zCreateFeatureRequestRequest } from "./generated/zod.gen";
 import type { CreateBugRequestInput, CreateFeatureRequestRequestInput } from "./generated/zod.gen";
 import type { PublicBugInput } from "./public-report";
@@ -19,10 +20,14 @@ export type { CreateBugRequestInput, CreateFeatureRequestRequestInput };
  *  submit time; auto-captured context is layered on separately). */
 export const bugFormSchema = zCreateBugRequest.omit({ type: true });
 export type BugFormValues = Omit<CreateBugRequestInput, "type">;
+/** Pre-parse shape (defaults not yet applied) — what a form editor holds. */
+export type BugFormInput = z.input<typeof bugFormSchema>;
 
 /** The editable feature-request-form fields. */
 export const featureFormSchema = zCreateFeatureRequestRequest.omit({ type: true });
 export type FeatureFormValues = Omit<CreateFeatureRequestRequestInput, "type">;
+/** Pre-parse shape (defaults not yet applied) — what a form editor holds. */
+export type FeatureFormInput = z.input<typeof featureFormSchema>;
 
 /** Field-keyed validation errors (first issue per field), ready for inline
  *  display under each input. */

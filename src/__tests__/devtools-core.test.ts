@@ -21,6 +21,49 @@ async function s256(input: string): Promise<string> {
   return Buffer.from(hash).toString("base64url");
 }
 
+/** Normalize a fetch-stub invocation: the generated SDK client calls
+ *  `fetch(new Request(url, init))` (single argument), the raw spec-gap
+ *  transport calls `fetch(url, init)` — tests accept both. */
+async function callOf(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<{ url: string; method: string; body?: unknown; headers: Headers }> {
+  if (input instanceof Request) {
+    let body: unknown;
+    try {
+      const text = await input.clone().text();
+      body = text ? (JSON.parse(text) as unknown) : undefined;
+    } catch {
+      body = undefined;
+    }
+    return { url: input.url, method: input.method, body, headers: input.headers };
+  }
+  return {
+    url: String(input),
+    method: init?.method ?? "GET",
+    body: init?.body ? (JSON.parse(String(init.body)) as unknown) : undefined,
+    headers: new Headers(init?.headers as HeadersInit | undefined),
+  };
+}
+
+/** Route-table fetch stub: first matching predicate wins. Records every call. */
+function routedFetch(
+  routes: Array<{
+    match: (c: { url: string; method: string }) => boolean;
+    respond: (c: { url: string; method: string; body?: unknown }) => Response;
+  }>,
+) {
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const stub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const call = await callOf(input, init);
+    calls.push(call);
+    const route = routes.find((r) => r.match(call));
+    if (!route) return jsonResponse({ error: `no route for ${call.method} ${call.url}` }, 500);
+    return route.respond(call);
+  });
+  return { stub: stub as unknown as typeof fetch, calls };
+}
+
 // ── DevtoolsClient ────────────────────────────────────────────────────────────
 
 describe("DevtoolsClient", () => {
@@ -86,9 +129,9 @@ describe("DevtoolsClient", () => {
     const calls: Array<{ url: string; body?: unknown }> = [];
     let bugsServed = 0;
     const fetchStub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-      if (init?.method === "POST") return jsonResponse({ id: "bug_1" });
+      const call = await callOf(input, init);
+      calls.push({ url: call.url, body: call.body });
+      if (call.method === "POST") return jsonResponse({ id: "bug_1" });
       bugsServed++;
       return jsonResponse([{ id: `bug_list_${bugsServed}` }]);
     });
@@ -112,6 +155,143 @@ describe("DevtoolsClient", () => {
     // The bugs memo was scrubbed by the mutation — next read refetches.
     await client.bugs();
     expect(bugsServed).toBe(2);
+  });
+
+  it("drains universes through the generated list op", async () => {
+    const pages = [
+      { data: [{ id: "u1", name: "checkout" }], next_cursor: "c1" },
+      { data: [{ id: "u2", name: "growth" }], next_cursor: null },
+    ];
+    let page = 0;
+    const { stub, calls } = routedFetch([
+      {
+        match: (c) => c.url.includes("/api/admin/universes"),
+        respond: () => jsonResponse(pages[page++]),
+      },
+    ]);
+    const client = new DevtoolsClient({
+      token: "t",
+      projectId: "p",
+      adminBaseUrl: "https://admin.test",
+      fetch: stub,
+    });
+    const universes = await client.universes();
+    expect(universes.map((u) => u.id)).toEqual(["u1", "u2"]);
+    expect(calls[1].url).toContain("cursor=c1");
+  });
+
+  it("pages i18n keys by offset until total is reached", async () => {
+    const mk = (n: number, offset: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `k${offset + i}`,
+        key: `key.${offset + i}`,
+        value: "v",
+        profileId: null,
+        createdAt: "2026-01-01",
+      }));
+    const { stub, calls } = routedFetch([
+      {
+        match: (c) => c.url.includes("/api/admin/i18n/keys"),
+        respond: (c) => {
+          const offset = Number(new URL(c.url).searchParams.get("offset") ?? 0);
+          return jsonResponse({ keys: mk(offset === 0 ? 500 : 100, offset), total: 600 });
+        },
+      },
+    ]);
+    const client = new DevtoolsClient({
+      token: "t",
+      projectId: "p",
+      adminBaseUrl: "https://admin.test",
+      fetch: stub,
+    });
+    const keys = await client.keys("prof_1");
+    expect(keys).toHaveLength(600);
+    expect(calls.every((c) => c.url.includes("profile_id=prof_1"))).toBe(true);
+  });
+
+  it("updateKeyById PUTs through the generated op and busts the keys cache", async () => {
+    let listServes = 0;
+    const { stub, calls } = routedFetch([
+      {
+        match: (c) => c.method === "PUT" && c.url.includes("/api/admin/i18n/keys/k1"),
+        respond: () => jsonResponse({ id: "k1" }),
+      },
+      {
+        match: (c) => c.url.includes("/api/admin/i18n/keys"),
+        respond: () => {
+          listServes++;
+          return jsonResponse({ keys: [], total: 0 });
+        },
+      },
+    ]);
+    const client = new DevtoolsClient({
+      token: "t",
+      projectId: "p",
+      adminBaseUrl: "https://admin.test",
+      fetch: stub,
+    });
+    await client.keys();
+    await client.updateKeyById("k1", "Bonjour");
+    const put = calls.find((c) => c.method === "PUT");
+    expect(put?.body).toEqual({ value: "Bonjour" });
+    await client.keys(); // cache was scrubbed
+    expect(listServes).toBe(2);
+  });
+
+  it("upsertKeys bulk-overwrites via the raw PUT (spec gap) with auth", async () => {
+    const { stub, calls } = routedFetch([
+      {
+        match: (c) => c.method === "PUT" && c.url.endsWith("/api/admin/i18n/keys"),
+        respond: () => jsonResponse({ ok: true }),
+      },
+    ]);
+    const client = new DevtoolsClient({
+      token: "sdk_admin_k",
+      projectId: "p",
+      adminBaseUrl: "https://admin.test",
+      fetch: stub,
+    });
+    await client.upsertKeys("prof_1", [{ key: "a", value: "1" }]);
+    expect(calls[0].body).toEqual({
+      profile_id: "prof_1",
+      chunk: "default",
+      keys: [{ key: "a", value: "1" }],
+    });
+  });
+
+  it("updateFeatureRequest PATCHes ops and scrubs list + detail memos", async () => {
+    let listServes = 0;
+    const { stub, calls } = routedFetch([
+      {
+        match: (c) => c.method === "PATCH",
+        respond: () => jsonResponse({ id: "fr_1" }),
+      },
+      {
+        match: (c) => c.url.includes("/api/admin/ops/fr_1"),
+        respond: () =>
+          jsonResponse({ id: "fr_1", title: "T", status: "open", priority: null, attachments: [] }),
+      },
+      {
+        match: (c) => c.url.includes("/api/admin/ops"),
+        respond: () => {
+          listServes++;
+          return jsonResponse([]);
+        },
+      },
+    ]);
+    const client = new DevtoolsClient({
+      token: "t",
+      projectId: "p",
+      adminBaseUrl: "https://admin.test",
+      fetch: stub,
+    });
+    await client.featureRequests();
+    await client.featureRequest("fr_1");
+    await client.updateFeatureRequest("fr_1", { status: "in_progress", priority: "high" });
+    const patch = calls.find((c) => c.method === "PATCH");
+    expect(patch?.body).toEqual({ status: "in_progress", priority: "high" });
+    await client.featureRequests();
+    expect(listServes).toBe(2);
   });
 });
 

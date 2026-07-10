@@ -1,6 +1,15 @@
 // Shared types for the headless devtools core (`@shipeasy/sdk/devtools`).
 // Framework-agnostic: no DOM, no React, no React Native imports. The RN overlay
-// (`@shipeasy/sdk/react-native-devtools`) and any future surface consume these.
+// (`@shipeasy/sdk/react-native-devtools`) and the browser overlay
+// (`@shipeasy/sdk/browser-devtools`) both consume these.
+//
+// Record interfaces below are the overlays' narrowed *projections* of the
+// generated admin OpenAPI responses (./generated) — the subset the panels
+// render. Where a projection matches a generated item 1:1 it is derived from
+// it (e.g. `UniverseRecord`), so a spec change surfaces as a type error here
+// instead of silent drift.
+
+import type { ListUniversesResponse } from "./generated/types.gen";
 
 /** Prod defaults; both overridable per client (local dev, staging). */
 export const DEFAULT_ADMIN_BASE_URL = "https://shipeasy.ai";
@@ -74,6 +83,44 @@ export interface ExperimentRecord {
   updatedAt: string;
 }
 
+export interface ProfileRecord {
+  id: string;
+  name: string;
+  createdAt: string;
+  /** 1 when this is the project's default profile (D1 returns the int flag). */
+  isDefault?: number;
+}
+
+// Derived straight from the generated contract — the overlays render the whole
+// universe list item, so there's nothing to narrow.
+export type UniverseRecord = ListUniversesResponse["data"][number];
+
+export interface KeyRecord {
+  id: string;
+  key: string;
+  value: string;
+  profileId: string | null;
+  createdAt: string;
+}
+
+export interface DraftRecord {
+  id: string;
+  name: string;
+  profileId: string;
+  status: string;
+  createdAt: string;
+}
+
+/** Subset of the server's `connector_data` the devtools read — just the linked
+ *  GitHub PR/issue. The admin endpoints return the full blob; we only type the
+ *  fields the overlays render. */
+export interface FeedbackConnectorData {
+  github?: {
+    issue?: { number: number; url: string };
+    pr?: { number: number; url: string };
+  };
+}
+
 export type BugStatus =
   | "open"
   | "pending_approval"
@@ -93,6 +140,7 @@ export interface BugRecord {
   reporterEmail: string | null;
   pageUrl: string | null;
   createdAt: string;
+  connectorData?: FeedbackConnectorData | null;
 }
 
 export interface AttachmentRecord {
@@ -119,6 +167,7 @@ export interface FeatureRequestRecord {
   reporterEmail: string | null;
   pageUrl: string | null;
   createdAt: string;
+  connectorData?: FeedbackConnectorData | null;
 }
 
 export interface FeatureRequestDetail extends FeatureRequestRecord {
