@@ -1,7 +1,7 @@
 {
   "name": "@shipeasy/sdk",
-  "version": "7.3.1",
-  "description": "Shipeasy SDK — feature gates, runtime configs, experiments, and metrics for the Shipeasy hosted service.",
+  "version": "7.4.0",
+  "description": "Shipeasy SDK \u2014 feature gates, runtime configs, experiments, and metrics for the Shipeasy hosted service.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://shipeasy.ai",
   "repository": {
@@ -31,6 +31,9 @@
       ],
       "react-native-devtools": [
         "./dist/react-native-devtools/index.d.ts"
+      ],
+      "browser-devtools": [
+        "./dist/browser-devtools/index.d.ts"
       ]
     }
   },
@@ -75,6 +78,11 @@
       "import": "./dist/react-native-devtools/index.mjs",
       "default": "./dist/react-native-devtools/index.js"
     },
+    "./browser-devtools": {
+      "types": "./dist/browser-devtools/index.d.ts",
+      "import": "./dist/browser-devtools/index.mjs",
+      "default": "./dist/browser-devtools/index.js"
+    },
     "./templates/*": "./templates/*.js"
   },
   "bin": {
@@ -108,18 +116,24 @@
     "murmurhash-js": "^1.0.0"
   },
   "peerDependencies": {
+    "@hookform/resolvers": ">=3",
     "@openfeature/server-sdk": ">=1.13.0",
     "@openfeature/web-sdk": ">=1.2.0",
     "expo-crypto": ">=13",
+    "expo-image-picker": ">=15",
     "expo-secure-store": ">=13",
     "expo-sensors": ">=13",
     "expo-web-browser": ">=13",
     "next": ">=13",
     "react": ">=18",
+    "react-hook-form": ">=7.50",
     "react-native": ">=0.73",
     "zod": ">=4"
   },
   "peerDependenciesMeta": {
+    "@hookform/resolvers": {
+      "optional": true
+    },
     "@openfeature/server-sdk": {
       "optional": true
     },
@@ -127,6 +141,9 @@
       "optional": true
     },
     "expo-crypto": {
+      "optional": true
+    },
+    "expo-image-picker": {
       "optional": true
     },
     "expo-secure-store": {
@@ -144,6 +161,9 @@
     "react": {
       "optional": true
     },
+    "react-hook-form": {
+      "optional": true
+    },
     "react-native": {
       "optional": true
     },
@@ -152,14 +172,20 @@
     }
   },
   "devDependencies": {
+    "@cfworker/json-schema": "^4.1.1",
     "@hey-api/openapi-ts": "^0.99.0",
+    "@hookform/resolvers": "^5.4.0",
     "@openfeature/server-sdk": "^1.22.0",
     "@openfeature/web-sdk": "^1.9.0",
+    "@testing-library/react": "^16.3.2",
     "@types/murmurhash-js": "^1.0.6",
     "@types/node": "^26.0.1",
     "@types/react": "^19.2.14",
+    "jsdom": "^29.1.1",
     "next": "^16.2.3",
     "react": "^19.2.5",
+    "react-dom": "^19.2.7",
+    "react-hook-form": "^7.81.0",
     "react-native": "^0.81.6",
     "tsup": "^8.3.0",
     "typescript": "^6.0.3",

@@ -24,6 +24,7 @@
     "testing": "pages/testing.md",
     "openfeature": "pages/openfeature.md",
     "react-native-devtools": "pages/react-native-devtools.md",
+    "browser-devtools": "pages/browser-devtools.md",
     "advanced": "pages/advanced.md"
   },
   "snippets": {

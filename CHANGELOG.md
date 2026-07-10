@@ -1,5 +1,67 @@
 # Changelog
 
+## 7.4.0 (2026-07-10)
+
+### Devtools: browser overlay moved in, RN overlay at parity, generated-SDK core
+
+- **New entry `@shipeasy/sdk/browser-devtools`** — the in-browser devtools
+  overlay (formerly the monorepo's `@shipeasy/devtools` package) now ships from
+  the SDK, in `src/browser-devtools/` parallel to the React Native overlay.
+  Importable surface (`init` / `destroy` / `loadOnTrigger` + the URL-override
+  helpers) plus a self-executing `dist/browser-devtools.global.js` for
+  script-tag use (the `se-devtools.js` artifact). `@cfworker/json-schema` is
+  bundled; `zod` stays a peer.
+- **Headless core now rides the generated OpenAPI SDK.** Codegen emits the
+  per-operation SDK + fetch client (`@hey-api/sdk` / `client-fetch`) alongside
+  types+zod, and `DevtoolsClient` calls generated operations for every
+  spec-covered endpoint (memo cache, cursor draining, 401→`onUnauthed`, and the
+  few not-yet-spec'd routes stay hand-written and are marked `SPEC GAP`). New
+  client surface: `universes()`, `profiles()`, `drafts()`, `keys()`,
+  `createDraft()`, `upsertDraftKey()`, `updateKeyById()`, `upsertKeys()`,
+  `updateFeatureRequest()`, plus `adminUrl` and shared record types
+  (`UniverseRecord`, `ProfileRecord`, `DraftRecord`, `KeyRecord`,
+  `FeedbackConnectorData`, `connectorData` on feedback records).
+- **React Native overlay at parity with the web overlay.** New panels: User
+  (edit props + re-evaluate for real), Events (live SDK stream), I18n (profile
+  selector + per-key editing), and a full Feedback panel (bugs + feature
+  requests, Active/All filters, detail views with inline status/priority
+  editing, attachment previews and screenshot upload via optional
+  `expo-image-picker`). Gates/Configs/Experiments gain search, expandable
+  detail, live values and **live forcing** (no reload) driven by the Engine's
+  programmatic overrides. Tabs are gated by the project's enabled modules.
+- **Engine devtools bridge.** The client Engine publishes a full accessor on
+  `globalThis` (`__SE_DEVTOOLS_ENGINE__`): live reads, the last `identify()`
+  payload, override get/set/remove/clear, a re-render subscription, and a
+  structured event feed. Overlays read it without importing the client (no
+  duplicate Engine). `window.__shipeasy` additionally carries `user`.
+- **Forms are react-hook-form.** `useBugForm()` / new `useFeatureForm()` return
+  an RHF instance validated by the generated zod schemas via `zodResolver`
+  (new optional peers `react-hook-form` + `@hookform/resolvers`; the hook shape
+  changed from the hand-rolled `values`/`setField` of 7.3.0).
+- i18n marker constants moved to `src/i18n-markers.ts`; `@shipeasy/sdk/client`
+  re-exports them unchanged.
+
+### i18n render-keys-only mode (testing)
+
+- **i18n:** new `renderKeysOnly` toggle makes `i18n.t()` / `i18n.rich()` /
+  `i18n.tEl()` return the translation **key** verbatim instead of resolving its
+  value, so tests and snapshots assert against stable data instead of copy that
+  changes when a translation is edited. **Defaults on when the runtime env is
+  `"test"`** (`SHIPEASY_ENV` / `NODE_ENV`, i.e. under jest/vitest), off
+  otherwise. Set it explicitly via `configure({ i18n: { renderKeysOnly } })` /
+  `shipeasy({ …, i18n: { renderKeysOnly } })` (both entrypoints) or
+  `i18n.configure({ renderKeysOnly })`. The flag is process-wide and shared
+  between the server and browser bundles, so a server override also governs the
+  `i18n.t()` calls in SSR'd `"use client"` components. Also exports `isTestEnv()`
+  from the env helper.
+
+### Performance
+
+- **i18n:** `{{var}}` interpolation now short-circuits via a native
+  `indexOf("{{")` scan (skipping the regex engine entirely for the common
+  placeholder-free label) and reuses a hoisted `RegExp` instead of re-allocating
+  one per `t()` call.
+
 ## 7.3.1 (2026-07-10)
 
 ### Fixes

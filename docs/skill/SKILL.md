@@ -169,5 +169,12 @@ import { ShipeasyDevtools } from "@shipeasy/sdk/react-native-devtools";
 
 Shake several times fast to open (expo-sensors; or `ref.open()`). Login runs
 device-auth via the app's own scheme (PKCE — the deep link never carries the
-token) and unlocks Gates / Configs / Experiments / Feedback panels. Full
-reference: <https://shipeasy-ai.github.io/sdk-ts/pages/react-native-devtools.md>
+token) and unlocks User / Gates / Configs / Experiments / Feedback / I18n /
+Events panels, with live value forcing through the SDK's programmatic
+overrides. The bug/feature forms need `react-hook-form` + `@hookform/resolvers`.
+Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/react-native-devtools.md>
+
+The browser overlay ships from the same package — script-tag `se-devtools.js`
+or `import { loadOnTrigger } from "@shipeasy/sdk/browser-devtools"` (URL-param
+overrides, `Shift+Alt+S`). Reference:
+<https://shipeasy-ai.github.io/sdk-ts/pages/browser-devtools.md>

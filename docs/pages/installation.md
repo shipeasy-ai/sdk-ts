@@ -320,9 +320,11 @@ What else differs from a browser (all graceful — the SDK degrades, never throw
 - **No DOM lifecycle listeners.** There is no `beforeunload`/`visibilitychange`
   in React Native, so the event buffer flushes on its 5s timer and on explicit
   `track()` — not on tab-hide.
-- **Auto web-vitals, the devtools overlay, and loader-driven i18n are skipped** —
-  they are DOM-only. Flags, configs, experiments, `track()`, and `see()` error
-  reporting are unaffected.
+- **Auto web-vitals and loader-driven i18n are skipped** — they are DOM-only.
+  Flags, configs, experiments, `track()`, and `see()` error reporting are
+  unaffected. The devtools overlay has a native counterpart — mount
+  `@shipeasy/sdk/react-native-devtools` (see its page) instead of the browser
+  bundle.
 
 ---
 

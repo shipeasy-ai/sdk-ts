@@ -60,7 +60,39 @@ export default defineConfig([
     outDir: "dist/react-native-devtools",
     format: ["cjs", "esm"],
     dts: true,
-    external: ["react", "react/jsx-runtime", "react-native", /^expo-/, "zod"],
+    external: [
+      "react",
+      "react/jsx-runtime",
+      "react-native",
+      /^expo-/,
+      "zod",
+      "react-hook-form",
+      /^@hookform\//,
+    ],
+  },
+  // Browser devtools overlay (importable entry). `zod` stays an external peer;
+  // @cfworker/json-schema (the config schema-form validator) is bundled so the
+  // SDK keeps zero runtime dependencies.
+  {
+    entry: { index: "src/browser-devtools/index.ts" },
+    outDir: "dist/browser-devtools",
+    format: ["cjs", "esm"],
+    dts: true,
+    external: ["zod"],
+    noExternal: ["@cfworker/json-schema"],
+    target: "es2020",
+  },
+  // Self-executing browser bundle for <script src="…/se-devtools.js"> usage —
+  // the artifact the shipeasy monorepo copies to apps/ui/public/se-devtools.js.
+  // Runs loadOnTrigger() automatically; everything (zod included) is bundled.
+  {
+    // tsup names iife outputs `<entry>.global.js` → dist/browser-devtools.global.js
+    entry: { "browser-devtools": "src/browser-devtools/auto.ts" },
+    outDir: "dist",
+    format: ["iife"],
+    target: "es2020",
+    minify: true,
+    dts: false,
   },
   // `shipeasy-skill` CLI — the opt-in installer that copies the bundled agent
   // skill (docs/skill/SKILL.md) into a consumer's project. A Node bin (CJS +
