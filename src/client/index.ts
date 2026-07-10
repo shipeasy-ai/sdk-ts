@@ -1,8 +1,14 @@
 // ShipEasy browser SDK — calls /sdk/evaluate on identify(), logs exposures + events via /collect.
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
-import { isProductionEnv } from "../env";
+import { isProductionEnv, i18nRenderKeysOnly, setI18nRenderKeysOnly } from "../env";
 import { CAPABILITIES_BRIDGE_KEY, type CapabilitiesBridge } from "../devtools/capabilities";
+import {
+  ENGINE_BRIDGE_KEY,
+  type DevtoolsEngineBridge,
+  type DevtoolsOverridesSnapshot,
+  type DevtoolsStateEvent,
+} from "../devtools/bridge";
 import type { DevtoolsCapabilities } from "../devtools/types";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
@@ -1182,6 +1188,11 @@ export class Engine {
     this.installBridge();
     this.notify();
   };
+  // Last identify() payload (caller fields ⊕ auto-collected attrs) — surfaced
+  // to the devtools User panel through the bridges. Never sent anywhere else.
+  private lastUser: Record<string, unknown> | null = null;
+  // Structured feed for the devtools Events panel (see ../devtools/bridge.ts).
+  private readonly devtoolsEventListeners = new Set<(e: DevtoolsStateEvent) => void>();
 
   constructor(opts: EngineOptions) {
     // Apply the log level first so anything logged during construction (or the
@@ -1254,8 +1265,90 @@ export class Engine {
         subscribe: (listener) => this.subscribe(listener),
       };
       (globalThis as Record<string, unknown>)[CAPABILITIES_BRIDGE_KEY] = bridge;
+      (globalThis as Record<string, unknown>)[ENGINE_BRIDGE_KEY] = this.buildEngineBridge();
     } catch {
       /* publishing the bridge must never break construction */
+    }
+  }
+
+  /**
+   * The full devtools ⇄ engine accessor published on `globalThis` (see
+   * ../devtools/bridge.ts). Overlays read live values, the identified user,
+   * and the override store through it instead of importing this module —
+   * which would inline a second, never-configured Engine into their bundle.
+   * Overrides applied here take effect live (no reload), so the RN overlay
+   * uses these instead of the web overlay's URL-param + reload store.
+   */
+  private buildEngineBridge(): DevtoolsEngineBridge {
+    const overrideEvent = (subject: string, value: string) => {
+      this.emitDevtoolsEvent("override", subject, value);
+      this.onOverrideChange();
+    };
+    return {
+      getFlag: (n) => this.getFlag(n),
+      // Devtools reads assignments by experiment name straight off the eval
+      // result (the public read path is universe-first; this is display-only).
+      getExperiment: (n) => {
+        const entry = this.evalResult?.experiments[n];
+        return { inExperiment: entry?.inExperiment ?? false, group: entry?.group ?? "control" };
+      },
+      getConfig: (n) => this.getConfig(n),
+      getUser: () => this.lastUser,
+      identify: (user) => this.identify(user),
+      getOverrides: (): DevtoolsOverridesSnapshot => ({
+        flags: Object.fromEntries(this.flagOverrides),
+        configs: Object.fromEntries(this.configOverrides),
+        experiments: Object.fromEntries(
+          Array.from(this.experimentOverrides, ([n, o]) => [n, o.group] as const),
+        ),
+      }),
+      setFlagOverride: (n, v) => {
+        this.overrideFlag(n, v);
+        overrideEvent(`gate ${n}`, String(v));
+      },
+      setConfigOverride: (n, v) => {
+        this.overrideConfig(n, v);
+        overrideEvent(`config ${n}`, devtoolsEventValue(v));
+      },
+      setExperimentOverride: (n, group) => {
+        // Empty params: assignUniverse() layers the universe defaults under
+        // the forced group's params, so defaults still resolve.
+        this.overrideExperiment(n, group, {});
+        overrideEvent(`experiment ${n}`, group);
+      },
+      removeOverride: (kind, name) => {
+        if (kind === "flag") this.flagOverrides.delete(name);
+        else if (kind === "config") this.configOverrides.delete(name);
+        else this.experimentOverrides.delete(name);
+        overrideEvent(`${kind === "flag" ? "gate" : kind} ${name}`, "restored");
+      },
+      clearOverrides: () => {
+        this.clearOverrides();
+        overrideEvent("overrides", "cleared");
+      },
+      subscribe: (listener) => this.subscribe(listener),
+      onEvent: (listener) => {
+        this.devtoolsEventListeners.add(listener);
+        return () => {
+          this.devtoolsEventListeners.delete(listener);
+        };
+      },
+    };
+  }
+
+  private emitDevtoolsEvent(
+    kind: DevtoolsStateEvent["kind"],
+    subject: string,
+    value: string,
+  ): void {
+    if (this.devtoolsEventListeners.size === 0) return;
+    const event: DevtoolsStateEvent = { kind, subject, value, ts: Date.now() };
+    for (const l of this.devtoolsEventListeners) {
+      try {
+        l(event);
+      } catch (err) {
+        logger.warn("[shipeasy] devtools event listener threw:", String(err));
+      }
     }
   }
 
@@ -1305,6 +1398,7 @@ export class Engine {
       // No-op — capture user_id for track()/exposure attribution, but never
       // hit /sdk/evaluate. Notify so subscribers settle.
       if (user.user_id !== undefined) this.userId = user.user_id;
+      this.lastUser = { ...user };
       this.notify();
       return;
     }
@@ -1335,6 +1429,7 @@ export class Engine {
       anonymous_id: this.anonId,
       ...user,
     };
+    this.lastUser = { ...userPayload };
     const res = await fetch(`${this.baseUrl}/sdk/evaluate?env=${this.env}`, {
       method: "POST",
       headers: { "X-SDK-Key": this.sdkKey, "Content-Type": "application/json" },
@@ -1382,6 +1477,7 @@ export class Engine {
         this.autoCollectAlways,
       );
     }
+    this.emitDevtoolsEvent("evaluate", "identify", this.userId || "anonymous");
     this.notify();
   }
 
@@ -1615,6 +1711,7 @@ export class Engine {
         return { inExperiment: entry?.inExperiment ?? false, group: entry?.group ?? "control" };
       },
       getConfig: (n) => this.getConfig(n),
+      user: this.lastUser,
     };
     (window as unknown as { __shipeasy?: ShipeasySdkBridge }).__shipeasy = bridge;
     dispatchWindow("se:state:update");
@@ -1661,6 +1758,7 @@ export class Engine {
     this.buffer.flush();
     this.buffer.destroy();
     this.listeners.clear();
+    this.devtoolsEventListeners.clear();
     if (this.overrideListenerInstalled && typeof window !== "undefined") {
       window.removeEventListener("se:override:change", this.onOverrideChange);
       this.overrideListenerInstalled = false;
@@ -1668,10 +1766,20 @@ export class Engine {
   }
 }
 
+/** Render an override value for the devtools event feed. Never throws. */
+function devtoolsEventValue(v: unknown): string {
+  if (typeof v === "string") return v;
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+}
+
 // ---- URL overrides ----
 //
 // Single source of truth for ?se_ks_, ?se_config_, ?se_exp_ params. Mirrored
-// (but not duplicated) by packages/devtools/src/overrides.ts which writes them.
+// (but not duplicated) by the browser devtools' overrides.ts which writes them.
 
 const TRUE_RX = /^(true|on|1|yes)$/i;
 const FALSE_RX = /^(false|off|0|no)$/i;
@@ -1736,11 +1844,14 @@ export function isDevtoolsRequested(): boolean {
 
 // ---- Devtools bridge + loader ----
 
-/** Bridge written to window.__shipeasy — mirrors @shipeasy/devtools' contract. */
+/** Bridge written to window.__shipeasy — mirrors the browser devtools' contract. */
 export interface ShipeasySdkBridge {
   getFlag(name: string): boolean;
   getExperiment(name: string): { inExperiment: boolean; group: string } | undefined;
   getConfig(name: string): unknown;
+  /** Last identify() payload (caller fields ⊕ auto-collected attrs) — the
+   *  devtools User panel reads it. Null before the app identifies. */
+  user?: Record<string, unknown> | null;
 }
 
 interface DevtoolsMod {
@@ -1885,6 +1996,20 @@ export interface ShipeasyClientConfig {
    * profile the server recorded in window.__SE_BOOTSTRAP, then "en:prod".
    */
   i18nProfile?: string;
+  /** i18n behaviour toggles. */
+  i18n?: {
+    /**
+     * Render each i18n key verbatim instead of resolving its translated value —
+     * `i18n.t("checkout.cta", "Place order")` returns `"checkout.cta"`. Meant
+     * for tests/snapshots that assert against stable data instead of copy that
+     * changes when a translation is edited. Process-wide.
+     *
+     * Defaults to `true` when the runtime env is `"test"` (`SHIPEASY_ENV` /
+     * `NODE_ENV`, i.e. under jest/vitest), `false` otherwise. Pass an explicit
+     * boolean to override the env default in either direction.
+     */
+    renderKeysOnly?: boolean;
+  };
   /**
    * Skip the lazy auto-identify({}) at boot. Defaults to true (auto-identify on).
    * Turn off when the host has its own identify orchestration and wants to
@@ -2010,6 +2135,8 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
     stickyBucketing: opts.stickyBucketing,
     anonymousStore: opts.anonymousStore,
   });
+  // Honour an explicit renderKeysOnly override (else it defaults to env==test).
+  setI18nRenderKeysOnly(opts.i18n?.renderKeysOnly);
   // Inject the runtime i18n loader with the client key. The server no longer
   // does this (it doesn't hold the client key); the SSR shim in __SE_BOOTSTRAP
   // covers first paint, then this loader fetches fresh strings client-side.
@@ -2578,23 +2705,20 @@ export const see: SeeApi = Object.assign(
 );
 
 // ---- i18n label helpers (formerly @shipeasy/i18n-core) ----
+//
+// The marker constants + encoder live in ../i18n-markers (a zero-dependency
+// module) so the browser devtools overlay can import them without pulling
+// this whole client into its bundle. Re-exported here unchanged — the public
+// surface of @shipeasy/sdk/client is identical.
 
-export const LABEL_MARKER_START = "￹";
-export const LABEL_MARKER_SEP = "￺";
-export const LABEL_MARKER_END = "￻";
-// 3-section format: ￹key￺varsJson￺value￻ — varsJson is "" when no vars,
-// otherwise JSON.stringify(vars). Devtools picks up vars without diffing
-// template against value.
-export const LABEL_MARKER_RE = /￹([^￺￻]+)￺([^￺￻]*)￺([^￻]*)￻/g;
-
-export function encodeLabelMarker(
-  key: string,
-  value: string,
-  variables?: I18nVariables,
-): string {
-  const varsJson = variables && Object.keys(variables).length > 0 ? JSON.stringify(variables) : "";
-  return `${LABEL_MARKER_START}${key}${LABEL_MARKER_SEP}${varsJson}${LABEL_MARKER_SEP}${value}${LABEL_MARKER_END}`;
-}
+export {
+  LABEL_MARKER_START,
+  LABEL_MARKER_SEP,
+  LABEL_MARKER_END,
+  LABEL_MARKER_RE,
+  encodeLabelMarker,
+} from "../i18n-markers";
+import { LABEL_MARKER_RE, encodeLabelMarker } from "../i18n-markers";
 
 export interface LabelAttrs {
   "data-label": string;
@@ -2717,9 +2841,17 @@ declare const __i18nStringBrand: unique symbol;
 export type I18nKey = string & { readonly [__i18nKeyBrand]?: never };
 export type I18nString = string & { readonly [__i18nStringBrand]?: never };
 
+// Hoisted so the RegExp object isn't re-allocated per call. Used only with
+// String.prototype.replace, which resets lastIndex around each call, so reusing
+// this global-flag instance is safe (no stateful .exec reentrancy here).
+const _INTERP_RE = /\{\{(\w+)\}\}/g;
+
 function interpolate(raw: string, variables?: I18nVariables): string {
-  if (!variables) return raw;
-  return raw.replace(/\{\{(\w+)\}\}/g, (placeholder, k) => {
+  // Fast path: no variables, or the string has no `{{` token at all — skip the
+  // regex engine entirely. Most labels carry no placeholder, and indexOf is a
+  // cheap native scan versus compiling/running the pattern on every render.
+  if (!variables || raw.indexOf("{{") === -1) return raw;
+  return raw.replace(_INTERP_RE, (placeholder, k) => {
     const v = variables[k];
     return v != null ? String(v) : placeholder;
   });
@@ -2840,6 +2972,8 @@ export interface I18nFacade {
   configure(opts: {
     components?: I18nRichComponents;
     createElement?: (tag: string, props: object, children: string) => unknown;
+    /** Render keys verbatim instead of resolving values (default: env==test). */
+    renderKeysOnly?: boolean;
   }): void;
   readonly locale: string | null;
   readonly ready: boolean;
@@ -2849,6 +2983,10 @@ export interface I18nFacade {
 
 export const i18n: I18nFacade = {
   t(key: string, fallbackOrVars?: string | I18nVariables, maybeVars?: I18nVariables): string {
+    // renderKeysOnly (default: env==test): return the key verbatim, skipping
+    // value resolution, edit-label markers, and interpolation — tests assert
+    // against the stable key, not translatable copy.
+    if (i18nRenderKeysOnly()) return key;
     let fallback: string | undefined;
     let variables: I18nVariables | undefined;
     if (typeof fallbackOrVars === "string") {
@@ -2896,6 +3034,7 @@ export const i18n: I18nFacade = {
     components?: I18nRichComponents,
     variables?: I18nVariables,
   ): unknown {
+    if (i18nRenderKeysOnly()) return key;
     const resolved = _resolveTranslation(key, variables);
     const raw = resolved ?? interpolate(fallback, variables);
     return _parseRichText(raw, components ?? {});
@@ -2920,6 +3059,7 @@ export const i18n: I18nFacade = {
    * type-safe usage and has been removed.
    */
   tEl<F extends string>(key: string, fallback: F, variables?: I18nVariables, _desc?: string): F {
+    if (i18nRenderKeysOnly()) return key as F;
     if (isEditLabelsMode()) {
       const resolved = _resolveTranslation(key, variables);
       const text = resolved ?? interpolate(fallback, variables);
@@ -2935,11 +3075,13 @@ export const i18n: I18nFacade = {
   configure(opts: {
     components?: I18nRichComponents;
     createElement?: (tag: string, props: object, children: string) => unknown;
+    renderKeysOnly?: boolean;
   }): void {
     if (opts.components) {
       _configuredComponents = { ..._configuredComponents, ...opts.components };
     }
     if (opts.createElement) _createElement = opts.createElement;
+    setI18nRenderKeysOnly(opts.renderKeysOnly);
   },
   get locale(): string | null {
     if (typeof window !== "undefined" && window.i18n) return window.i18n.locale;
