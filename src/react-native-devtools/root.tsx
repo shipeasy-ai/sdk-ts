@@ -13,6 +13,7 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -25,6 +26,7 @@ import {
 } from "react-native";
 import type { ProjectModules } from "../devtools/types";
 import { BugForm } from "./bug-form";
+import { FeatureForm } from "./feature-form";
 import { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
 import { FeedbackPanel } from "./feedback-panel";
 import { UserPanel } from "./user-panel";
@@ -32,14 +34,16 @@ import { EventsPanel } from "./events-panel";
 import { I18nPanel } from "./i18n-panel";
 import { resolveTheme } from "./theme";
 import type { DevtoolsTheme } from "./theme";
+import { canCaptureScreen, captureScreenShot } from "./expo-adapters";
 import {
+  ScreenCaptureContext,
   ensureEventCapture,
   useDevtoolsAuth,
   useDevtoolsCapabilities,
   useProject,
   useShakeToOpen,
 } from "./hooks";
-import type { DevtoolsConfig, ShakeOptions } from "./hooks";
+import type { DevtoolsConfig, ScreenCapture, ShakeOptions } from "./hooks";
 import { Button, Muted, ThemeContext, Title, useTheme } from "./ui";
 
 export interface DevtoolsHandle {
@@ -71,6 +75,7 @@ export interface ShipeasyDevtoolsProps {
 type Screen =
   | "home"
   | "bug"
+  | "feature"
   | "user"
   | "gates"
   | "configs"
@@ -117,30 +122,57 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
       [props.scheme, props.clientKey, props.projectId, props.edgeBaseUrl, props.adminBaseUrl],
     );
 
+    // Screen capture for the report forms: the shot must show the APP, not
+    // this sheet — hide the overlay via style (state survives; toggling the
+    // Modal's `visible` would unmount the form mid-edit), wait a beat for the
+    // keyboard + the hide to commit, shoot, restore.
+    const [capturing, setCapturing] = useState(false);
+    const screenCapture = useMemo<ScreenCapture>(
+      () => ({
+        available: canCaptureScreen(),
+        capture: async () => {
+          if (!canCaptureScreen()) return null;
+          Keyboard.dismiss();
+          setCapturing(true);
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          try {
+            return await captureScreenShot();
+          } catch {
+            return null;
+          } finally {
+            setCapturing(false);
+          }
+        },
+      }),
+      [],
+    );
+
     return (
       <ThemeContext.Provider value={theme}>
-        <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-          {/* Lift the sheet above the keyboard so form inputs stay visible. */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.backdrop}
-          >
-            <SafeAreaView
-              style={[styles.sheet, { backgroundColor: theme.bg, borderColor: theme.border }]}
+        <ScreenCaptureContext.Provider value={screenCapture}>
+          <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+            {/* Lift the sheet above the keyboard so form inputs stay visible. */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={[styles.backdrop, capturing && styles.captureHidden]}
             >
-              <View style={styles.handleRow}>
-                <View style={[styles.handle, { backgroundColor: theme.border }]} />
-              </View>
-              <Sheet
-                config={config}
-                screen={screen}
-                setScreen={setScreen}
-                close={close}
-                bugContext={props.bugContext}
-              />
-            </SafeAreaView>
-          </KeyboardAvoidingView>
-        </Modal>
+              <SafeAreaView
+                style={[styles.sheet, { backgroundColor: theme.bg, borderColor: theme.border }]}
+              >
+                <View style={styles.handleRow}>
+                  <View style={[styles.handle, { backgroundColor: theme.border }]} />
+                </View>
+                <Sheet
+                  config={config}
+                  screen={screen}
+                  setScreen={setScreen}
+                  close={close}
+                  bugContext={props.bugContext}
+                />
+              </SafeAreaView>
+            </KeyboardAvoidingView>
+          </Modal>
+        </ScreenCaptureContext.Provider>
       </ThemeContext.Provider>
     );
   },
@@ -184,6 +216,15 @@ function Sheet(props: {
       {screen === "bug" ? (
         <View style={styles.panel}>
           <BugForm
+            config={props.config}
+            client={auth.client}
+            context={props.bugContext}
+            onDone={() => setScreen("home")}
+          />
+        </View>
+      ) : screen === "feature" ? (
+        <View style={styles.panel}>
+          <FeatureForm
             config={props.config}
             client={auth.client}
             context={props.bugContext}
@@ -252,34 +293,158 @@ function Sheet(props: {
           ) : null}
         </>
       ) : (
-        <View style={styles.home}>
-          <Muted style={styles.homeBlurb}>
-            Inspect this project's gates, configs and experiments, or report an issue.
-          </Muted>
-          <Button
-            title="Log in to Shipeasy"
-            onPress={() => void auth.login()}
-            loading={auth.loggingIn || auth.restoring}
-          />
-          {auth.error ? (
-            <Text style={[styles.loginError, { color: t.danger }]}>{auth.error}</Text>
-          ) : null}
-          {canFileBug ? (
-            <Button
-              title="Report a bug"
-              variant="secondary"
-              onPress={() => setScreen("bug")}
-              style={styles.homeSecondary}
-            />
-          ) : null}
-        </View>
+        <HomeScreen
+          onConnect={() => void auth.login()}
+          connecting={auth.loggingIn || auth.restoring}
+          error={auth.error}
+          canReport={canFileBug}
+          onReportBug={() => setScreen("bug")}
+          onRequestFeature={() => setScreen("feature")}
+        />
       )}
     </View>
   );
 }
 
+// ── logged-out home ───────────────────────────────────────────────────────────
+
+/** The Shipeasy brand mark, drawn with plain Views (no SVG/image deps): the
+ *  rounded accent tile with the inset app square — same geometry as logo.svg. */
+function BrandMark(): ReactNode {
+  const t = useTheme();
+  return (
+    <View style={[styles.brandMark, { backgroundColor: t.accent }]}>
+      <View style={[styles.brandMarkInner, { backgroundColor: t.bg }]} />
+    </View>
+  );
+}
+
+function ActionCard(props: {
+  glyph: string;
+  title: string;
+  sub: string;
+  onPress: () => void;
+}): ReactNode {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.title}
+      onPress={props.onPress}
+      style={({ pressed }) => [
+        styles.actionCard,
+        {
+          backgroundColor: t.surface,
+          borderColor: t.border,
+          borderRadius: t.radius,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      <View style={[styles.actionGlyphWrap, { backgroundColor: t.accentSoft }]}>
+        <Text style={[styles.actionGlyph, { color: t.accent }]}>{props.glyph}</Text>
+      </View>
+      <View style={styles.actionCopy}>
+        <Text style={[styles.actionTitle, { color: t.fg }]}>{props.title}</Text>
+        <Text style={[styles.actionSub, { color: t.fgMuted }]} numberOfLines={2}>
+          {props.sub}
+        </Text>
+      </View>
+      <Text style={[styles.actionChevron, { color: t.fgMuted }]}>›</Text>
+    </Pressable>
+  );
+}
+
+/** The logged-out landing: brand, the public report actions (shown when the
+ *  project opted into public tickets), and Connect pinned to the bottom.
+ *  Exported for design surfaces; the sheet wires it to live auth state. */
+export function HomeScreen(props: {
+  onConnect: () => void;
+  connecting?: boolean;
+  error?: string | null;
+  /** Public reporting available (project opt-in + client key). */
+  canReport: boolean;
+  onReportBug: () => void;
+  onRequestFeature: () => void;
+}): ReactNode {
+  const t = useTheme();
+  return (
+    <View style={styles.home}>
+      <View style={styles.homeBrand}>
+        <BrandMark />
+        <Title style={styles.homeWordmark}>Shipeasy</Title>
+        <Muted style={styles.homeTagline}>
+          The toolbox behind this app — flags, experiments and feedback.
+        </Muted>
+      </View>
+
+      {props.canReport ? (
+        <View style={styles.homeActions}>
+          <ActionCard
+            glyph="!"
+            title="Report a bug"
+            sub="Something broken? Send it straight to the team."
+            onPress={props.onReportBug}
+          />
+          <ActionCard
+            glyph="+"
+            title="Request a feature"
+            sub="Tell the team what this app is missing."
+            onPress={props.onRequestFeature}
+          />
+        </View>
+      ) : null}
+
+      <View style={styles.homeSpacer} />
+
+      {props.error ? (
+        <Text style={[styles.loginError, { color: t.danger }]}>{props.error}</Text>
+      ) : null}
+      <Button
+        title="Connect to Shipeasy"
+        onPress={props.onConnect}
+        loading={props.connecting === true}
+      />
+      <Muted style={styles.homeConnectHint}>
+        Team members: log in to inspect gates, configs, experiments and live events.
+      </Muted>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  actionCard: {
+    alignItems: "center",
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  actionChevron: { fontSize: 22, fontWeight: "400", marginTop: -2 },
+  actionCopy: { flex: 1, gap: 2 },
+  actionGlyph: { fontSize: 16, fontWeight: "800" },
+  actionGlyphWrap: {
+    alignItems: "center",
+    borderRadius: 10,
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
+  actionSub: { fontSize: 12, lineHeight: 16 },
+  actionTitle: { fontSize: 15, fontWeight: "600" },
   backdrop: { backgroundColor: "rgba(0,0,0,0.55)", flex: 1, justifyContent: "flex-end" },
+  brandMark: {
+    alignItems: "center",
+    borderRadius: 12,
+    height: 46,
+    justifyContent: "center",
+    width: 46,
+  },
+  brandMarkInner: { borderRadius: 7, height: 26, width: 26 },
+  // Invisible but mounted — captureScreen must shoot the app, and toggling the
+  // Modal instead would unmount the form state.
+  captureHidden: { opacity: 0 },
   closeGlyph: { fontSize: 18, padding: 4 },
   handle: { borderRadius: 999, height: 4, width: 36 },
   handleRow: { alignItems: "center", paddingBottom: 2, paddingTop: 8 },
@@ -292,10 +457,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  home: { gap: 12, padding: 24 },
-  homeBlurb: { marginBottom: 8 },
-  homeSecondary: {},
-  loginError: { fontSize: 13 },
+  home: { flex: 1, gap: 10, padding: 20, paddingBottom: 16 },
+  homeActions: { gap: 10, marginTop: 6 },
+  homeBrand: { alignItems: "center", gap: 8, paddingBottom: 10, paddingTop: 18 },
+  homeConnectHint: { fontSize: 11.5, paddingHorizontal: 20, textAlign: "center" },
+  homeSpacer: { flex: 1, minHeight: 8 },
+  homeTagline: { paddingHorizontal: 24, textAlign: "center" },
+  homeWordmark: { fontSize: 20, letterSpacing: -0.4 },
+  loginError: { fontSize: 13, textAlign: "center" },
   logout: { fontSize: 13, fontWeight: "600" },
   panel: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
   sessionRow: {

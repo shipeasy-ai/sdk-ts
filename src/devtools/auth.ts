@@ -59,6 +59,11 @@ export interface DeviceAuthOptions {
   /** Pre-select a project on the /cli-auth page (skips the picker when the
    *  user has access). */
   projectId?: string;
+  /** The app's public client key (`sdk_client_*`). The /cli-auth page resolves
+   *  it to the project it belongs to and locks the flow there — the key IS the
+   *  project identity, so the user never sees a project picker (same contract
+   *  as the browser overlay's `sdkKey` param). An explicit `projectId` wins. */
+  clientKey?: string;
 }
 
 function defaultRandomUUID(): string {
@@ -152,7 +157,10 @@ export async function startDeviceAuth(
     `${admin}/cli-auth?state=${encodeURIComponent(state)}` +
     `&code_challenge=${encodeURIComponent(challenge)}` +
     `&redirect_uri=${encodeURIComponent(opts.redirectUri)}` +
-    (opts.projectId ? `&project_id=${encodeURIComponent(opts.projectId)}` : "");
+    (opts.projectId ? `&project_id=${encodeURIComponent(opts.projectId)}` : "") +
+    (!opts.projectId && opts.clientKey
+      ? `&client_key=${encodeURIComponent(opts.clientKey)}`
+      : "");
   const result = await adapters.openAuthSession(authUrl, opts.redirectUri);
   if (result.type !== "success" || !result.url) throw new LoginCancelled();
 

@@ -10,10 +10,11 @@
 // expo-sensors (shake-to-open — otherwise call `ref.open()`),
 // expo-image-picker (attach screenshots to feedback).
 
-export { ShipeasyDevtools } from "./root";
+export { HomeScreen, ShipeasyDevtools } from "./root";
 export type { DevtoolsHandle, ShipeasyDevtoolsProps } from "./root";
 
 export {
+  ScreenCaptureContext,
   ensureEventCapture,
   useBugForm,
   useBugDetail,
@@ -30,8 +31,8 @@ export {
   useGates,
   useI18nKeys,
   useIdentityEmail,
-  useProfiles,
   useProject,
+  useScreenCapture,
   useShakeToOpen,
   useUniverses,
 } from "./hooks";
@@ -41,6 +42,7 @@ export type {
   DevtoolsConfig,
   FeatureFormState,
   QueryState,
+  ScreenCapture,
   ShakeOptions,
 } from "./hooks";
 
@@ -49,8 +51,10 @@ export { FeedbackPanel } from "./feedback-panel";
 export { UserPanel } from "./user-panel";
 export { EventsPanel } from "./events-panel";
 export { I18nPanel } from "./i18n-panel";
-export { BugForm } from "./bug-form";
+export { BugForm, ScreenshotAttach } from "./bug-form";
 export { FeatureForm } from "./feature-form";
+export { canCaptureScreen, captureScreenShot } from "./expo-adapters";
+export type { CapturedScreen } from "./expo-adapters";
 export { defaultTheme } from "./theme";
 export type { DevtoolsTheme } from "./theme";
 

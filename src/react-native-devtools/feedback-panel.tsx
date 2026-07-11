@@ -300,7 +300,12 @@ export function FeedbackPanel(props: {
         onDone={done}
       />
     ) : (
-      <FeatureForm client={props.client} context={props.bugContext} onDone={done} />
+      <FeatureForm
+        config={props.config}
+        client={props.client}
+        context={props.bugContext}
+        onDone={done}
+      />
     );
   }
 

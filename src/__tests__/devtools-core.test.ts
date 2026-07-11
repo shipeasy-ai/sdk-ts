@@ -5,8 +5,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { AuthError, DevtoolsClient } from "../devtools/api";
 import { LoginCancelled, parseDeepLinkQuery, startDeviceAuth } from "../devtools/auth";
-import { PublicTicketsDisabled, submitPublicBug } from "../devtools/public-report";
-import { bugFormToPublicInput, validateBugForm } from "../devtools/forms";
+import {
+  PublicTicketsDisabled,
+  submitPublicBug,
+  submitPublicFeature,
+} from "../devtools/public-report";
+import {
+  bugFormToPublicInput,
+  featureFormToPublicInput,
+  validateBugForm,
+  validateFeatureForm,
+} from "../devtools/forms";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -369,6 +378,51 @@ describe("startDeviceAuth", () => {
     expect(authUrl).toContain("code_challenge=");
   });
 
+  it("carries the client key into the auth URL so the page auto-picks the project", async () => {
+    const { stub } = makeFetchStub();
+    let authUrl = "";
+    await startDeviceAuth(
+      {
+        redirectUri: "acme://se-auth",
+        edgeBaseUrl: "https://edge.test",
+        adminBaseUrl: "https://admin.test",
+        clientKey: "sdk_client_pub",
+      },
+      {
+        fetch: stub as unknown as typeof fetch,
+        openAuthSession: async (url) => {
+          authUrl = url;
+          return { type: "success", url: "acme://se-auth?state=state-1" };
+        },
+      },
+    );
+    expect(authUrl).toContain(`client_key=${encodeURIComponent("sdk_client_pub")}`);
+    expect(authUrl).not.toContain("project_id=");
+  });
+
+  it("prefers an explicit projectId over the client key", async () => {
+    const { stub } = makeFetchStub();
+    let authUrl = "";
+    await startDeviceAuth(
+      {
+        redirectUri: "acme://se-auth",
+        edgeBaseUrl: "https://edge.test",
+        adminBaseUrl: "https://admin.test",
+        clientKey: "sdk_client_pub",
+        projectId: "proj_forced",
+      },
+      {
+        fetch: stub as unknown as typeof fetch,
+        openAuthSession: async (url) => {
+          authUrl = url;
+          return { type: "success", url: "acme://se-auth?state=state-1" };
+        },
+      },
+    );
+    expect(authUrl).toContain("project_id=proj_forced");
+    expect(authUrl).not.toContain("client_key=");
+  });
+
   it("throws LoginCancelled when the user dismisses the browser", async () => {
     const { stub } = makeFetchStub();
     await expect(
@@ -479,6 +533,52 @@ describe("submitPublicBug", () => {
   });
 });
 
+// ── submitPublicFeature ──────────────────────────────────────────────────────
+
+describe("submitPublicFeature", () => {
+  it("POSTs /cli/report with type=feature and maps the result", async () => {
+    const fetchStub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("https://edge.test/cli/report");
+      expect((init?.headers as Record<string, string>)["X-SDK-Key"]).toBe("sdk_client_pub");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        type: "feature",
+        title: "Dark mode",
+        description: "A dark theme",
+        use_case: "Night triage",
+        reporter_email: "me@x.test",
+      });
+      return jsonResponse({ number: 12 }, 201);
+    });
+    const r = await submitPublicFeature(
+      {
+        title: "Dark mode",
+        description: "A dark theme",
+        useCase: "Night triage",
+        reporterEmail: "me@x.test",
+      },
+      {
+        clientKey: "sdk_client_pub",
+        edgeBaseUrl: "https://edge.test",
+        fetch: fetchStub as unknown as typeof fetch,
+      },
+    );
+    expect(r).toEqual({ number: 12, deduped: false });
+  });
+
+  it("throws PublicTicketsDisabled on 403", async () => {
+    await expect(
+      submitPublicFeature(
+        { title: "T" },
+        {
+          clientKey: "k",
+          edgeBaseUrl: "https://edge.test",
+          fetch: (async () => jsonResponse({ error: "nope" }, 403)) as unknown as typeof fetch,
+        },
+      ),
+    ).rejects.toBeInstanceOf(PublicTicketsDisabled);
+  });
+});
+
 // ── forms ────────────────────────────────────────────────────────────────────
 
 describe("bug form schema", () => {
@@ -512,6 +612,25 @@ describe("bug form schema", () => {
       description: "1. open app",
       reporterEmail: "me@x.test",
       step: "shake overlay",
+      context: { os: "ios" },
+    });
+  });
+
+  it("projects feature values onto the public /cli/report shape", () => {
+    const v = validateFeatureForm({
+      title: "Dark mode",
+      description: "A dark theme",
+      useCase: "Night triage",
+      reporterEmail: "me@x.test",
+    });
+    expect(v.ok).toBe(true);
+    if (!v.ok) return;
+    expect(featureFormToPublicInput(v.value, { step: "home", context: { os: "ios" } })).toEqual({
+      title: "Dark mode",
+      description: "A dark theme",
+      useCase: "Night triage",
+      reporterEmail: "me@x.test",
+      step: "home",
       context: { os: "ios" },
     });
   });

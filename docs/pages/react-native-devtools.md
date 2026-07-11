@@ -4,8 +4,8 @@ The SDK ships a shake-to-open devtools overlay for React Native / Expo apps at
 feature parity with the in-browser overlay: inspect the project's live gates,
 configs and experiments on-device, **force values live** (no reload), simulate
 users, watch the SDK event stream, browse and edit translations, triage
-feedback, and file bug reports — including a **public** bug path that works
-without any login when the project has opted in.
+feedback, and file bug reports **and feature requests** — including a **public**
+path that works without any login when the project has opted in.
 
 | Entrypoint | What it is | Peer deps |
 | --- | --- | --- |
@@ -41,12 +41,16 @@ export function App() {
 Shake the phone **several times quickly** to open the panel (expo-sensors).
 Without expo-sensors — or from a debug menu — call `devtools.current?.open()`.
 
+The logged-out home screen shows the Shipeasy mark, the public **Report a bug**
+and **Request a feature** actions (when the project opted in), and a
+**Connect to Shipeasy** button for team members to log in.
+
 Install the form peers (required when mounting the overlay) and the Expo peers
 you want (each degrades gracefully when absent):
 
 ```bash
 npm install react-hook-form @hookform/resolvers
-npx expo install expo-web-browser expo-crypto expo-secure-store expo-sensors expo-image-picker
+npx expo install expo-web-browser expo-crypto expo-secure-store expo-sensors expo-image-picker react-native-view-shot
 ```
 
 - `react-hook-form` + `@hookform/resolvers` — the bug / feature forms
@@ -55,14 +59,23 @@ npx expo install expo-web-browser expo-crypto expo-secure-store expo-sensors exp
 - `expo-crypto` — PKCE digest (falls back to `crypto.subtle` where available).
 - `expo-secure-store` — keeps the session across app launches (Keychain/Keystore).
 - `expo-sensors` — shake-to-open (otherwise use `ref.open()`).
-- `expo-image-picker` — attach screenshots to feedback items.
+- `expo-image-picker` — attach an existing image to feedback items.
+- `react-native-view-shot` — **capture the current screen** as a report
+  attachment (the overlay hides itself for the shot). Without it the capture
+  button is hidden.
 
 ## Logging in
 
-**Log in to Shipeasy** runs the device-auth flow: the web auth page opens in an
-auth session, the user signs in and picks a project, and the page deep-links
-back to your `scheme` carrying a one-time code — never the token. The SDK then
-exchanges the code (PKCE, RFC 8252) for an admin key and stores it securely.
+**Connect to Shipeasy** runs the device-auth flow: the web auth page opens in an
+auth session, the user signs in, and the page deep-links back to your `scheme`
+carrying a one-time code — never the token. The SDK then exchanges the code
+(PKCE, RFC 8252) for an admin key and stores it securely.
+
+Because you pass the app's `clientKey`, the auth page resolves it to the project
+that key belongs to and **locks the flow to that project** — the team member
+signs in and lands straight in the overlay, with no project picker (the key *is*
+the project identity, the same contract the browser overlay uses). Pass an
+explicit `projectId` to override.
 
 Because the deep link never carries the token, **any** app scheme is safe to
 use — a malicious app squatting your scheme intercepts nothing usable.
@@ -100,22 +113,30 @@ instead: forcing a gate, variant, or config applies immediately and notifies
 `onChange` subscribers. If the app hasn't configured the client SDK, panels
 still list the project's resources but hide live values and forcing.
 
-## Public bug reports
+## Public bug reports and feature requests
 
-The **Report a bug** button appears on the logged-out home screen only when the
-project allows it: flip **Settings → Allow public tickets** in the dashboard
-and mint a client key carrying the `tickets:public_create` scope. The overlay
-learns the setting from the SDK's own evaluate call (no extra request) via
-`useDevtoolsCapabilities()`. Submissions are force-filed as `pending_approval`
-and human-reviewed. Logged-in users can always file (full authed path), and can
-also submit **feature requests** from the Feedback panel.
+The **Report a bug** and **Request a feature** actions appear on the logged-out
+home screen only when the project allows it: flip **Settings → Allow public
+tickets** in the dashboard and mint a client key carrying the
+`tickets:public_create` scope. The overlay learns the setting from the SDK's own
+evaluate call (no extra request) via `useDevtoolsCapabilities()`. Submissions
+are force-filed as `pending_approval` and human-reviewed. Logged-in users can
+always file both (full authed path), also from the Feedback panel.
 
 The forms are react-hook-form over the same generated schemas the web devtools
-overlay validates with (`title` required; steps / actual result / email
-optional). The reporter email is sourced from the app's `identify()` payload
-(its `email` attribute, read via the engine bridge — also exposed as the
-`useIdentityEmail()` hook): when the app has identified an email the form
-doesn't ask for it, and only shows the email field otherwise.
+overlay validates with (`title` required; the rest optional). The reporter email
+is sourced from the app's `identify()` payload (its `email` attribute, read via
+the engine bridge — also exposed as the `useIdentityEmail()` hook): when the app
+has identified an email the form doesn't ask for it, and only shows the email
+field otherwise.
+
+### Attaching a screenshot
+
+When logged in, the forms show an **Attach a screenshot** button
+(react-native-view-shot). Tapping it hides the overlay, captures the current app
+screen, and previews a thumbnail; the submit uploads it as a report attachment,
+visible in the dashboard's feedback detail. The public (logged-out) path takes
+no attachments — the intake is JSON only.
 
 ## Hooks
 
@@ -147,8 +168,9 @@ plus the submit-path glue — drive custom fields with
 `useProfiles`, `useI18nKeys`.
 
 The framework-agnostic core (`@shipeasy/sdk/devtools`) exposes the pieces
-underneath — `DevtoolsClient`, `startDeviceAuth`, `submitPublicBug`, the zod
-form schemas, and the engine-bridge readers — for non-React hosts.
+underneath — `DevtoolsClient`, `startDeviceAuth`, `submitPublicBug`,
+`submitPublicFeature`, the zod form schemas, and the engine-bridge readers — for
+non-React hosts.
 
 ## Theming
 

@@ -49,13 +49,19 @@ export type {
 export { LoginCancelled, parseDeepLinkQuery, startDeviceAuth } from "./auth";
 export type { AuthSessionResult, DeviceAuthAdapters, DeviceAuthOptions } from "./auth";
 
-export { PublicTicketsDisabled, submitPublicBug } from "./public-report";
-export type { PublicBugInput, PublicBugResult, SubmitPublicBugOptions } from "./public-report";
+export { PublicTicketsDisabled, submitPublicBug, submitPublicFeature } from "./public-report";
+export type {
+  PublicBugInput,
+  PublicBugResult,
+  PublicFeatureInput,
+  SubmitPublicBugOptions,
+} from "./public-report";
 
 export {
   bugFormSchema,
   bugFormToPublicInput,
   featureFormSchema,
+  featureFormToPublicInput,
   validateBugForm,
   validateFeatureForm,
   zCreateBugRequest,

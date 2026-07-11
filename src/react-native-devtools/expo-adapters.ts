@@ -12,6 +12,9 @@
 //     `ref.open()` handle.
 //   • expo-image-picker — attach screenshots to bug reports / feedback items.
 //     Without it the attach button is hidden.
+//   • react-native-view-shot — capture the CURRENT app screen for a report
+//     (the overlay hides itself for the shot). Without it the capture button
+//     is hidden.
 
 import type { AuthSessionResult, DeviceAuthAdapters } from "../devtools/auth";
 
@@ -50,6 +53,16 @@ export interface ImagePickerModule {
     quality: number;
   }): Promise<{ canceled: boolean; assets?: PickedImage[] | null }>;
 }
+export interface ViewShotModule {
+  captureScreen(options: { format: string; quality: number; result: string }): Promise<string>;
+}
+/** A captured screen, ready to preview (`uri` renders in an <Image>) and to
+ *  upload (`fetch(uri)` → Blob — RN's fetch resolves local file:// URIs). */
+export interface CapturedScreen {
+  uri: string;
+  filename: string;
+  mimeType: string;
+}
 
 // Static `require("expo-…")` literals, one per module: Metro only resolves
 // LITERAL require paths, so a `require(name)` helper would leave the modules
@@ -87,6 +100,12 @@ try {
 } catch {
   /* optional — the attach button hides */
 }
+let viewShot: ViewShotModule | null = null;
+try {
+  viewShot = require("react-native-view-shot") as ViewShotModule;
+} catch {
+  /* optional — the capture-screen button hides */
+}
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 export function getAccelerometer(): AccelerometerModule | null {
@@ -116,6 +135,20 @@ export async function pickImageAttachment(): Promise<{
   const filename =
     asset.fileName || `screenshot-${Date.now()}.${(asset.mimeType ?? "image/png").split("/")[1] ?? "png"}`;
   return { blob, filename };
+}
+
+/** True when react-native-view-shot is installed (the capture button shows). */
+export function canCaptureScreen(): boolean {
+  return viewShot !== null;
+}
+
+/** Capture the current screen to a tmpfile. The CALLER is responsible for
+ *  hiding the overlay first — this only takes the shot. Null when the module
+ *  is absent. */
+export async function captureScreenShot(): Promise<CapturedScreen | null> {
+  if (!viewShot) return null;
+  const uri = await viewShot.captureScreen({ format: "jpg", quality: 0.85, result: "tmpfile" });
+  return { uri, filename: `screen-${Date.now()}.jpg`, mimeType: "image/jpeg" };
 }
 
 function base64ToBase64Url(b64: string): string {

@@ -2,15 +2,33 @@
 // no react-native imports — so they're portable to any React renderer; the
 // styled overlay in ./components is one consumer.
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useForm } from "react-hook-form";
 import type { UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { DevtoolsClient } from "../devtools/api";
 import { startDeviceAuth, LoginCancelled } from "../devtools/auth";
 import type { DeviceAuthAdapters } from "../devtools/auth";
-import { submitPublicBug, PublicTicketsDisabled } from "../devtools/public-report";
-import { bugFormSchema, bugFormToPublicInput, featureFormSchema } from "../devtools/forms";
+import {
+  submitPublicBug,
+  submitPublicFeature,
+  PublicTicketsDisabled,
+} from "../devtools/public-report";
+import {
+  bugFormSchema,
+  bugFormToPublicInput,
+  featureFormSchema,
+  featureFormToPublicInput,
+} from "../devtools/forms";
 import type {
   BugFormInput,
   BugFormValues,
@@ -38,8 +56,14 @@ import {
 import { readEngineBridge, watchEngineBridge } from "../devtools/bridge";
 import type { DevtoolsEngineBridge, DevtoolsStateEvent } from "../devtools/bridge";
 import type { DevtoolsCapabilities } from "../devtools/types";
-import { makeExpoAuthAdapters, makeSessionStorage, getAccelerometer } from "./expo-adapters";
-import type { SessionStorage } from "./expo-adapters";
+import {
+  canCaptureScreen,
+  captureScreenShot,
+  getAccelerometer,
+  makeExpoAuthAdapters,
+  makeSessionStorage,
+} from "./expo-adapters";
+import type { CapturedScreen, SessionStorage } from "./expo-adapters";
 
 const SESSION_KEY = "se_devtools_session";
 
@@ -219,6 +243,9 @@ export function useDevtoolsAuth(
           edgeBaseUrl: config.edgeBaseUrl,
           adminBaseUrl: config.adminBaseUrl,
           projectId: config.projectId,
+          // The auth page resolves the key to its project and locks the flow
+          // there — no project picker (mirrors the browser overlay).
+          clientKey: config.clientKey,
         },
         adapters,
       );
@@ -231,7 +258,15 @@ export function useDevtoolsAuth(
     } finally {
       setLoggingIn(false);
     }
-  }, [adapters, config.adminBaseUrl, config.edgeBaseUrl, config.projectId, config.scheme, storage]);
+  }, [
+    adapters,
+    config.adminBaseUrl,
+    config.clientKey,
+    config.edgeBaseUrl,
+    config.projectId,
+    config.scheme,
+    storage,
+  ]);
 
   // Keep the logout callback fresh inside the client's onUnauthed without
   // rebuilding the client (which would drop its memo cache) on every render.
@@ -364,6 +399,52 @@ export function useI18nKeys(
   return useClientQuery(client, (c) => c.keys(profileId ?? undefined), profileId ?? "");
 }
 
+// ── screen capture ───────────────────────────────────────────────────────────
+
+/** How the report forms take a screenshot of the CURRENT app screen. The
+ *  overlay root provides an implementation that hides the sheet for the shot;
+ *  the default (forms rendered outside the sheet — e.g. a design gallery)
+ *  captures as-is. `available` gates the button. */
+export interface ScreenCapture {
+  available: boolean;
+  /** Null on cancel / module absence / capture failure. */
+  capture(): Promise<CapturedScreen | null>;
+}
+
+export const ScreenCaptureContext = createContext<ScreenCapture>({
+  available: canCaptureScreen(),
+  capture: () => captureScreenShot().catch(() => null),
+});
+
+export function useScreenCapture(): ScreenCapture {
+  return useContext(ScreenCaptureContext);
+}
+
+/** Attach a captured screen to a just-filed report through the authed
+ *  attachments API (the same storage the browser overlay files into).
+ *  Best-effort: the ticket is already filed — a failed upload must not turn
+ *  the submit into an error. */
+async function uploadCapturedScreen(
+  client: DevtoolsClient,
+  reportKind: "bug" | "feature_request",
+  reportId: string,
+  shot: CapturedScreen,
+): Promise<void> {
+  try {
+    // RN's fetch materializes local file:// URIs (and data: URIs on web).
+    const blob = await (await fetch(shot.uri)).blob();
+    await client.uploadAttachment({
+      reportKind,
+      reportId,
+      kind: "screenshot",
+      filename: shot.filename,
+      blob,
+    });
+  } catch {
+    /* report filed; it just has no image */
+  }
+}
+
 // ── bug form ─────────────────────────────────────────────────────────────────
 //
 // Form state is react-hook-form; validation is the GENERATED zod schema
@@ -380,6 +461,10 @@ export interface BugFormState {
   /** True when the 403 said public tickets are off (button shouldn't have
    *  shown; kept for belt-and-braces messaging). */
   publicDisabled: boolean;
+  /** Captured screen pending upload with the report (authed submits only —
+   *  the public intake takes no attachments). */
+  screenshot: CapturedScreen | null;
+  setScreenshot(shot: CapturedScreen | null): void;
   submit(): Promise<void>;
   reset(): void;
 }
@@ -399,6 +484,7 @@ export function useBugForm(args: {
   const [result, setResult] = useState<{ number?: number; deduped?: boolean } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [publicDisabled, setPublicDisabled] = useState(false);
+  const [screenshot, setScreenshot] = useState<CapturedScreen | null>(null);
   const identityEmail = useIdentityEmail();
 
   const { config, client, context } = args;
@@ -411,7 +497,11 @@ export function useBugForm(args: {
       const value = { ...raw, reporterEmail: raw.reporterEmail || identityEmail || undefined };
       try {
         if (client) {
-          await client.createBug({ ...value, context: { ...value.context, ...context } });
+          const created = await client.createBug({
+            ...value,
+            context: { ...value.context, ...context },
+          });
+          if (screenshot) await uploadCapturedScreen(client, "bug", created.id, screenshot);
           setResult({});
         } else {
           if (!config.clientKey) {
@@ -432,13 +522,14 @@ export function useBugForm(args: {
         }
       }
     })();
-  }, [client, config.clientKey, config.edgeBaseUrl, context, form, identityEmail]);
+  }, [client, config.clientKey, config.edgeBaseUrl, context, form, identityEmail, screenshot]);
 
   const reset = useCallback(() => {
     form.reset();
     setResult(null);
     setSubmitError(null);
     setPublicDisabled(false);
+    setScreenshot(null);
   }, [form]);
 
   return {
@@ -447,6 +538,8 @@ export function useBugForm(args: {
     result,
     submitError,
     publicDisabled,
+    screenshot,
+    setScreenshot,
     submit,
     reset,
   };
@@ -458,15 +551,23 @@ export interface FeatureFormState {
   /** react-hook-form instance — drive fields with `<Controller control={…}>`. */
   form: UseFormReturn<FeatureFormInput, unknown, FeatureFormValues>;
   submitting: boolean;
-  result: { id: string } | null;
+  /** Authed path sets `id`; the public path carries the ticket number. */
+  result: { id?: string; number?: number; deduped?: boolean } | null;
   submitError: string | null;
+  /** True when the 403 said public tickets are off. */
+  publicDisabled: boolean;
+  /** Captured screen pending upload with the request (authed submits only). */
+  screenshot: CapturedScreen | null;
+  setScreenshot(shot: CapturedScreen | null): void;
   submit(): Promise<void>;
   reset(): void;
 }
 
-/** Authed-only counterpart of {@link useBugForm} — the public intake takes
- *  bugs only, so the feature form renders only for a logged-in session. */
+/** Feature-request counterpart of {@link useBugForm} — same two submit paths:
+ *  logged in → the full authed `createFeatureRequest`; logged out → the public
+ *  `/cli/report` intake (`type: "feature"`, client key). */
 export function useFeatureForm(args: {
+  config: DevtoolsConfig;
   client: DevtoolsClient | null;
   context?: Record<string, unknown>;
 }): FeatureFormState {
@@ -474,37 +575,72 @@ export function useFeatureForm(args: {
     resolver: zodResolver(featureFormSchema),
     defaultValues: { title: "", description: "", useCase: "" },
   });
-  const [result, setResult] = useState<{ id: string } | null>(null);
+  const [result, setResult] = useState<{
+    id?: string;
+    number?: number;
+    deduped?: boolean;
+  } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [publicDisabled, setPublicDisabled] = useState(false);
+  const [screenshot, setScreenshot] = useState<CapturedScreen | null>(null);
+  const identityEmail = useIdentityEmail();
 
-  const { client, context } = args;
+  const { config, client, context } = args;
 
   const submit = useCallback(async () => {
     setSubmitError(null);
-    await form.handleSubmit(async (value) => {
-      if (!client) {
-        setSubmitError("Log in to request a feature.");
-        return;
-      }
+    await form.handleSubmit(async (raw) => {
+      const value = { ...raw, reporterEmail: raw.reporterEmail || identityEmail || undefined };
       try {
-        const r = await client.createFeatureRequest({
-          ...value,
-          context: { ...value.context, ...context },
-        });
-        setResult(r);
+        if (client) {
+          const created = await client.createFeatureRequest({
+            ...value,
+            context: { ...value.context, ...context },
+          });
+          if (screenshot) {
+            await uploadCapturedScreen(client, "feature_request", created.id, screenshot);
+          }
+          setResult(created);
+        } else {
+          if (!config.clientKey) {
+            throw new Error("Public feature requests need a clientKey on <ShipeasyDevtools>.");
+          }
+          const r = await submitPublicFeature(featureFormToPublicInput(value, { context }), {
+            clientKey: config.clientKey,
+            edgeBaseUrl: config.edgeBaseUrl,
+          });
+          setResult(r);
+        }
       } catch (e) {
-        setSubmitError(e instanceof Error ? e.message : "Submit failed. Please try again.");
+        if (e instanceof PublicTicketsDisabled) {
+          setPublicDisabled(true);
+          setSubmitError("Public feature requests are not enabled for this project.");
+        } else {
+          setSubmitError(e instanceof Error ? e.message : "Submit failed. Please try again.");
+        }
       }
     })();
-  }, [client, context, form]);
+  }, [client, config.clientKey, config.edgeBaseUrl, context, form, identityEmail, screenshot]);
 
   const reset = useCallback(() => {
     form.reset();
     setResult(null);
     setSubmitError(null);
+    setPublicDisabled(false);
+    setScreenshot(null);
   }, [form]);
 
-  return { form, submitting: form.formState.isSubmitting, result, submitError, submit, reset };
+  return {
+    form,
+    submitting: form.formState.isSubmitting,
+    result,
+    submitError,
+    publicDisabled,
+    screenshot,
+    setScreenshot,
+    submit,
+    reset,
+  };
 }
 
 // ── shake-to-open ────────────────────────────────────────────────────────────

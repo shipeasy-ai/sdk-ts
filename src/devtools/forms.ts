@@ -11,7 +11,7 @@
 import type { z } from "zod";
 import { zCreateBugRequest, zCreateFeatureRequestRequest } from "./generated/zod.gen";
 import type { CreateBugRequestInput, CreateFeatureRequestRequestInput } from "./generated/zod.gen";
-import type { PublicBugInput } from "./public-report";
+import type { PublicBugInput, PublicFeatureInput } from "./public-report";
 
 export { zCreateBugRequest, zCreateFeatureRequestRequest };
 export type { CreateBugRequestInput, CreateFeatureRequestRequestInput };
@@ -74,6 +74,24 @@ export function bugFormToPublicInput(
     title: value.title,
     ...(value.actualResult ? { error: value.actualResult } : {}),
     ...(value.stepsToReproduce ? { description: value.stepsToReproduce } : {}),
+    ...(value.reporterEmail ? { reporterEmail: value.reporterEmail } : {}),
+    ...(extra?.step ? { step: extra.step } : {}),
+    ...(extra?.context ?? value.context
+      ? { context: { ...(value.context ?? {}), ...(extra?.context ?? {}) } }
+      : {}),
+  };
+}
+
+/** Project validated feature-form values onto the public `/cli/report` body
+ *  shape (`type: "feature"` — no priority/notify on the public path). */
+export function featureFormToPublicInput(
+  value: FeatureFormValues,
+  extra?: { step?: string; context?: Record<string, unknown> },
+): PublicFeatureInput {
+  return {
+    title: value.title,
+    ...(value.description ? { description: value.description } : {}),
+    ...(value.useCase ? { useCase: value.useCase } : {}),
     ...(value.reporterEmail ? { reporterEmail: value.reporterEmail } : {}),
     ...(extra?.step ? { step: extra.step } : {}),
     ...(extra?.context ?? value.context

@@ -1,8 +1,31 @@
 # Changelog
 
-## 7.5.1 (2026-07-10)
+## 7.6.0 (2026-07-10)
 
-### React Native devtools overlay — visual redesign of the report forms
+### React Native devtools overlay — home redesign, public feature requests, screenshots, key-based login
+
+- **Redesigned logged-out home**: the Shipeasy brand mark, dedicated
+  **Report a bug** / **Request a feature** action cards (shown when the project
+  opted into public tickets), and a **Connect to Shipeasy** button pinned to the
+  bottom.
+- **Public feature requests**: the feature form now files through the same
+  public `/cli/report` intake (`type: "feature"`) when logged out, not just the
+  authed path — new `submitPublicFeature()` core helper +
+  `featureFormToPublicInput()`. `useFeatureForm` gains the dual submit path
+  (public + authed) and now takes a `config`.
+- **Screenshot capture**: logged-in bug / feature forms can capture the current
+  app screen (react-native-view-shot, optional peer) — the overlay hides itself
+  for the shot and uploads it as a report attachment. New `<ScreenshotAttach>`
+  component, `ScreenCaptureContext` / `useScreenCapture`, `canCaptureScreen()` /
+  `captureScreenShot()`.
+- **Key-based project auto-pick on login**: `<ShipeasyDevtools clientKey>` is now
+  passed to the auth page, which resolves the key to its project and locks the
+  flow there — the team member logs in and lands straight in the overlay with no
+  project picker (mirrors the browser overlay). `startDeviceAuth` /
+  `DevtoolsConfig` gain `clientKey`.
+- `HomeScreen` exported for design/embedding surfaces.
+
+### Report forms — visual redesign (folded in from 7.5.1 prep)
 
 - Bug and feature-request forms rebuilt: screen heading + explainer, field
   hints and "optional" label suffixes, focus ring on inputs (accent border),
