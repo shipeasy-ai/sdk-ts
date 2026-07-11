@@ -82,8 +82,9 @@ use — a malicious app squatting your scheme intercepts nothing usable.
 
 ## Panels
 
-Once logged in, the overlay shows one tab per module the project has enabled
-(disabled modules are hidden, matching the web overlay):
+Once logged in, the overlay opens a drill-in menu with one big-tap row per
+module the project has enabled (disabled modules are hidden, matching the web
+overlay); tapping a row opens that panel with a **‹ Back** affordance:
 
 - **User** — a read-only view of the exact `identify()` payload: the fields the
   app passed, plus the attributes the SDK auto-collects on every identify()

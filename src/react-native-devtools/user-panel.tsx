@@ -7,7 +7,7 @@
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import { useEngineBridge } from "./hooks";
-import { Badge, CenterState, KV, Muted, SectionLabel, useTheme } from "./ui";
+import { CenterState, KV, Muted, SectionLabel, useTheme } from "./ui";
 
 /** Attributes the SDK injects on every identify() (see `collectBrowserAttrs` +
  *  the always-on `anonymous_id` in the client engine). Everything else in the
@@ -108,11 +108,6 @@ export function UserPanel(): ReactNode {
       <SectionLabel hint="read-only">Device context</SectionLabel>
       <KV k="ctx.platform" v={Platform.OS} accent />
       <KV k="ctx.platform_version" v={String(Platform.Version)} accent />
-
-      <View style={styles.footnote}>
-        <Badge label="read-only" tone="muted" />
-        <Muted style={styles.footnoteText}>Live targeting inputs, exactly as identified.</Muted>
-      </View>
     </ScrollView>
   );
 }
@@ -127,8 +122,6 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 17, fontWeight: "700" },
   centerText: { textAlign: "center" },
-  footnote: { alignItems: "center", flexDirection: "row", gap: 8, marginTop: 16 },
-  footnoteText: { flexShrink: 1 },
   scroll: { paddingBottom: 32 },
   who: {
     alignItems: "center",

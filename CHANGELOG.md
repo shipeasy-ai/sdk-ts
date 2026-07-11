@@ -30,6 +30,11 @@
   rendered as JSON. The property-editing / "Re-evaluate to simulate another
   user" affordance is removed; the panel shows the live targeting inputs
   verbatim.
+- **Drill-in section nav**: the cramped horizontal tab strip is replaced by a
+  menu of big-tap section rows (far easier to hit on a phone); opening a section
+  shows its panel under a **‹ Back** affordance. **Log out** moves to the header
+  top-right (replacing the close ✕ while logged in); the redundant
+  project/email session row is dropped.
 
 ### Report forms — visual redesign (folded in from 7.5.1 prep)
 

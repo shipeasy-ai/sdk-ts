@@ -84,14 +84,22 @@ type Screen =
   | "i18n"
   | "events";
 
-const TABS: Array<{ key: Screen; label: string; module: keyof ProjectModules }> = [
-  { key: "user", label: "User", module: "user" },
-  { key: "gates", label: "Gates", module: "gates" },
-  { key: "configs", label: "Configs", module: "configs" },
-  { key: "experiments", label: "Experiments", module: "experiments" },
-  { key: "feedback", label: "Feedback", module: "feedback" },
-  { key: "i18n", label: "I18n", module: "translations" },
-  { key: "events", label: "Events", module: "events" },
+// The devtools modules, rendered as a drill-in menu (one big-tap row each) —
+// far friendlier on a phone than a cramped horizontal tab strip. The glyph is
+// the row's leading badge; `module` gates visibility on the project's config.
+const SECTIONS: Array<{
+  key: Screen;
+  label: string;
+  glyph: string;
+  module: keyof ProjectModules;
+}> = [
+  { key: "user", label: "User", glyph: "👤", module: "user" },
+  { key: "gates", label: "Gates", glyph: "🚩", module: "gates" },
+  { key: "configs", label: "Configs", glyph: "⚙️", module: "configs" },
+  { key: "experiments", label: "Experiments", glyph: "🧪", module: "experiments" },
+  { key: "feedback", label: "Feedback", glyph: "💬", module: "feedback" },
+  { key: "i18n", label: "I18n", glyph: "🌐", module: "translations" },
+  { key: "events", label: "Events", glyph: "📈", module: "events" },
 ];
 
 export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps>(
@@ -196,13 +204,13 @@ function Sheet(props: {
   const canFileBug =
     auth.session !== null || (capabilities?.allowPublicTickets === true && !!props.config.clientKey);
 
-  // Module-gated tabs (hidden, not greyed — same as the web overlay). Until
-  // the project record lands, show everything rather than flash-hide tabs.
+  // Module-gated sections (hidden, not greyed — same as the web overlay). Until
+  // the project record lands, show everything rather than flash-hide rows.
   const modules = project.data?.modules ?? null;
-  const tabs = TABS.filter((tab) => modules === null || modules[tab.module]);
-  const activeTab: Screen = tabs.some((tab) => tab.key === screen)
-    ? screen
-    : (tabs[0]?.key ?? "gates");
+  const sections = SECTIONS.filter((s) => modules === null || modules[s.module]);
+  // Logged-in nav is a drill-in: `screen === "home"` shows the section menu; a
+  // section key shows that panel with a Back affordance.
+  const activeSection = sections.find((s) => s.key === screen) ?? null;
 
   return (
     <View style={styles.sheetInner}>
@@ -214,9 +222,19 @@ function Sheet(props: {
             <Text style={[styles.headerTitleDim, { color: t.fgMuted }]}>Inspector</Text>
           </Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={props.close}>
-          <Text style={[styles.closeGlyph, { color: t.fgMuted }]}>✕</Text>
-        </Pressable>
+        {auth.session ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Log out"
+            onPress={() => void auth.logout()}
+          >
+            <Text style={[styles.logout, { color: t.accent }]}>Log out</Text>
+          </Pressable>
+        ) : (
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={props.close}>
+            <Text style={[styles.closeGlyph, { color: t.fgMuted }]}>✕</Text>
+          </Pressable>
+        )}
       </View>
 
       {screen === "bug" ? (
@@ -238,66 +256,57 @@ function Sheet(props: {
           />
         </View>
       ) : auth.session && auth.client ? (
-        <>
-          <View style={styles.sessionRow}>
-            <Muted>
-              {auth.session.projectName ?? auth.session.projectId}
-              {auth.session.userEmail ? ` · ${auth.session.userEmail}` : ""}
-            </Muted>
-            <Pressable accessibilityRole="button" onPress={() => void auth.logout()}>
-              <Text style={[styles.logout, { color: t.accent }]}>Log out</Text>
+        activeSection ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back to menu"
+              onPress={() => setScreen("home")}
+              style={styles.backRow}
+            >
+              <Text style={[styles.backChevron, { color: t.accent }]}>‹</Text>
+              <Text style={[styles.backTitle, { color: t.fg }]}>{activeSection.label}</Text>
             </Pressable>
-          </View>
-          <View style={[styles.tabs, { borderBottomColor: t.border }]}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
-              {tabs.map((tab) => {
-                const active = activeTab === tab.key;
-                return (
-                  <Pressable
-                    key={tab.key}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                    onPress={() => setScreen(tab.key)}
-                    style={[styles.tab, active && { borderBottomColor: t.accent }]}
-                  >
-                    <Text style={[styles.tabLabel, { color: active ? t.fg : t.fgMuted }]}>
-                      {tab.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-          <View style={styles.panel}>
-            {activeTab === "user" ? (
-              <UserPanel />
-            ) : activeTab === "configs" ? (
-              <ConfigsPanel client={auth.client} />
-            ) : activeTab === "experiments" ? (
-              <ExperimentsPanel client={auth.client} />
-            ) : activeTab === "feedback" ? (
-              <FeedbackPanel
-                client={auth.client}
-                config={props.config}
-                bugContext={props.bugContext}
+            <View style={styles.panel}>
+              {activeSection.key === "user" ? (
+                <UserPanel />
+              ) : activeSection.key === "configs" ? (
+                <ConfigsPanel client={auth.client} />
+              ) : activeSection.key === "experiments" ? (
+                <ExperimentsPanel client={auth.client} />
+              ) : activeSection.key === "feedback" ? (
+                <FeedbackPanel
+                  client={auth.client}
+                  config={props.config}
+                  bugContext={props.bugContext}
+                />
+              ) : activeSection.key === "i18n" ? (
+                <I18nPanel client={auth.client} />
+              ) : activeSection.key === "events" ? (
+                <EventsPanel />
+              ) : (
+                <GatesPanel client={auth.client} />
+              )}
+            </View>
+          </>
+        ) : (
+          <ScrollView contentContainerStyle={styles.menu}>
+            {sections.map((s) => (
+              <SectionRow
+                key={s.key}
+                glyph={s.glyph}
+                label={s.label}
+                onPress={() => setScreen(s.key)}
               />
-            ) : activeTab === "i18n" ? (
-              <I18nPanel client={auth.client} />
-            ) : activeTab === "events" ? (
-              <EventsPanel />
-            ) : (
-              <GatesPanel client={auth.client} />
-            )}
-          </View>
-          {activeTab !== "feedback" ? (
-            <Button
-              title="Report a bug"
-              variant="secondary"
+            ))}
+            <SectionRow
+              glyph="!"
+              label="Report a bug"
+              tone="accent"
               onPress={() => setScreen("bug")}
-              style={styles.footerButton}
             />
-          ) : null}
-        </>
+          </ScrollView>
+        )
       ) : (
         <HomeScreen
           onConnect={() => void auth.login()}
@@ -342,6 +351,44 @@ function BrandMark(props: { size?: number }): ReactNode {
         }}
       />
     </View>
+  );
+}
+
+/** A big-tap row in the logged-in section menu (the drill-in nav). `tone:
+ *  "accent"` fills the glyph badge — used for the "Report a bug" action row. */
+function SectionRow(props: {
+  glyph: string;
+  label: string;
+  onPress: () => void;
+  tone?: "accent";
+}): ReactNode {
+  const t = useTheme();
+  const accent = props.tone === "accent";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      onPress={props.onPress}
+      style={({ pressed }) => [
+        styles.sectionRow,
+        {
+          backgroundColor: t.surface,
+          borderColor: t.border,
+          borderRadius: t.radius,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      <View
+        style={[styles.sectionGlyphWrap, { backgroundColor: accent ? t.accent : t.accentSoft }]}
+      >
+        <Text style={[styles.sectionGlyph, { color: accent ? t.accentFg : t.accent }]}>
+          {props.glyph}
+        </Text>
+      </View>
+      <Text style={[styles.sectionLabel, { color: t.fg }]}>{props.label}</Text>
+      <Text style={[styles.sectionChevron, { color: t.fgMuted }]}>›</Text>
+    </Pressable>
   );
 }
 
@@ -459,6 +506,9 @@ const styles = StyleSheet.create({
   },
   actionSub: { fontSize: 12, lineHeight: 16 },
   actionTitle: { fontSize: 15, fontWeight: "600" },
+  backChevron: { fontSize: 26, fontWeight: "500", marginTop: -3 },
+  backRow: { alignItems: "center", flexDirection: "row", gap: 4, paddingHorizontal: 12, paddingVertical: 10 },
+  backTitle: { fontSize: 16, fontWeight: "700", letterSpacing: -0.2 },
   backdrop: { backgroundColor: "rgba(0,0,0,0.55)", flex: 1, justifyContent: "flex-end" },
   brandMark: { alignItems: "center", justifyContent: "center" },
   // Invisible but mounted — captureScreen must shoot the app, and toggling the
@@ -488,14 +538,8 @@ const styles = StyleSheet.create({
   homeWordmark: { fontSize: 20, letterSpacing: -0.4 },
   loginError: { fontSize: 13, textAlign: "center" },
   logout: { fontSize: 13, fontWeight: "600" },
+  menu: { gap: 10, padding: 16, paddingBottom: 24 },
   panel: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
-  sessionRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
   sheet: {
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -504,8 +548,23 @@ const styles = StyleSheet.create({
     minHeight: "55%",
   },
   sheetInner: { flex: 1 },
-  tab: { borderBottomColor: "transparent", borderBottomWidth: 2, paddingBottom: 8 },
-  tabLabel: { fontSize: 14, fontWeight: "600" },
-  tabs: { borderBottomWidth: 1, paddingTop: 4 },
-  tabsRow: { flexDirection: "row", gap: 18, paddingHorizontal: 16 },
+  sectionChevron: { fontSize: 24, fontWeight: "400", marginTop: -2 },
+  sectionGlyph: { fontSize: 16 },
+  sectionGlyphWrap: {
+    alignItems: "center",
+    borderRadius: 10,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  sectionLabel: { flex: 1, fontSize: 15, fontWeight: "600" },
+  sectionRow: {
+    alignItems: "center",
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
 });
