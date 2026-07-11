@@ -64,6 +64,7 @@ export default defineConfig([
       "react",
       "react/jsx-runtime",
       "react-native",
+      "react-native-svg",
       /^expo-/,
       "zod",
       "react-hook-form",

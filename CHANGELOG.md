@@ -32,8 +32,11 @@
   verbatim.
 - **Drill-in section nav**: the cramped horizontal tab strip is replaced by a
   menu of big-tap section rows (far easier to hit on a phone); opening a section
-  shows its panel under a **‹ Back** affordance. **Log out** moves to the header
-  top-right (replacing the close ✕ while logged in); the redundant
+  shows its panel under a **‹ Back** affordance. Each row carries the same
+  Lucide icon the in-browser overlay uses (via `react-native-svg`, a new
+  optional peer — text-glyph fallback when absent). The **Gates** section is
+  renamed **Feature Flags** (matching the web overlay). **Log out** moves to the
+  header top-right (replacing the close ✕ while logged in); the redundant
   project/email session row is dropped.
 
 ### Report forms — visual redesign (folded in from 7.5.1 prep)

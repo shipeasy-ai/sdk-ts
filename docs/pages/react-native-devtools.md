@@ -9,7 +9,7 @@ path that works without any login when the project has opted in.
 
 | Entrypoint | What it is | Peer deps |
 | --- | --- | --- |
-| `@shipeasy/sdk/react-native-devtools` | `<ShipeasyDevtools/>` overlay + hooks | `react`, `react-native`, `react-hook-form`, `@hookform/resolvers`, `zod`, plus optional `expo-*` (below) |
+| `@shipeasy/sdk/react-native-devtools` | `<ShipeasyDevtools/>` overlay + hooks | `react`, `react-native`, `react-hook-form`, `@hookform/resolvers`, `zod`, plus optional `expo-*` + `react-native-svg` (below) |
 | `@shipeasy/sdk/devtools` | Headless core (client, auth, public bug intake, form schemas) | `zod` |
 | `@shipeasy/sdk/browser-devtools` | The web overlay (see its page) | — |
 
@@ -50,11 +50,13 @@ you want (each degrades gracefully when absent):
 
 ```bash
 npm install react-hook-form @hookform/resolvers
-npx expo install expo-web-browser expo-crypto expo-secure-store expo-sensors expo-image-picker react-native-view-shot
+npx expo install expo-web-browser expo-crypto expo-secure-store expo-sensors expo-image-picker react-native-view-shot react-native-svg
 ```
 
 - `react-hook-form` + `@hookform/resolvers` — the bug / feature forms
   (validated against the generated zod schemas).
+- `react-native-svg` — the section-menu icons (the same Lucide glyphs the
+  in-browser overlay uses). Absent → the menu falls back to text glyphs.
 - `expo-web-browser` — required for **Log in** (the auth browser round-trip).
 - `expo-crypto` — PKCE digest (falls back to `crypto.subtle` where available).
 - `expo-secure-store` — keeps the session across app launches (Keychain/Keystore).
@@ -90,8 +92,8 @@ overlay); tapping a row opens that panel with a **‹ Back** affordance:
   app passed, plus the attributes the SDK auto-collects on every identify()
   (`anonymous_id`, locale/timezone and device context). These are the live
   targeting inputs, verbatim — nothing here is editable.
-- **Gates** — rollout, killswitch flag, the value this device is being served,
-  and **Force on / Force off / Restore** buttons.
+- **Feature Flags** — rollout, killswitch flag, the value this device is being
+  served, and **Force on / Force off / Restore** buttons.
 - **Configs** — effective values with a JSON override editor (schema-checked at
   the root) and **Restore**.
 - **Experiments** — status, universe, weights, the live assignment, and

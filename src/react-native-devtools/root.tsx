@@ -35,6 +35,8 @@ import { I18nPanel } from "./i18n-panel";
 import { resolveTheme } from "./theme";
 import type { DevtoolsTheme } from "./theme";
 import { canCaptureScreen, captureScreenShot } from "./expo-adapters";
+import { Icon } from "./icons";
+import type { DevtoolsIconName } from "./icons";
 import {
   ScreenCaptureContext,
   ensureEventCapture,
@@ -85,21 +87,22 @@ type Screen =
   | "events";
 
 // The devtools modules, rendered as a drill-in menu (one big-tap row each) —
-// far friendlier on a phone than a cramped horizontal tab strip. The glyph is
-// the row's leading badge; `module` gates visibility on the project's config.
+// far friendlier on a phone than a cramped horizontal tab strip. The icon is
+// the row's leading badge (same Lucide set as the in-browser overlay);
+// `module` gates visibility on the project's config.
 const SECTIONS: Array<{
   key: Screen;
   label: string;
-  glyph: string;
+  icon: DevtoolsIconName;
   module: keyof ProjectModules;
 }> = [
-  { key: "user", label: "User", glyph: "👤", module: "user" },
-  { key: "gates", label: "Gates", glyph: "🚩", module: "gates" },
-  { key: "configs", label: "Configs", glyph: "⚙️", module: "configs" },
-  { key: "experiments", label: "Experiments", glyph: "🧪", module: "experiments" },
-  { key: "feedback", label: "Feedback", glyph: "💬", module: "feedback" },
-  { key: "i18n", label: "I18n", glyph: "🌐", module: "translations" },
-  { key: "events", label: "Events", glyph: "📈", module: "events" },
+  { key: "user", label: "User", icon: "user", module: "user" },
+  { key: "gates", label: "Feature Flags", icon: "gates", module: "gates" },
+  { key: "configs", label: "Configs", icon: "configs", module: "configs" },
+  { key: "experiments", label: "Experiments", icon: "experiments", module: "experiments" },
+  { key: "feedback", label: "Feedback", icon: "feedback", module: "feedback" },
+  { key: "i18n", label: "I18n", icon: "i18n", module: "translations" },
+  { key: "events", label: "Events", icon: "events", module: "events" },
 ];
 
 export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps>(
@@ -294,13 +297,13 @@ function Sheet(props: {
             {sections.map((s) => (
               <SectionRow
                 key={s.key}
-                glyph={s.glyph}
+                icon={s.icon}
                 label={s.label}
                 onPress={() => setScreen(s.key)}
               />
             ))}
             <SectionRow
-              glyph="!"
+              icon="bug"
               label="Report a bug"
               tone="accent"
               onPress={() => setScreen("bug")}
@@ -355,9 +358,9 @@ function BrandMark(props: { size?: number }): ReactNode {
 }
 
 /** A big-tap row in the logged-in section menu (the drill-in nav). `tone:
- *  "accent"` fills the glyph badge — used for the "Report a bug" action row. */
+ *  "accent"` fills the icon badge — used for the "Report a bug" action row. */
 function SectionRow(props: {
-  glyph: string;
+  icon: DevtoolsIconName;
   label: string;
   onPress: () => void;
   tone?: "accent";
@@ -382,9 +385,7 @@ function SectionRow(props: {
       <View
         style={[styles.sectionGlyphWrap, { backgroundColor: accent ? t.accent : t.accentSoft }]}
       >
-        <Text style={[styles.sectionGlyph, { color: accent ? t.accentFg : t.accent }]}>
-          {props.glyph}
-        </Text>
+        <Icon name={props.icon} size={18} color={accent ? t.accentFg : t.accent} />
       </View>
       <Text style={[styles.sectionLabel, { color: t.fg }]}>{props.label}</Text>
       <Text style={[styles.sectionChevron, { color: t.fgMuted }]}>›</Text>
@@ -549,7 +550,6 @@ const styles = StyleSheet.create({
   },
   sheetInner: { flex: 1 },
   sectionChevron: { fontSize: 24, fontWeight: "400", marginTop: -2 },
-  sectionGlyph: { fontSize: 16 },
   sectionGlyphWrap: {
     alignItems: "center",
     borderRadius: 10,
