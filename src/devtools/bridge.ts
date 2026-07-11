@@ -51,7 +51,10 @@ export interface DevtoolsEngineBridge {
   getOverrides(): DevtoolsOverridesSnapshot;
   setFlagOverride(name: string, value: boolean): void;
   setConfigOverride(name: string, value: unknown): void;
-  setExperimentOverride(name: string, group: string): void;
+  /** Force an experiment's variant live. Pass the variant's param overrides so
+   *  the forced assignment delivers that variant's values (layered over the
+   *  universe defaults) — not just the defaults. */
+  setExperimentOverride(name: string, group: string, params?: Record<string, unknown>): void;
   /** Remove a single override (the panels' "Restore" action). */
   removeOverride(kind: "flag" | "config" | "experiment", name: string): void;
   clearOverrides(): void;

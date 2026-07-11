@@ -45,6 +45,7 @@ import type {
   FeatureRequestRecord,
   GateRecord,
   KeyRecord,
+  OpsItemDetail,
   ProfileRecord,
   ProjectRecord,
   UniverseRecord,
@@ -391,6 +392,24 @@ export function useUniverses(client: DevtoolsClient | null): QueryState<Universe
 
 export function useFeedback(client: DevtoolsClient | null): QueryState<BugRecord[]> {
   return useClientQuery(client, (c) => c.bugs());
+}
+
+/** Auto-filed error tickets. */
+export function useErrors(client: DevtoolsClient | null): QueryState<BugRecord[]> {
+  return useClientQuery(client, (c) => c.errors(), "ops:error");
+}
+
+/** Auto-filed alert tickets. */
+export function useAlerts(client: DevtoolsClient | null): QueryState<BugRecord[]> {
+  return useClientQuery(client, (c) => c.alerts(), "ops:alert");
+}
+
+/** Generic ops-item detail for any type (bug/feature/error/alert). */
+export function useOpsDetail(
+  client: DevtoolsClient | null,
+  id: string | null,
+): QueryState<OpsItemDetail> {
+  return useClientQuery(id ? client : null, (c) => c.opsItem(id as string), id ?? "");
 }
 
 export function useFeatureRequests(

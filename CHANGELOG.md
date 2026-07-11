@@ -81,6 +81,35 @@
   `feedbackAgentInfo()` / `FEEDBACK_AGENT_LABEL` on `@shipeasy/sdk/devtools`;
   `FeedbackConnectorData` widens to carry the PR merged marker + agent trace.
 
+- **Feedback panel — status sections, error/alert tickets, priority borders.**
+  The queue now spans four sub-tabs — **Bugs / Features / Errors / Alerts** (the
+  auto-filed system tickets are exposed too) — with open items grouped into
+  **status sections**. Rows are decluttered: the status badge becomes the
+  section, priority becomes a **left-border colour**, and the AI/PR pill is the
+  only remaining badge, so long titles fit. New `DevtoolsClient.errors()` /
+  `alerts()` / `opsItem()` / `updateOps()`; `useErrors` / `useAlerts` /
+  `useOpsDetail` hooks; `OpsItemDetail` / `OpsItemType` types.
+
+- **Active-overrides screen + header state.** The header shows a **⚡ N
+  overrides** pill and an accent underline whenever any override is active;
+  tapping it opens **Active overrides** — every forced flag / config / variant
+  this session, clearable individually or all at once (`OverridesPanel`,
+  exported).
+
+- **Forcing a variant delivers its params.** `setExperimentOverride(name,
+  group, params?)` now takes the variant's param override map, so a forced
+  assignment resolves to that variant's real values (layered over the universe
+  defaults) instead of just the defaults. The experiment detail passes the
+  chosen variant's params.
+
+- **Redesigned create-success screen.** Bug/feature submits land on a shared
+  `CreateSuccess` screen (exported) that distinguishes the **public** path
+  (ticket number + "pending review") from the **authed** path ("in the triage
+  queue"), notes a dedup merge, and offers "Report/Request another".
+
+- **The RN overlay's I18n panel is removed** for now (the section no longer
+  appears in the drill-in menu; the SDK's i18n runtime is unchanged).
+
 ### Report forms — visual redesign (folded in from 7.5.1 prep)
 
 - Bug and feature-request forms rebuilt: screen heading + explainer, field

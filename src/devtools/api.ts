@@ -23,6 +23,7 @@ import type {
   FeatureRequestRecord,
   GateRecord,
   KeyRecord,
+  OpsItemDetail,
   ProfileRecord,
   ProjectRecord,
   UniverseRecord,
@@ -506,6 +507,61 @@ export class DevtoolsClient {
         await getOpsItem({ client: this.api, path: { handle: id } }),
       ) as unknown as BugDetail,
     );
+  }
+
+  /** Auto-filed error tickets. Same list endpoint, `type=error`. */
+  errors(): Promise<BugRecord[]> {
+    return this.memo("errors", async () =>
+      this.asList<BugRecord>(
+        this.unwrap(
+          "/api/admin/ops?type=error",
+          await listOpsItems({ client: this.api, query: { type: "error" } }),
+        ),
+      ),
+    );
+  }
+
+  /** Auto-filed alert tickets. Same list endpoint, `type=alert`. */
+  alerts(): Promise<BugRecord[]> {
+    return this.memo("alerts", async () =>
+      this.asList<BugRecord>(
+        this.unwrap(
+          "/api/admin/ops?type=alert",
+          await listOpsItems({ client: this.api, query: { type: "alert" } }),
+        ),
+      ),
+    );
+  }
+
+  /** Generic ops-item detail — works for any type (bug/feature/error/alert). */
+  opsItem(id: string): Promise<OpsItemDetail> {
+    return this.memo(`ops:${id}`, async () =>
+      this.unwrap(
+        `/api/admin/ops/${id}`,
+        await getOpsItem({ client: this.api, path: { handle: id } }),
+      ) as unknown as OpsItemDetail,
+    );
+  }
+
+  /** Triage-only update (status / priority) that works for ANY item type —
+   *  the only editable shape for auto-filed error/alert tickets. Scrubs every
+   *  list bucket + the item's detail so the panels refetch. */
+  async updateOps(
+    id: string,
+    patch: { status?: BugRecord["status"]; priority?: BugRecord["priority"] },
+  ): Promise<void> {
+    this.unwrap(
+      `/api/admin/ops/${id}`,
+      await updateOpsItem({
+        client: this.api,
+        path: { handle: id },
+        body: patch as UpdateOpsItemRequest,
+      }),
+    );
+    for (const k of ["bugs", "featureRequests", "errors", "alerts"]) this.cache.delete(k);
+    this.cache.delete(`ops:${id}`);
+    this.cache.delete(`bug:${id}`);
+    this.cache.delete(`featureRequest:${id}`);
   }
 
   async createBug(input: Omit<CreateBugRequestInput, "type">): Promise<{ id: string }> {

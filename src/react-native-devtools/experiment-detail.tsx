@@ -168,7 +168,9 @@ export function ExperimentDetailScreen(props: {
               key={g.name}
               label={g.name}
               selected={forcedGroup === g.name}
-              onPress={() => bridge.setExperimentOverride(e.name, g.name)}
+              // Pass the variant's param overrides so the forced assignment
+              // delivers this variant's values, not just the universe defaults.
+              onPress={() => bridge.setExperimentOverride(e.name, g.name, g.params ?? {})}
             />
           ))}
           {forcedGroup ? (

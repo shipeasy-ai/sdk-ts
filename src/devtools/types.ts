@@ -228,6 +228,26 @@ export interface BugDetail extends BugRecord {
   attachments: AttachmentRecord[];
 }
 
+/** The queue-item type. `bug`/`feature_request` are user-fileable; `error` and
+ *  `alert` are auto-filed system tickets the overlay now also lists. */
+export type OpsItemType = "bug" | "feature_request" | "error" | "alert" | "measure_plan";
+
+/** Generic ops-item detail — the enriched GET response, permissive across all
+ *  types (bug/feature content fields present only for those types; empty for
+ *  auto-filed error/alert tickets). */
+export interface OpsItemDetail extends BugRecord {
+  type?: OpsItemType;
+  /** Auto-filed tickets carry the originating record's key (error fingerprint,
+   *  alert dedupe key), or null for human-filed bugs/features. */
+  sourceRef?: string | null;
+  stepsToReproduce?: string;
+  actualResult?: string;
+  expectedResult?: string;
+  description?: string;
+  useCase?: string;
+  attachments: AttachmentRecord[];
+}
+
 export interface FeatureRequestRecord {
   id: string;
   title: string;

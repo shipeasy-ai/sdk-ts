@@ -68,6 +68,28 @@ describe("engine devtools bridge", () => {
     expect(bridge.getConfig("pricing.tiers")).toEqual({ tier: "pro" });
   });
 
+  it("forcing a variant delivers that variant's params over the universe defaults", () => {
+    const { engine, bridge } = freshBridge();
+    // Seed a universe with defaults + an experiment mapped to it (the shape
+    // /sdk/evaluate returns), so universe().assign() can resolve the override.
+    engine.initFromBootstrap({
+      flags: {},
+      configs: {},
+      experiments: { paywall: { inExperiment: false, group: "control", params: {}, universe: "u" } },
+      universes: { u: { defaults: { headline: "Default", cta: "Start" } } },
+    });
+
+    // Force variant_a with its own param override map (headline only).
+    bridge.setExperimentOverride("paywall", "variant_a", { headline: "Do more with Pro" });
+
+    const a = engine.universe("u").assign({ logExposure: false });
+    expect(a.group).toBe("variant_a");
+    // The variant's value wins…
+    expect(a.get("headline")).toBe("Do more with Pro");
+    // …and unset params still inherit the universe default.
+    expect(a.get("cta")).toBe("Start");
+  });
+
   it("captures the identify() payload for the User panel (offline mode)", async () => {
     const { bridge } = freshBridge();
     expect(bridge.getUser()).toBeNull();

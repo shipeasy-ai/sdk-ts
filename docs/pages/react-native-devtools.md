@@ -1,11 +1,12 @@
 # React Native devtools
 
 The SDK ships a shake-to-open devtools overlay for React Native / Expo apps at
-feature parity with the in-browser overlay: inspect the project's live gates,
-configs and experiments on-device, **force values live** (no reload), inspect
-the identified user, watch the SDK event stream, browse and edit translations, triage
-feedback, and file bug reports **and feature requests** — including a **public**
-path that works without any login when the project has opted in.
+feature parity with the in-browser overlay: inspect the project's live feature
+flags, configs and experiments on-device, **force values live** (no reload),
+inspect the identified user, watch the SDK event stream, triage the ops queue
+(bugs, features, errors, alerts), and file bug reports **and feature requests** —
+including a **public** path that works without any login when the project has
+opted in.
 
 | Entrypoint | What it is | Peer deps |
 | --- | --- | --- |
@@ -112,20 +113,25 @@ overlay); tapping a row opens that panel with a **‹ Back** affordance:
   collapsed-by-default card that expands to its resolved param fields (variant
   override → universe default). **Force assignment** picks a variant live;
   **Restore live** clears it.
-- **Feedback** — bugs + feature requests, **open items only** (resolved /
-  won't-fix are never listed). Each row **tints by its AI/PR state** — cyan when
-  an agent opened a PR that's ready for review (with a tappable **PR link**),
-  amber when the agent posted a question back and is awaiting a reply, green
-  when the PR **merged**. Tapping a row opens the detail (its **metadata** block
-  matches the experiment/detail style) with inline **status / priority
-  editing**, attachment previews + screenshot upload (expo-image-picker), and
-  the create forms. The detail's Back is the sheet header's ‹ Back (no per-panel
-  button) — panels drive it through the `SheetNav` context.
-- **I18n** — profile selector, searchable key list, per-key value editing
-  applied to the profile. (The web overlay's in-page click-to-edit mode is
-  DOM-only and has no RN equivalent.)
+- **Feedback** — the project's ops queue across four sub-tabs: **Bugs**,
+  **Features**, **Errors**, and **Alerts** (the last two are the auto-filed
+  system tickets). **Open items only** — resolved / won't-fix are never listed —
+  grouped into **status sections**. A row carries a **priority left-border**
+  (red critical → orange high → yellow medium) and, as its only badge, an
+  **AI/PR state pill**: cyan when an agent opened a PR ready for review (a
+  tappable **PR link**), amber when it posted a question back awaiting a reply,
+  green when the PR **merged**. Tapping a row opens the detail (its **metadata**
+  block matches the experiment detail) with inline **status / priority editing**
+  (all types) and, for bugs/features, attachment previews + screenshot upload
+  (expo-image-picker). The detail's Back is the sheet header's ‹ Back (no
+  per-panel button) — panels drive it through the `SheetNav` context.
 - **Events** — the live SDK event stream (identify evaluations, override
   mutations), captured even while the overlay is closed.
+
+The header shows a **⚡ N overrides** pill and an accent underline whenever any
+override is active; tapping the pill opens **Active overrides** — every forced
+flag / config / experiment variant this session, each clearable individually or
+all at once (`OverridesPanel`, also exported).
 
 ## Live values and forcing
 
@@ -133,10 +139,14 @@ Live state comes from the app's configured `@shipeasy/sdk/client` singleton via
 a `globalThis` bridge — the overlay never imports the client module. On the
 web, devtools overrides ride URL params and reload the page; React Native has
 no URL, so the RN overlay drives the Engine's **programmatic overrides**
-instead: forcing a gate or experiment variant applies immediately and notifies
-`onChange` subscribers (configs are read-only in the RN overlay). If the app
-hasn't configured the client SDK, panels still list the project's resources but
-hide live values and forcing.
+instead: forcing a flag or experiment variant applies immediately and notifies
+`onChange` subscribers, so a running app that reads through `getFlag` /
+`universe(...).assign()` re-renders with the forced value. Forcing a variant
+passes that variant's **param overrides**, so the assignment delivers the
+variant's real values (layered over the universe defaults), not just the
+defaults. Configs are read-only in the RN overlay. If the app hasn't configured
+the client SDK, panels still list the project's resources but hide live values
+and forcing.
 
 ## Public bug reports and feature requests
 

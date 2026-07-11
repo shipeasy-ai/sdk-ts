@@ -1317,10 +1317,12 @@ export class Engine {
         this.overrideConfig(n, v);
         overrideEvent(`config ${n}`, devtoolsEventValue(v));
       },
-      setExperimentOverride: (n, group) => {
-        // Empty params: assignUniverse() layers the universe defaults under
-        // the forced group's params, so defaults still resolve.
-        this.overrideExperiment(n, group, {});
+      setExperimentOverride: (n, group, params) => {
+        // Layer the variant's own param overrides over the universe defaults so
+        // a forced assignment delivers that variant's VALUES, not just the
+        // defaults (assignUniverse spreads `{ ...defaults, ...params }`). The
+        // overlay passes the chosen variant's params; omit → defaults only.
+        this.overrideExperiment(n, group, params ?? {});
         overrideEvent(`experiment ${n}`, group);
       },
       removeOverride: (kind, name) => {

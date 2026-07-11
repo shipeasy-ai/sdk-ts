@@ -1,10 +1,12 @@
-// Feedback panel — bugs + feature requests, at parity with the web overlay's:
-// two sub-tabs, Active/All status filter, a detail view with inline status /
-// priority editing, attachment previews (authed blob → data URI), image
-// attachment upload (optional expo-image-picker), and the create forms.
+// Feedback panel — the project's ops queue: user-filed bugs + feature requests
+// and the auto-filed error + alert tickets. Open items only (resolved / won't-
+// fix are never listed), grouped into status sections. Rows carry a priority
+// left-border and, when an agent has acted, an AI/PR state pill (the only
+// badge). Tapping a row opens a detail with inline status / priority editing,
+// attachment previews + upload (bug/feature), and the create forms.
 
 import { useEffect, useRef, useState } from "react";
-import { FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import type { DevtoolsClient } from "../devtools/api";
 import type {
@@ -13,10 +15,19 @@ import type {
   BugRecord,
   BugStatus,
   FeatureRequestRecord,
+  OpsItemType,
 } from "../devtools/types";
 import { feedbackAgentInfo, FEEDBACK_AGENT_LABEL } from "../devtools/feedback-state";
 import type { FeedbackAgentState } from "../devtools/feedback-state";
-import { useBugDetail, useFeatureDetail, useFeatureRequests, useFeedback, useSheetNav } from "./hooks";
+import {
+  useAlerts,
+  useErrors,
+  useFeatureRequests,
+  useFeedback,
+  useOpsDetail,
+  useSheetNav,
+} from "./hooks";
+import type { QueryState } from "./hooks";
 import { pickImageAttachment, getImagePicker } from "./expo-adapters";
 import { BugForm } from "./bug-form";
 import { FeatureForm } from "./feature-form";
@@ -36,6 +47,8 @@ import {
   useTheme,
 } from "./ui";
 
+type OpsItem = BugRecord | FeatureRequestRecord;
+
 const STATUSES: BugStatus[] = [
   "open",
   "pending_approval",
@@ -45,14 +58,48 @@ const STATUSES: BugStatus[] = [
   "resolved",
   "wont_fix",
 ];
-const TERMINAL: ReadonlySet<BugStatus> = new Set(["resolved", "wont_fix"]);
+const TERMINAL: ReadonlySet<string> = new Set(["resolved", "wont_fix"]);
 const PRIORITIES: BugPriority[] = ["nice_to_have", "medium", "high", "critical"];
 
-function statusTone(s: BugStatus): "ok" | "muted" | "accent" | "danger" {
+// Workflow order the status sections render in; any status not listed is
+// appended after these (keyed by its raw value).
+const STATUS_ORDER = [
+  "pending_approval",
+  "triage",
+  "triaged",
+  "open",
+  "in_progress",
+  "ready_for_qa",
+];
+
+// The queue sub-tabs — bugs/features are user-fileable, errors/alerts are the
+// auto-filed system tickets.
+const SUBS: Array<{ kind: OpsItemType; label: string }> = [
+  { kind: "bug", label: "Bugs" },
+  { kind: "feature_request", label: "Features" },
+  { kind: "error", label: "Errors" },
+  { kind: "alert", label: "Alerts" },
+];
+
+function statusTone(s: string): "ok" | "muted" | "accent" | "danger" {
   if (s === "resolved") return "ok";
   if (s === "wont_fix") return "muted";
-  if (s === "pending_approval") return "accent";
   return "accent";
+}
+
+/** Priority → the row's left-border colour. `nice_to_have` / unset read as the
+ *  neutral border (no emphasis). */
+function priorityTint(p: string | null | undefined, t: DevtoolsTheme): string {
+  switch (p) {
+    case "critical":
+      return t.danger;
+    case "high":
+      return "#f97316";
+    case "medium":
+      return "#eab308";
+    default:
+      return t.border;
+  }
 }
 
 function label(s: string): string {
@@ -108,17 +155,16 @@ function AttachmentThumb(props: { client: DevtoolsClient; att: AttachmentRecord 
 
 function DetailView(props: {
   client: DevtoolsClient;
-  kind: "bug" | "feature_request";
+  kind: OpsItemType;
   id: string;
 }): ReactNode {
   const t = useTheme();
   const { client, kind, id } = props;
-  const bugQuery = useBugDetail(client, kind === "bug" ? id : null);
-  const featureQuery = useFeatureDetail(client, kind === "feature_request" ? id : null);
-  const query = kind === "bug" ? bugQuery : featureQuery;
+  const query = useOpsDetail(client, id);
   const [mutating, setMutating] = useState(false);
   const [mutateError, setMutateError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const editableContent = kind === "bug" || kind === "feature_request";
 
   if (query.loading && !query.data) return <Loading />;
   if (query.error) return <ErrorState message={query.error} onRetry={query.refresh} />;
@@ -129,8 +175,7 @@ function DetailView(props: {
     setMutating(true);
     setMutateError(null);
     try {
-      if (kind === "bug") await client.updateBug(id, p);
-      else await client.updateFeatureRequest(id, p);
+      await client.updateOps(id, p);
       query.refresh();
     } catch (e) {
       setMutateError(e instanceof Error ? e.message : "Update failed.");
@@ -144,7 +189,7 @@ function DetailView(props: {
     setMutateError(null);
     try {
       const picked = await pickImageAttachment();
-      if (picked) {
+      if (picked && (kind === "bug" || kind === "feature_request")) {
         await client.uploadAttachment({
           reportKind: kind,
           reportId: id,
@@ -162,8 +207,8 @@ function DetailView(props: {
     }
   };
 
-  const bug = kind === "bug" ? bugQuery.data : null;
-  const feature = kind === "feature_request" ? featureQuery.data : null;
+  const isBug = kind === "bug";
+  const isFeature = kind === "feature_request";
   const pr = item.connectorData?.github?.pr;
 
   return (
@@ -177,58 +222,66 @@ function DetailView(props: {
       </View>
 
       <SectionLabel>Metadata</SectionLabel>
+      <KV k="Type" v={label(kind)} />
       {item.reporterEmail ? <KV k="Reporter" v={item.reporterEmail} /> : null}
+      {item.sourceRef ? <KV k="Source" v={item.sourceRef} /> : null}
       {item.pageUrl ? <KV k="Page" v={item.pageUrl} /> : null}
       <KV k="Created" v={new Date(item.createdAt).toLocaleString()} />
       {pr ? <KV k="Linked PR" v={`#${pr.number} · ${pr.url}`} accent /> : null}
 
-      {bug ? (
+      {isBug ? (
         <>
-          {bug.actualResult ? (
+          {item.actualResult ? (
             <>
               <SectionLabel>What happened</SectionLabel>
-              <Muted>{bug.actualResult}</Muted>
+              <Muted>{item.actualResult}</Muted>
             </>
           ) : null}
-          {bug.stepsToReproduce ? (
+          {item.stepsToReproduce ? (
             <>
               <SectionLabel>Steps to reproduce</SectionLabel>
-              <Muted>{bug.stepsToReproduce}</Muted>
+              <Muted>{item.stepsToReproduce}</Muted>
             </>
           ) : null}
-          {bug.expectedResult ? (
+          {item.expectedResult ? (
             <>
               <SectionLabel>Expected</SectionLabel>
-              <Muted>{bug.expectedResult}</Muted>
+              <Muted>{item.expectedResult}</Muted>
             </>
           ) : null}
         </>
       ) : null}
-      {feature ? (
+      {isFeature ? (
         <>
-          {feature.description ? (
+          {item.description ? (
             <>
               <SectionLabel>Description</SectionLabel>
-              <Muted>{feature.description}</Muted>
+              <Muted>{item.description}</Muted>
             </>
           ) : null}
-          {feature.useCase ? (
+          {item.useCase ? (
             <>
               <SectionLabel>Use case</SectionLabel>
-              <Muted>{feature.useCase}</Muted>
+              <Muted>{item.useCase}</Muted>
             </>
           ) : null}
         </>
       ) : null}
+      {!editableContent ? (
+        <Muted style={styles.autoNote}>
+          Auto-filed {label(kind)} ticket — its content isn’t editable here.
+        </Muted>
+      ) : null}
 
-      {item.attachments.length > 0 || getImagePicker() ? (
+      {(editableContent && (item.attachments.length > 0 || getImagePicker())) ||
+      item.attachments.length > 0 ? (
         <>
           <SectionLabel hint={uploading ? "uploading…" : undefined}>Attachments</SectionLabel>
           <View style={styles.thumbRow}>
             {item.attachments.map((att) => (
               <AttachmentThumb key={att.id} client={client} att={att} />
             ))}
-            {getImagePicker() ? (
+            {editableContent && getImagePicker() ? (
               <Chip label={uploading ? "…" : "+ Attach"} onPress={() => void attach()} />
             ) : null}
           </View>
@@ -238,13 +291,23 @@ function DetailView(props: {
       <SectionLabel hint={mutating ? "saving…" : undefined}>Status</SectionLabel>
       <ChipRow>
         {STATUSES.map((s) => (
-          <Chip key={s} label={label(s)} selected={item.status === s} onPress={() => void patch({ status: s })} />
+          <Chip
+            key={s}
+            label={label(s)}
+            selected={item.status === s}
+            onPress={() => void patch({ status: s })}
+          />
         ))}
       </ChipRow>
       <SectionLabel>Priority</SectionLabel>
       <ChipRow>
         {PRIORITIES.map((p) => (
-          <Chip key={p} label={label(p)} selected={item.priority === p} onPress={() => void patch({ priority: p })} />
+          <Chip
+            key={p}
+            label={label(p)}
+            selected={item.priority === p}
+            onPress={() => void patch({ priority: p })}
+          />
         ))}
       </ChipRow>
       {mutateError ? (
@@ -256,7 +319,6 @@ function DetailView(props: {
 
 // ── list + panel ─────────────────────────────────────────────────────────────
 
-type Sub = "bugs" | "features";
 type View_ = { name: "list" } | { name: "detail"; id: string; title: string } | { name: "create" };
 
 export function FeedbackPanel(props: {
@@ -264,12 +326,25 @@ export function FeedbackPanel(props: {
   config: DevtoolsConfig;
   bugContext?: Record<string, unknown>;
 }): ReactNode {
-  const [sub, setSub] = useState<Sub>("bugs");
+  const [sub, setSub] = useState<OpsItemType>("bug");
   const [view, setView] = useState<View_>({ name: "list" });
   const [search, setSearch] = useState("");
-  const bugsQuery = useFeedback(props.client);
-  const featuresQuery = useFeatureRequests(props.client);
-  const query = sub === "bugs" ? bugsQuery : featuresQuery;
+  // Lazy per-tab loading — only the active tab hits the network (results stay
+  // cached on the client, so switching back is instant).
+  const bugsQuery = useFeedback(sub === "bug" ? props.client : null);
+  const featuresQuery = useFeatureRequests(sub === "feature_request" ? props.client : null);
+  const errorsQuery = useErrors(sub === "error" ? props.client : null);
+  const alertsQuery = useAlerts(sub === "alert" ? props.client : null);
+  const query: QueryState<OpsItem[]> =
+    sub === "bug"
+      ? bugsQuery
+      : sub === "feature_request"
+        ? featuresQuery
+        : sub === "error"
+          ? errorsQuery
+          : alertsQuery;
+
+  const canCreate = sub === "bug" || sub === "feature_request";
 
   // The header's single ‹ Back drives the internal list ↔ detail/create nav —
   // no per-screen back button. Register a Back handler (+ title) while nested.
@@ -287,7 +362,7 @@ export function FeedbackPanel(props: {
       view.name === "detail"
         ? view.title
         : view.name === "create"
-          ? sub === "bugs"
+          ? sub === "bug"
             ? "New bug"
             : "New request"
           : null,
@@ -299,13 +374,7 @@ export function FeedbackPanel(props: {
   }, [nav, view, sub]);
 
   if (view.name === "detail") {
-    return (
-      <DetailView
-        client={props.client}
-        kind={sub === "bugs" ? "bug" : "feature_request"}
-        id={view.id}
-      />
-    );
+    return <DetailView client={props.client} kind={sub} id={view.id} />;
   }
 
   if (view.name === "create") {
@@ -314,7 +383,7 @@ export function FeedbackPanel(props: {
       props.client.invalidate();
       query.refresh();
     };
-    return sub === "bugs" ? (
+    return sub === "bug" ? (
       <BugForm
         config={props.config}
         client={props.client}
@@ -332,54 +401,74 @@ export function FeedbackPanel(props: {
   }
 
   const needle = search.trim().toLowerCase();
-  // Resolved / won't-fix items are never shown — the list stays focused on
-  // actionable tickets.
-  const items: Array<BugRecord | FeatureRequestRecord> = (query.data ?? []).filter((it) => {
-    if (TERMINAL.has(it.status)) return false;
-    if (needle && !it.title.toLowerCase().includes(needle)) return false;
-    return true;
-  });
+  // Resolved / won't-fix are never shown — the queue stays on open, actionable
+  // items. What's left is grouped into status sections (the row no longer
+  // carries a status badge).
+  const items = (query.data ?? []).filter(
+    (it) => !TERMINAL.has(it.status) && (!needle || it.title.toLowerCase().includes(needle)),
+  );
+  const byStatus = new Map<string, OpsItem[]>();
+  for (const it of items) {
+    const bucket = byStatus.get(it.status);
+    if (bucket) bucket.push(it);
+    else byStatus.set(it.status, [it]);
+  }
+  const orderedStatuses = [
+    ...STATUS_ORDER.filter((s) => byStatus.has(s)),
+    ...[...byStatus.keys()].filter((s) => !STATUS_ORDER.includes(s)),
+  ];
 
   return (
     <View style={styles.fill}>
       <ChipRow>
-        <Chip label="Bugs" selected={sub === "bugs"} onPress={() => setSub("bugs")} />
-        <Chip label="Features" selected={sub === "features"} onPress={() => setSub("features")} />
-        <Chip
-          label={sub === "bugs" ? "+ New bug" : "+ New request"}
-          onPress={() => setView({ name: "create" })}
-        />
+        {SUBS.map((s) => (
+          <Chip
+            key={s.kind}
+            label={s.label}
+            selected={sub === s.kind}
+            onPress={() => setSub(s.kind)}
+          />
+        ))}
       </ChipRow>
       <SearchInput value={search} onChangeText={setSearch} />
+      {canCreate ? (
+        <ChipRow>
+          <Chip
+            label={sub === "bug" ? "+ New bug" : "+ New request"}
+            onPress={() => setView({ name: "create" })}
+          />
+        </ChipRow>
+      ) : null}
       {query.loading && !query.data ? (
         <Loading />
       ) : query.error ? (
         <ErrorState message={query.error} onRetry={query.refresh} />
       ) : items.length === 0 ? (
         <View style={styles.empty}>
-          <Muted>
-            {needle
-              ? "No matches."
-              : sub === "bugs"
-                ? "No open bugs in the queue."
-                : "No open feature requests."}
-          </Muted>
+          <Muted>{needle ? "No matches." : "Nothing open here."}</Muted>
         </View>
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(it) => it.id}
-          refreshing={query.loading}
-          onRefresh={query.refresh}
+        <ScrollView
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <FeedbackRow
-              item={item}
-              onPress={() => setView({ name: "detail", id: item.id, title: item.title })}
-            />
-          )}
-        />
+          showsVerticalScrollIndicator={false}
+        >
+          {orderedStatuses.map((status) => {
+            const rows = byStatus.get(status) ?? [];
+            return (
+              <View key={status}>
+                <SectionLabel hint={String(rows.length)}>{label(status)}</SectionLabel>
+                {rows.map((item) => (
+                  <FeedbackRow
+                    key={item.id}
+                    item={item}
+                    onPress={() => setView({ name: "detail", id: item.id, title: item.title })}
+                  />
+                ))}
+              </View>
+            );
+          })}
+        </ScrollView>
       )}
     </View>
   );
@@ -427,14 +516,15 @@ function AgentChip(props: {
   );
 }
 
-function FeedbackRow(props: {
-  item: BugRecord | FeatureRequestRecord;
-  onPress: () => void;
-}): ReactNode {
+function FeedbackRow(props: { item: OpsItem; onPress: () => void }): ReactNode {
   const t = useTheme();
   const { item } = props;
   const info = feedbackAgentInfo(item);
   const tint = info ? agentTint(info.state, t) : null;
+  // Left border encodes priority; the AI/PR pill is the only badge.
+  const meta = [item.reporterEmail, item.priority ? label(item.priority) : null, timeAgo(Date.now(), item.createdAt)]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <Pressable
       onPress={props.onPress}
@@ -443,21 +533,22 @@ function FeedbackRow(props: {
       <View
         style={[
           styles.row,
-          { backgroundColor: t.surface, borderColor: t.border, borderRadius: t.radius },
-          tint ? { borderLeftColor: tint, borderLeftWidth: 3 } : null,
+          {
+            backgroundColor: t.surface,
+            borderColor: t.border,
+            borderRadius: t.radius,
+            borderLeftColor: priorityTint(item.priority, t),
+            borderLeftWidth: 3,
+          },
         ]}
       >
         <View style={styles.rowMain}>
           <Text numberOfLines={1} style={[styles.rowTitle, { color: t.fg }]}>
             {item.title}
           </Text>
-          <Muted numberOfLines={1}>
-            {[item.reporterEmail, timeAgo(Date.now(), item.createdAt)].filter(Boolean).join(" · ")}
-          </Muted>
+          {meta ? <Muted numberOfLines={1}>{meta}</Muted> : null}
         </View>
         {info && tint ? <AgentChip info={info} color={tint} /> : null}
-        <Badge label={label(item.status)} tone={statusTone(item.status)} />
-        {item.priority ? <Badge label={label(item.priority)} tone="accent" /> : null}
       </View>
     </Pressable>
   );
@@ -466,6 +557,7 @@ function FeedbackRow(props: {
 const styles = StyleSheet.create({
   agentChip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
   agentChipText: { fontSize: 10.5, fontWeight: "700" },
+  autoNote: { marginTop: 10 },
   detailBadges: { flexDirection: "row", gap: 8, marginBottom: 12 },
   detailScroll: { paddingBottom: 32 },
   detailTitle: { fontSize: 17, fontWeight: "700", marginBottom: 8 },

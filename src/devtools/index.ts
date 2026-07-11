@@ -28,6 +28,8 @@ export type {
   GateRule,
   GateStackEntry,
   KeyRecord,
+  OpsItemDetail,
+  OpsItemType,
   ProfileRecord,
   ProjectModules,
   ProjectRecord,

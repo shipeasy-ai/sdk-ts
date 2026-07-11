@@ -9,6 +9,7 @@ import type { DevtoolsClient } from "../devtools/api";
 import { useFeatureForm, useIdentityEmail } from "./hooks";
 import type { DevtoolsConfig } from "./hooks";
 import { ControlledField, ScreenshotAttach } from "./bug-form";
+import { CreateSuccess } from "./create-success";
 import { Button, Muted, Title, useTheme } from "./ui";
 
 export function FeatureForm(props: {
@@ -27,23 +28,14 @@ export function FeatureForm(props: {
 
   if (state.result) {
     return (
-      <View style={styles.done}>
-        <View style={[styles.doneMark, { backgroundColor: t.accentSoft }]}>
-          <Text style={[styles.doneGlyph, { color: t.ok }]}>✓</Text>
-        </View>
-        <Title>Thanks — request filed</Title>
-        {state.result.number !== undefined ? (
-          <View style={[styles.doneTicket, { borderColor: t.border, backgroundColor: t.surface }]}>
-            <Text style={[styles.doneTicketNo, { color: t.accent }]}>#{state.result.number}</Text>
-          </View>
-        ) : null}
-        <Muted style={styles.doneDetail}>
-          {state.result.deduped
-            ? "This matches a request already in the queue — we bumped it instead of duplicating."
-            : "Your feature request landed in the queue."}
-        </Muted>
-        <Button title="Done" onPress={props.onDone} style={styles.doneButton} />
-      </View>
+      <CreateSuccess
+        kind="feature"
+        authed={props.client !== null}
+        number={state.result.number}
+        deduped={state.result.deduped}
+        onDone={props.onDone}
+        onAnother={state.reset}
+      />
     );
   }
 
@@ -126,20 +118,6 @@ export function FeatureForm(props: {
 const styles = StyleSheet.create({
   blurb: { marginBottom: 18 },
   cancel: { marginTop: 6 },
-  done: { alignItems: "center", gap: 10, padding: 24, paddingTop: 40 },
-  doneButton: { alignSelf: "stretch", marginTop: 18 },
-  doneDetail: { paddingHorizontal: 12, textAlign: "center" },
-  doneGlyph: { fontSize: 26, fontWeight: "700" },
-  doneMark: {
-    alignItems: "center",
-    borderRadius: 999,
-    height: 56,
-    justifyContent: "center",
-    marginBottom: 4,
-    width: 56,
-  },
-  doneTicket: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 3 },
-  doneTicketNo: { fontSize: 13, fontVariant: ["tabular-nums"], fontWeight: "700" },
   form: { paddingBottom: 32, paddingTop: 6 },
   heading: { marginBottom: 4 },
   identityDot: { borderRadius: 999, height: 8, width: 8 },

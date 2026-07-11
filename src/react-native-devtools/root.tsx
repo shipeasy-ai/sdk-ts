@@ -33,7 +33,7 @@ import { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
 import { FeedbackPanel } from "./feedback-panel";
 import { UserPanel } from "./user-panel";
 import { EventsPanel } from "./events-panel";
-import { I18nPanel } from "./i18n-panel";
+import { OverridesPanel } from "./overrides-panel";
 import { resolveTheme } from "./theme";
 import type { DevtoolsTheme } from "./theme";
 import { canCaptureScreen, captureScreenShot } from "./expo-adapters";
@@ -88,7 +88,8 @@ type Screen =
   | "experiments"
   | "feedback"
   | "i18n"
-  | "events";
+  | "events"
+  | "overrides";
 
 // The devtools modules, rendered as a drill-in menu (one big-tap row each) —
 // far friendlier on a phone than a cramped horizontal tab strip. The icon is
@@ -105,7 +106,6 @@ const SECTIONS: Array<{
   { key: "configs", label: "Configs", icon: "configs", module: "configs" },
   { key: "experiments", label: "Experiments", icon: "experiments", module: "experiments" },
   { key: "feedback", label: "Feedback", icon: "feedback", module: "feedback" },
-  { key: "i18n", label: "I18n", icon: "i18n", module: "translations" },
   { key: "events", label: "Events", icon: "events", module: "events" },
 ];
 
@@ -225,8 +225,8 @@ function Sheet(props: {
     [],
   );
 
-  // Opening a section from the menu clears any stale drill-in target so the
-  // section lands on its list, not a previously-open sub-screen.
+  // Opening a section (or the overrides screen) from anywhere clears any stale
+  // drill-in target so it lands on its own list, not a previously-open sub-screen.
   const openSection = (key: Screen) => {
     setEditorConfig(null);
     setDetailExperiment(null);
@@ -234,6 +234,16 @@ function Sheet(props: {
     setSectionTitle(null);
     setScreen(key);
   };
+
+  // Count of active engine overrides (forced flags/configs/experiment variants)
+  // — drives the header's overrides pill + highlight. Live: the bridge re-reads
+  // on every override change (useEngineBridge bumps a generation).
+  const overrides = bridge ? bridge.getOverrides() : null;
+  const overrideCount = overrides
+    ? Object.keys(overrides.flags).length +
+      Object.keys(overrides.configs).length +
+      Object.keys(overrides.experiments).length
+    : 0;
 
   // The public bug button renders ONLY when the project opted in (surfaced via
   // /sdk/evaluate). A logged-in session can always file (authed path).
@@ -258,7 +268,9 @@ function Sheet(props: {
         ? "Report a bug"
         : screen === "feature"
           ? "Request a feature"
-          : (sectionTitle ?? activeSection?.label ?? null);
+          : screen === "overrides"
+            ? "Active overrides"
+            : (sectionTitle ?? activeSection?.label ?? null);
   const goBack = () => {
     if (editorConfig) setEditorConfig(null);
     else if (detailExperiment) setDetailExperiment(null);
@@ -269,7 +281,17 @@ function Sheet(props: {
   return (
     <SheetNavContext.Provider value={nav}>
       <View style={styles.sheetInner}>
-      <View style={[styles.header, { borderBottomColor: t.border }]}>
+      {/* The header highlights (accent underline) while any override is active,
+          so it's obvious the app is being driven off its real evaluated state. */}
+      <View
+        style={[
+          styles.header,
+          {
+            borderBottomColor: overrideCount > 0 ? t.accent : t.border,
+            borderBottomWidth: overrideCount > 0 ? 2 : StyleSheet.hairlineWidth,
+          },
+        ]}
+      >
         {subTitle ? (
           <Pressable
             accessibilityRole="button"
@@ -289,19 +311,33 @@ function Sheet(props: {
             </Text>
           </View>
         )}
-        {auth.session ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Log out"
-            onPress={() => void auth.logout()}
-          >
-            <Text style={[styles.logout, { color: t.accent }]}>Log out</Text>
-          </Pressable>
-        ) : (
-          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={props.close}>
-            <Text style={[styles.closeGlyph, { color: t.fgMuted }]}>✕</Text>
-          </Pressable>
-        )}
+        <View style={styles.headerRight}>
+          {overrideCount > 0 && screen !== "overrides" ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${overrideCount} active overrides`}
+              onPress={() => openSection("overrides")}
+              style={[styles.overridePill, { backgroundColor: t.accent }]}
+            >
+              <Text style={[styles.overridePillText, { color: t.accentFg }]}>
+                ⚡ {overrideCount}
+              </Text>
+            </Pressable>
+          ) : null}
+          {auth.session ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Log out"
+              onPress={() => void auth.logout()}
+            >
+              <Text style={[styles.logout, { color: t.accent }]}>Log out</Text>
+            </Pressable>
+          ) : (
+            <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={props.close}>
+              <Text style={[styles.closeGlyph, { color: t.fgMuted }]}>✕</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {screen === "bug" ? (
@@ -321,6 +357,11 @@ function Sheet(props: {
             context={props.bugContext}
             onDone={() => setScreen("home")}
           />
+        </View>
+      ) : screen === "overrides" ? (
+        // App-level (engine bridge), so reachable regardless of devtools login.
+        <View style={styles.panel}>
+          <OverridesPanel bridge={bridge} />
         </View>
       ) : auth.session && auth.client ? (
         activeSection ? (
@@ -350,8 +391,6 @@ function Sheet(props: {
                   config={props.config}
                   bugContext={props.bugContext}
                 />
-              ) : activeSection.key === "i18n" ? (
-                <I18nPanel client={auth.client} />
               ) : activeSection.key === "events" ? (
                 <EventsPanel />
               ) : (
@@ -595,8 +634,11 @@ const styles = StyleSheet.create({
   },
   headerBack: { alignItems: "center", flexDirection: "row", gap: 3, marginLeft: -4 },
   headerBrand: { alignItems: "center", flexDirection: "row", gap: 8 },
+  headerRight: { alignItems: "center", flexDirection: "row", gap: 10 },
   headerTitle: { fontSize: 15, fontWeight: "700", letterSpacing: -0.2 },
   headerTitleDim: { fontWeight: "500" },
+  overridePill: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
+  overridePillText: { fontSize: 12, fontVariant: ["tabular-nums"], fontWeight: "800" },
   home: { flex: 1, gap: 10, padding: 20, paddingBottom: 16 },
   homeActions: { gap: 10, marginTop: 6 },
   homeBrand: { alignItems: "center", gap: 8, paddingBottom: 10, paddingTop: 18 },
