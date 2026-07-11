@@ -101,8 +101,10 @@ overlay); tapping a row opens that panel with a **‹ Back** affordance:
   override** restores the live value.
 - **Configs** — effective values with a JSON override editor (schema-checked at
   the root) and **Restore**.
-- **Experiments** — status, universe, weights, the live assignment, and
-  per-variant forcing.
+- **Experiments** — grouped into collapsible **status sections** (Running,
+  Draft, Stopped, Archived). **Running** is preloaded and open; the rest are
+  folded and don't fetch until first expanded. Each row shows universe, weights,
+  the live assignment, and per-variant forcing.
 - **Feedback** — bugs + feature requests with Active/All filtering, detail
   views, inline **status / priority editing**, attachment previews + screenshot
   upload (expo-image-picker), and the create forms.

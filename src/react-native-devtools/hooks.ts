@@ -360,6 +360,25 @@ export function useExperiments(client: DevtoolsClient | null): QueryState<Experi
   return useClientQuery(client, (c) => c.experiments());
 }
 
+/** Experiments of a single lifecycle status, fetched lazily: the query only
+ *  runs once `enabled` (i.e. the section is expanded). Archived comes from the
+ *  archive endpoint; the rest share the non-archived list (memoized on the
+ *  client, so sibling sections don't refetch), filtered by status here. */
+export function useExperimentsByStatus(
+  client: DevtoolsClient | null,
+  status: ExperimentRecord["status"],
+  enabled: boolean,
+): QueryState<ExperimentRecord[]> {
+  return useClientQuery(
+    enabled ? client : null,
+    (c) =>
+      c
+        .experiments(status === "archived" ? { archived: true } : undefined)
+        .then((list) => list.filter((e) => e.status === status)),
+    `exp:${status}`,
+  );
+}
+
 export function useUniverses(client: DevtoolsClient | null): QueryState<UniverseRecord[]> {
   return useClientQuery(client, (c) => c.universes());
 }

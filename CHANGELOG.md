@@ -4,6 +4,12 @@
 
 ### React Native devtools overlay — home redesign, public feature requests, screenshots, key-based login
 
+- **Experiments grouped by status.** The flat list becomes collapsible
+  **Running / Draft / Stopped / Archived** sections. Running is preloaded and
+  open; the others are folded and **lazy-load on first expand** (Archived hits
+  the archive endpoint; the rest share the memoized non-archived list). New
+  `useExperimentsByStatus` hook + `DevtoolsClient.experiments({ archived })`.
+
 - **Feature Flags panel — evaluation flow + per-flag switch.** Each flag row now
   carries an on/off **switch** (forces the value live) in place of the old
   live-value badge. Expanding a flag renders its full gatekeeper **flow**

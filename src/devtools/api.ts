@@ -360,10 +360,17 @@ export class DevtoolsClient {
     });
   }
 
-  experiments(): Promise<ExperimentRecord[]> {
-    return this.memo("experiments", () =>
+  /** Experiments list. The endpoint returns the non-archived set (running /
+   *  draft / stopped) by default; pass `{ archived: true }` for the archive tab
+   *  (a separate memo bucket so the overlay's Archived section loads on demand). */
+  experiments(opts?: { archived?: boolean }): Promise<ExperimentRecord[]> {
+    const archived = opts?.archived === true;
+    return this.memo(archived ? "experiments:archived" : "experiments", () =>
       this.drain<ExperimentRecord>("/api/admin/experiments", (query) =>
-        listExperiments({ client: this.api, query }),
+        listExperiments({
+          client: this.api,
+          query: archived ? { ...query, status: "archived" } : query,
+        }),
       ),
     );
   }

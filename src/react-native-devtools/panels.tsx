@@ -5,14 +5,14 @@
 // web overlay's param+reload flow becomes bridge.setFlagOverride() etc.).
 
 import { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import type { DevtoolsClient } from "../devtools/api";
 import type { ConfigRecord, ExperimentRecord, GateRecord } from "../devtools/types";
 import type { DevtoolsEngineBridge } from "../devtools/bridge";
 import { buildGateFlow, evalStepMatch, ruleSummary } from "../devtools/gate-flow";
 import type { GateFlowStep, StepSource } from "../devtools/gate-flow";
-import { useConfigs, useEngineBridge, useExperiments, useGates } from "./hooks";
+import { useConfigs, useEngineBridge, useExperimentsByStatus, useGates } from "./hooks";
 import type { QueryState } from "./hooks";
 import type { DevtoolsTheme } from "./theme";
 import {
@@ -418,19 +418,74 @@ function ExperimentRow(props: {
   );
 }
 
+// Experiments are grouped by lifecycle status. Running is preloaded + open;
+// the rest are folded and don't fetch until first expanded (lazy — see
+// useExperimentsByStatus). "stopped" is the paused/disabled bucket.
+const EXPERIMENT_SECTIONS: Array<{ status: ExperimentRecord["status"]; label: string }> = [
+  { status: "running", label: "Running" },
+  { status: "draft", label: "Draft" },
+  { status: "stopped", label: "Stopped" },
+  { status: "archived", label: "Archived" },
+];
+
+function ExperimentSection(props: {
+  client: DevtoolsClient;
+  bridge: DevtoolsEngineBridge | null;
+  status: ExperimentRecord["status"];
+  label: string;
+  defaultOpen: boolean;
+}): ReactNode {
+  const t = useTheme();
+  const [open, setOpen] = useState(props.defaultOpen);
+  const query = useExperimentsByStatus(props.client, props.status, open);
+  const items = query.data ?? [];
+  return (
+    <View style={styles.section}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={props.label}
+        onPress={() => setOpen((o) => !o)}
+        style={styles.sectionHeader}
+      >
+        <Text style={[styles.sectionCaret, { color: t.fgMuted }]}>{open ? "▾" : "▸"}</Text>
+        <Text style={[styles.sectionTitle, { color: t.fg }]}>{props.label}</Text>
+        {open && query.loading ? (
+          <ActivityIndicator size="small" color={t.accent} />
+        ) : open && !query.error ? (
+          <View style={[styles.sectionCount, { backgroundColor: t.accentSoft }]}>
+            <Text style={[styles.sectionCountText, { color: t.accent }]}>{items.length}</Text>
+          </View>
+        ) : null}
+      </Pressable>
+      {open ? (
+        query.error ? (
+          <ErrorState message={query.error} onRetry={query.refresh} />
+        ) : query.loading && items.length === 0 ? null : items.length === 0 ? (
+          <Muted style={styles.sectionEmpty}>No {props.label.toLowerCase()} experiments.</Muted>
+        ) : (
+          items.map((e) => <ExperimentRow key={e.id} experiment={e} bridge={props.bridge} />)
+        )
+      ) : null}
+    </View>
+  );
+}
+
 export function ExperimentsPanel(props: { client: DevtoolsClient }): ReactNode {
-  const query = useExperiments(props.client);
   const bridge = useEngineBridge();
   return (
-    <PanelList<ExperimentRecord>
-      query={query}
-      keyFor={(e) => e.id}
-      emptyLabel="No experiments yet."
-      matches={(e, n) =>
-        e.name.toLowerCase().includes(n) || e.universe.toLowerCase().includes(n)
-      }
-      render={(e) => <ExperimentRow experiment={e} bridge={bridge} />}
-    />
+    <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
+      {EXPERIMENT_SECTIONS.map((s) => (
+        <ExperimentSection
+          key={s.status}
+          client={props.client}
+          bridge={bridge}
+          status={s.status}
+          label={s.label}
+          defaultOpen={s.status === "running"}
+        />
+      ))}
+    </ScrollView>
   );
 }
 
@@ -444,6 +499,18 @@ const styles = StyleSheet.create({
   nameCell: { flex: 1, gap: 2, marginRight: 8 },
   noBridge: { marginTop: 4 },
   rowTop: { alignItems: "center", flexDirection: "row", gap: 8 },
+  section: { marginBottom: 4 },
+  sectionCaret: { fontSize: 12, width: 14 },
+  sectionCount: { borderRadius: 999, minWidth: 20, paddingHorizontal: 6, paddingVertical: 1 },
+  sectionCountText: { fontSize: 11, fontWeight: "700", textAlign: "center" },
+  sectionEmpty: { paddingBottom: 8, paddingLeft: 22 },
+  sectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    paddingVertical: 10,
+  },
+  sectionTitle: { flex: 1, fontSize: 13, fontWeight: "700", letterSpacing: 0.3 },
   served: { alignItems: "center", flexDirection: "row", gap: 6, marginBottom: 4 },
   servedLabel: { fontSize: 12 },
   step: { flexDirection: "row", gap: 8, marginBottom: 6 },
