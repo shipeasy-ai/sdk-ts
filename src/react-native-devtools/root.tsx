@@ -24,9 +24,10 @@ import {
   Text,
   View,
 } from "react-native";
-import type { ProjectModules } from "../devtools/types";
+import type { ConfigRecord, ProjectModules } from "../devtools/types";
 import { BugForm } from "./bug-form";
 import { FeatureForm } from "./feature-form";
+import { ConfigEditorScreen } from "./config-editor";
 import { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
 import { FeedbackPanel } from "./feedback-panel";
 import { UserPanel } from "./user-panel";
@@ -42,6 +43,7 @@ import {
   ensureEventCapture,
   useDevtoolsAuth,
   useDevtoolsCapabilities,
+  useEngineBridge,
   useProject,
   useShakeToOpen,
 } from "./hooks";
@@ -200,7 +202,10 @@ function Sheet(props: {
   const auth = useDevtoolsAuth(props.config);
   const capabilities = useDevtoolsCapabilities();
   const project = useProject(auth.client);
+  const bridge = useEngineBridge();
   const { screen, setScreen } = props;
+  // Configs drill a second level: a row opens the full-page nested editor.
+  const [editorConfig, setEditorConfig] = useState<ConfigRecord | null>(null);
 
   // The public bug button renders ONLY when the project opted in (surfaced via
   // /sdk/evaluate). A logged-in session can always file (authed path).
@@ -215,12 +220,19 @@ function Sheet(props: {
   // section key shows that panel. A sub-screen (a section, or the bug/feature
   // forms) swaps the header brand for a ‹ Back that returns to home/menu.
   const activeSection = sections.find((s) => s.key === screen) ?? null;
-  const subTitle =
-    screen === "bug"
+  // The config editor is a level below the Configs section: its Back returns to
+  // the config list, not all the way to the menu.
+  const subTitle = editorConfig
+    ? editorConfig.name
+    : screen === "bug"
       ? "Report a bug"
       : screen === "feature"
         ? "Request a feature"
         : (activeSection?.label ?? null);
+  const goBack = () => {
+    if (editorConfig) setEditorConfig(null);
+    else setScreen("home");
+  };
 
   return (
     <View style={styles.sheetInner}>
@@ -229,7 +241,7 @@ function Sheet(props: {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            onPress={() => setScreen("home")}
+            onPress={goBack}
             style={styles.headerBack}
           >
             <Text style={[styles.backChevron, { color: t.accent }]}>‹</Text>
@@ -284,7 +296,15 @@ function Sheet(props: {
               {activeSection.key === "user" ? (
                 <UserPanel />
               ) : activeSection.key === "configs" ? (
-                <ConfigsPanel client={auth.client} />
+                editorConfig ? (
+                  <ConfigEditorScreen
+                    config={editorConfig}
+                    bridge={bridge}
+                    onClose={() => setEditorConfig(null)}
+                  />
+                ) : (
+                  <ConfigsPanel client={auth.client} onOpen={setEditorConfig} />
+                )
               ) : activeSection.key === "experiments" ? (
                 <ExperimentsPanel client={auth.client} />
               ) : activeSection.key === "feedback" ? (

@@ -21,7 +21,6 @@ import {
   Chip,
   ChipRow,
   ErrorState,
-  Field,
   KV,
   Loading,
   Muted,
@@ -234,110 +233,39 @@ export function GatesPanel(props: { client: DevtoolsClient }): ReactNode {
 
 // ── Configs ──────────────────────────────────────────────────────────────────
 
-function pretty(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2) ?? "undefined";
-  } catch {
-    return String(value);
-  }
-}
-
-function ConfigRow(props: { config: ConfigRecord; bridge: DevtoolsEngineBridge | null }): ReactNode {
+/** A config list row — a navigational entry that drills into the full-page
+ *  nested editor (ConfigEditorScreen). Shows a compact value preview + whether
+ *  a local override is active. */
+function ConfigRow(props: {
+  config: ConfigRecord;
+  bridge: DevtoolsEngineBridge | null;
+  onOpen: (c: ConfigRecord) => void;
+}): ReactNode {
   const t = useTheme();
   const { config, bridge } = props;
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [parseError, setParseError] = useState<string | null>(null);
-
   const overrides = bridge ? bridge.getOverrides().configs : {};
   const forced = Object.prototype.hasOwnProperty.call(overrides, config.name);
   const live = bridge ? bridge.getConfig(config.name) : undefined;
-  const effective = forced ? overrides[config.name] : (live !== undefined ? live : config.valueJson);
+  const effective = forced ? overrides[config.name] : live !== undefined ? live : config.valueJson;
   const preview = JSON.stringify(effective ?? {});
-
-  const apply = () => {
-    if (!bridge) return;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(draft) as unknown;
-    } catch (e) {
-      setParseError(e instanceof Error ? e.message : "Invalid JSON");
-      return;
-    }
-    // Configs are object-shaped post-migration; hold the editor to the same
-    // bar the web schema form enforces at its root.
-    const schemaType = (config.schema as { type?: string }).type;
-    if (schemaType === "object" && (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))) {
-      setParseError("This config's schema expects a JSON object at the root.");
-      return;
-    }
-    setParseError(null);
-    bridge.setConfigOverride(config.name, parsed);
-    setEditing(false);
-  };
-
   return (
-    <Row onPress={() => setOpen((o) => !o)}>
-      <View style={styles.fill}>
-        <View style={styles.rowTop}>
-          <NameCell
-            name={config.name}
-            sub={preview.length > 60 ? `${preview.slice(0, 60)}…` : preview}
-          />
-          {forced ? <Badge label="forced" tone="accent" /> : null}
-        </View>
-        {open ? (
-          <View style={styles.detail}>
-            <SectionLabel hint={forced ? "override" : "effective"}>Value</SectionLabel>
-            <Text style={[styles.json, { color: t.fg }]} selectable>
-              {pretty(effective)}
-            </Text>
-            {bridge ? (
-              editing ? (
-                <View>
-                  <Field
-                    label="Override value (JSON)"
-                    value={draft}
-                    onChangeText={setDraft}
-                    multiline
-                    autoCapitalize="none"
-                    error={parseError ?? undefined}
-                  />
-                  <ChipRow>
-                    <Chip label="Apply override" selected onPress={apply} />
-                    <Chip label="Cancel" onPress={() => setEditing(false)} />
-                  </ChipRow>
-                </View>
-              ) : (
-                <ChipRow>
-                  <Chip
-                    label="Edit override"
-                    onPress={() => {
-                      setDraft(pretty(effective));
-                      setParseError(null);
-                      setEditing(true);
-                    }}
-                  />
-                  {forced ? (
-                    <Chip
-                      label="Restore"
-                      onPress={() => bridge.removeOverride("config", config.name)}
-                    />
-                  ) : null}
-                </ChipRow>
-              )
-            ) : (
-              <NoBridgeHint />
-            )}
-          </View>
-        ) : null}
+    <Row onPress={() => props.onOpen(config)}>
+      <View style={styles.rowTop}>
+        <NameCell
+          name={config.name}
+          sub={preview.length > 60 ? `${preview.slice(0, 60)}…` : preview}
+        />
+        {forced ? <Badge label="override" tone="accent" /> : null}
+        <Text style={[styles.chevron, { color: t.fgMuted }]}>›</Text>
       </View>
     </Row>
   );
 }
 
-export function ConfigsPanel(props: { client: DevtoolsClient }): ReactNode {
+export function ConfigsPanel(props: {
+  client: DevtoolsClient;
+  onOpen: (c: ConfigRecord) => void;
+}): ReactNode {
   const query = useConfigs(props.client);
   const bridge = useEngineBridge();
   return (
@@ -346,7 +274,7 @@ export function ConfigsPanel(props: { client: DevtoolsClient }): ReactNode {
       keyFor={(c) => c.id}
       emptyLabel="No dynamic configs yet."
       matches={(c, n) => c.name.toLowerCase().includes(n)}
-      render={(c) => <ConfigRow config={c} bridge={bridge} />}
+      render={(c) => <ConfigRow config={c} bridge={bridge} onOpen={props.onOpen} />}
     />
   );
 }
@@ -490,10 +418,10 @@ export function ExperimentsPanel(props: { client: DevtoolsClient }): ReactNode {
 }
 
 const styles = StyleSheet.create({
+  chevron: { fontSize: 22, fontWeight: "400" },
   detail: { marginTop: 10 },
   empty: { alignItems: "center", padding: 32 },
   fill: { flex: 1 },
-  json: { fontFamily: "Menlo", fontSize: 11, marginBottom: 8 },
   list: { paddingBottom: 24 },
   name: { fontSize: 15, fontWeight: "600" },
   nameCell: { flex: 1, gap: 2, marginRight: 8 },

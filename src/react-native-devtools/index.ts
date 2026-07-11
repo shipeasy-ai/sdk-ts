@@ -47,6 +47,7 @@ export type {
 } from "./hooks";
 
 export { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
+export { ConfigEditorScreen } from "./config-editor";
 export { FeedbackPanel } from "./feedback-panel";
 export { UserPanel } from "./user-panel";
 export { EventsPanel } from "./events-panel";

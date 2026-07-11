@@ -99,8 +99,11 @@ overlay); tapping a row opens that panel with a **‹ Back** affordance:
   locally against the identify() attributes) and each rollout step's %. The
   served value + source (live vs forced override) is shown up top; **Clear
   override** restores the live value.
-- **Configs** — effective values with a JSON override editor (schema-checked at
-  the root) and **Restore**.
+- **Configs** — each config drills into a **full-page nested editor**: a tree
+  view of the effective value with expand/collapse, typed leaf controls
+  (text / number / switch), add & remove fields on objects and arrays, plus a
+  **raw JSON** escape hatch. Applying writes a local override (schema-checked at
+  the root); **Restore live** clears it.
 - **Experiments** — grouped into collapsible **status sections** (Running,
   Draft, Stopped, Archived). **Running** is preloaded and open; the rest are
   folded and don't fetch until first expanded. Each row shows universe, weights,

@@ -4,6 +4,13 @@
 
 ### React Native devtools overlay — home redesign, public feature requests, screenshots, key-based login
 
+- **Full-page nested config editor.** Tapping a config now drills into a
+  dedicated editor screen (`ConfigEditorScreen`) instead of an inline JSON box:
+  a tree view of the value with expand/collapse, typed leaf controls (text /
+  number / switch), add & remove fields on objects and arrays, and a raw-JSON
+  escape hatch. Applying writes an override (root schema-checked); Restore live
+  clears it. The config list rows become navigational.
+
 - **Experiments grouped by status.** The flat list becomes collapsible
   **Running / Draft / Stopped / Archived** sections. Running is preloaded and
   open; the others are folded and **lazy-load on first expand** (Archived hits
