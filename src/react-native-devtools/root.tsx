@@ -207,7 +207,13 @@ function Sheet(props: {
   return (
     <View style={styles.sheetInner}>
       <View style={[styles.header, { borderBottomColor: t.border }]}>
-        <Title>Shipeasy devtools</Title>
+        <View style={styles.headerBrand}>
+          <BrandMark size={22} />
+          <Text style={[styles.headerTitle, { color: t.fg }]}>
+            Shipeasy{" "}
+            <Text style={[styles.headerTitleDim, { color: t.fgMuted }]}>Inspector</Text>
+          </Text>
+        </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={props.close}>
           <Text style={[styles.closeGlyph, { color: t.fgMuted }]}>✕</Text>
         </Pressable>
@@ -309,12 +315,32 @@ function Sheet(props: {
 // ── logged-out home ───────────────────────────────────────────────────────────
 
 /** The Shipeasy brand mark, drawn with plain Views (no SVG/image deps): the
- *  rounded accent tile with the inset app square — same geometry as logo.svg. */
-function BrandMark(): ReactNode {
+ *  rounded accent tile with the inset app square — same geometry as logo.svg.
+ *  `size` scales the whole mark (default 46; the header uses a compact 22). */
+function BrandMark(props: { size?: number }): ReactNode {
   const t = useTheme();
+  const size = props.size ?? 46;
+  const inner = Math.round(size * 0.56);
   return (
-    <View style={[styles.brandMark, { backgroundColor: t.accent }]}>
-      <View style={[styles.brandMarkInner, { backgroundColor: t.bg }]} />
+    <View
+      style={[
+        styles.brandMark,
+        {
+          backgroundColor: t.accent,
+          borderRadius: Math.round(size * 0.26),
+          height: size,
+          width: size,
+        },
+      ]}
+    >
+      <View
+        style={{
+          backgroundColor: t.bg,
+          borderRadius: Math.round(inner * 0.27),
+          height: inner,
+          width: inner,
+        }}
+      />
     </View>
   );
 }
@@ -434,14 +460,7 @@ const styles = StyleSheet.create({
   actionSub: { fontSize: 12, lineHeight: 16 },
   actionTitle: { fontSize: 15, fontWeight: "600" },
   backdrop: { backgroundColor: "rgba(0,0,0,0.55)", flex: 1, justifyContent: "flex-end" },
-  brandMark: {
-    alignItems: "center",
-    borderRadius: 12,
-    height: 46,
-    justifyContent: "center",
-    width: 46,
-  },
-  brandMarkInner: { borderRadius: 7, height: 26, width: 26 },
+  brandMark: { alignItems: "center", justifyContent: "center" },
   // Invisible but mounted — captureScreen must shoot the app, and toggling the
   // Modal instead would unmount the form state.
   captureHidden: { opacity: 0 },
@@ -455,8 +474,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 9,
   },
+  headerBrand: { alignItems: "center", flexDirection: "row", gap: 8 },
+  headerTitle: { fontSize: 15, fontWeight: "700", letterSpacing: -0.2 },
+  headerTitleDim: { fontWeight: "500" },
   home: { flex: 1, gap: 10, padding: 20, paddingBottom: 16 },
   homeActions: { gap: 10, marginTop: 6 },
   homeBrand: { alignItems: "center", gap: 8, paddingBottom: 10, paddingTop: 18 },
