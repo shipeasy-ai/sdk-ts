@@ -15,6 +15,7 @@ export type { DevtoolsHandle, ShipeasyDevtoolsProps } from "./root";
 
 export {
   ScreenCaptureContext,
+  SheetNavContext,
   ensureEventCapture,
   useBugForm,
   useBugDetail,
@@ -43,6 +44,7 @@ export type {
   FeatureFormState,
   QueryState,
   ScreenCapture,
+  SheetNav,
   ShakeOptions,
 } from "./hooks";
 

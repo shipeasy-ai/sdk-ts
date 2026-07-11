@@ -3,8 +3,8 @@
 // priority editing, attachment previews (authed blob → data URI), image
 // attachment upload (optional expo-image-picker), and the create forms.
 
-import { useEffect, useState } from "react";
-import { FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import type { DevtoolsClient } from "../devtools/api";
 import type {
@@ -14,11 +14,14 @@ import type {
   BugStatus,
   FeatureRequestRecord,
 } from "../devtools/types";
-import { useBugDetail, useFeatureDetail, useFeatureRequests, useFeedback } from "./hooks";
+import { feedbackAgentInfo, FEEDBACK_AGENT_LABEL } from "../devtools/feedback-state";
+import type { FeedbackAgentState } from "../devtools/feedback-state";
+import { useBugDetail, useFeatureDetail, useFeatureRequests, useFeedback, useSheetNav } from "./hooks";
 import { pickImageAttachment, getImagePicker } from "./expo-adapters";
 import { BugForm } from "./bug-form";
 import { FeatureForm } from "./feature-form";
 import type { DevtoolsConfig } from "./hooks";
+import type { DevtoolsTheme } from "./theme";
 import {
   Badge,
   Chip,
@@ -107,7 +110,6 @@ function DetailView(props: {
   client: DevtoolsClient;
   kind: "bug" | "feature_request";
   id: string;
-  onBack: () => void;
 }): ReactNode {
   const t = useTheme();
   const { client, kind, id } = props;
@@ -166,9 +168,6 @@ function DetailView(props: {
 
   return (
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.detailScroll}>
-      <Text style={[styles.detailBack, { color: t.accent }]} onPress={props.onBack}>
-        ‹ Back
-      </Text>
       <Text style={[styles.detailTitle, { color: t.fg }]} selectable>
         {item.title}
       </Text>
@@ -177,10 +176,11 @@ function DetailView(props: {
         {item.priority ? <Badge label={label(item.priority)} tone="accent" /> : null}
       </View>
 
-      {item.reporterEmail ? <KV k="reporter" v={item.reporterEmail} /> : null}
-      {item.pageUrl ? <KV k="page" v={item.pageUrl} /> : null}
-      <KV k="created" v={timeAgo(Date.now(), item.createdAt)} />
-      {pr ? <KV k="linked PR" v={`#${pr.number} · ${pr.url}`} accent /> : null}
+      <SectionLabel>Metadata</SectionLabel>
+      {item.reporterEmail ? <KV k="Reporter" v={item.reporterEmail} /> : null}
+      {item.pageUrl ? <KV k="Page" v={item.pageUrl} /> : null}
+      <KV k="Created" v={new Date(item.createdAt).toLocaleString()} />
+      {pr ? <KV k="Linked PR" v={`#${pr.number} · ${pr.url}`} accent /> : null}
 
       {bug ? (
         <>
@@ -257,7 +257,7 @@ function DetailView(props: {
 // ── list + panel ─────────────────────────────────────────────────────────────
 
 type Sub = "bugs" | "features";
-type View_ = { name: "list" } | { name: "detail"; id: string } | { name: "create" };
+type View_ = { name: "list" } | { name: "detail"; id: string; title: string } | { name: "create" };
 
 export function FeedbackPanel(props: {
   client: DevtoolsClient;
@@ -266,11 +266,37 @@ export function FeedbackPanel(props: {
 }): ReactNode {
   const [sub, setSub] = useState<Sub>("bugs");
   const [view, setView] = useState<View_>({ name: "list" });
-  const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState("");
   const bugsQuery = useFeedback(props.client);
   const featuresQuery = useFeatureRequests(props.client);
   const query = sub === "bugs" ? bugsQuery : featuresQuery;
+
+  // The header's single ‹ Back drives the internal list ↔ detail/create nav —
+  // no per-screen back button. Register a Back handler (+ title) while nested.
+  const nav = useSheetNav();
+  const backToList = useRef<() => void>(() => {});
+  backToList.current = () => {
+    setView({ name: "list" });
+    query.refresh();
+  };
+  useEffect(() => {
+    if (!nav) return;
+    const nested = view.name !== "list";
+    nav.setBack(nested ? () => backToList.current() : null);
+    nav.setTitle(
+      view.name === "detail"
+        ? view.title
+        : view.name === "create"
+          ? sub === "bugs"
+            ? "New bug"
+            : "New request"
+          : null,
+    );
+    return () => {
+      nav.setBack(null);
+      nav.setTitle(null);
+    };
+  }, [nav, view, sub]);
 
   if (view.name === "detail") {
     return (
@@ -278,10 +304,6 @@ export function FeedbackPanel(props: {
         client={props.client}
         kind={sub === "bugs" ? "bug" : "feature_request"}
         id={view.id}
-        onBack={() => {
-          setView({ name: "list" });
-          query.refresh();
-        }}
       />
     );
   }
@@ -310,8 +332,10 @@ export function FeedbackPanel(props: {
   }
 
   const needle = search.trim().toLowerCase();
+  // Resolved / won't-fix items are never shown — the list stays focused on
+  // actionable tickets.
   const items: Array<BugRecord | FeatureRequestRecord> = (query.data ?? []).filter((it) => {
-    if (!showAll && TERMINAL.has(it.status)) return false;
+    if (TERMINAL.has(it.status)) return false;
     if (needle && !it.title.toLowerCase().includes(needle)) return false;
     return true;
   });
@@ -321,7 +345,6 @@ export function FeedbackPanel(props: {
       <ChipRow>
         <Chip label="Bugs" selected={sub === "bugs"} onPress={() => setSub("bugs")} />
         <Chip label="Features" selected={sub === "features"} onPress={() => setSub("features")} />
-        <Chip label={showAll ? "All" : "Active"} onPress={() => setShowAll((s) => !s)} />
         <Chip
           label={sub === "bugs" ? "+ New bug" : "+ New request"}
           onPress={() => setView({ name: "create" })}
@@ -338,8 +361,8 @@ export function FeedbackPanel(props: {
             {needle
               ? "No matches."
               : sub === "bugs"
-                ? "No bugs in the queue."
-                : "No feature requests yet."}
+                ? "No open bugs in the queue."
+                : "No open feature requests."}
           </Muted>
         </View>
       ) : (
@@ -351,10 +374,55 @@ export function FeedbackPanel(props: {
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
-            <FeedbackRow item={item} onPress={() => setView({ name: "detail", id: item.id })} />
+            <FeedbackRow
+              item={item}
+              onPress={() => setView({ name: "detail", id: item.id, title: item.title })}
+            />
           )}
         />
       )}
+    </View>
+  );
+}
+
+/** Tint for a row's AI/PR state — cyan (PR ready for review), amber (a question
+ *  is waiting on a human), green (the PR merged / fix landed). */
+function agentTint(state: FeedbackAgentState, t: DevtoolsTheme): string {
+  switch (state) {
+    case "pr_ready":
+      return "#22d3ee";
+    case "question":
+      return "#f59e0b";
+    case "pr_landed":
+      return t.ok;
+  }
+}
+
+/** The AI/PR chip on a feedback row: a tappable PR link (opens the PR) for the
+ *  PR states, or a plain "needs reply" pill for a posted-back question. */
+function AgentChip(props: {
+  info: NonNullable<ReturnType<typeof feedbackAgentInfo>>;
+  color: string;
+}): ReactNode {
+  const { info, color } = props;
+  if (info.pr) {
+    const prefix = info.state === "pr_landed" ? "merged" : "PR";
+    return (
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`Pull request #${info.pr.number}`}
+        onPress={() => void Linking.openURL(info.pr!.url)}
+        style={[styles.agentChip, { borderColor: color }]}
+      >
+        <Text style={[styles.agentChipText, { color }]}>
+          {prefix} #{info.pr.number} ↗
+        </Text>
+      </Pressable>
+    );
+  }
+  return (
+    <View style={[styles.agentChip, { borderColor: color }]}>
+      <Text style={[styles.agentChipText, { color }]}>{FEEDBACK_AGENT_LABEL[info.state]}</Text>
     </View>
   );
 }
@@ -365,12 +433,20 @@ function FeedbackRow(props: {
 }): ReactNode {
   const t = useTheme();
   const { item } = props;
+  const info = feedbackAgentInfo(item);
+  const tint = info ? agentTint(info.state, t) : null;
   return (
     <Pressable
       onPress={props.onPress}
       style={({ pressed }) => [styles.rowWrap, { opacity: pressed ? 0.85 : 1 }]}
     >
-      <View style={[styles.row, { backgroundColor: t.surface, borderColor: t.border, borderRadius: t.radius }]}>
+      <View
+        style={[
+          styles.row,
+          { backgroundColor: t.surface, borderColor: t.border, borderRadius: t.radius },
+          tint ? { borderLeftColor: tint, borderLeftWidth: 3 } : null,
+        ]}
+      >
         <View style={styles.rowMain}>
           <Text numberOfLines={1} style={[styles.rowTitle, { color: t.fg }]}>
             {item.title}
@@ -379,6 +455,7 @@ function FeedbackRow(props: {
             {[item.reporterEmail, timeAgo(Date.now(), item.createdAt)].filter(Boolean).join(" · ")}
           </Muted>
         </View>
+        {info && tint ? <AgentChip info={info} color={tint} /> : null}
         <Badge label={label(item.status)} tone={statusTone(item.status)} />
         {item.priority ? <Badge label={label(item.priority)} tone="accent" /> : null}
       </View>
@@ -387,7 +464,8 @@ function FeedbackRow(props: {
 }
 
 const styles = StyleSheet.create({
-  detailBack: { fontSize: 15, fontWeight: "600", marginBottom: 10 },
+  agentChip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
+  agentChipText: { fontSize: 10.5, fontWeight: "700" },
   detailBadges: { flexDirection: "row", gap: 8, marginBottom: 12 },
   detailScroll: { paddingBottom: 32 },
   detailTitle: { fontSize: 17, fontWeight: "700", marginBottom: 8 },

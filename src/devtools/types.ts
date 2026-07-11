@@ -165,13 +165,28 @@ export interface DraftRecord {
   createdAt: string;
 }
 
-/** Subset of the server's `connector_data` the devtools read — just the linked
- *  GitHub PR/issue. The admin endpoints return the full blob; we only type the
- *  fields the overlays render. */
+/** Subset of the server's `connector_data` the devtools read. The admin
+ *  endpoints return the full blob; we only type the fields the overlays render:
+ *  the linked GitHub issue/PR (with the PR's merged marker), and the agent
+ *  trace Jarvis records as it works an item. All fields are tolerated absent. */
 export interface FeedbackConnectorData {
   github?: {
     issue?: { number: number; url: string };
-    pr?: { number: number; url: string };
+    pr?: {
+      number: number;
+      url: string;
+      /** Merged markers — any of these present means the PR landed. */
+      merged?: boolean;
+      mergedAt?: string | null;
+      state?: string;
+    };
+  };
+  /** Agent (Jarvis) trace — present once the AI has acted on the item.
+   *  `awaitingReply` / `state: "awaiting_reply"` means it posted a question
+   *  back and is waiting on a human. */
+  agent?: {
+    state?: string;
+    awaitingReply?: boolean;
   };
 }
 

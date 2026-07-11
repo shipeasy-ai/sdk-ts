@@ -68,6 +68,19 @@
   header top-right (replacing the close ✕ while logged in); the redundant
   project/email session row is dropped.
 
+- **Feedback panel — AI/PR row tints, open-only list, header-driven back.**
+  Rows now **tint by AI/PR state**: cyan when an agent opened a PR that's ready
+  for review (with a tappable **PR link** on the row), amber when it posted a
+  question back awaiting a reply, green when the PR **merged**. Resolved /
+  won't-fix items are **no longer listed** (the Active/All toggle is gone — the
+  list stays on open, actionable tickets). The detail's **metadata** renders in
+  the same `Metadata` + `KV` style as the experiment detail. The per-panel back
+  button is removed: Feedback's list ↔ detail nav is driven by the sheet
+  header's single **‹ Back** via a new `SheetNav` context (`SheetNavContext`,
+  exported), which a panel uses to hand the header a back handler + title. New
+  `feedbackAgentInfo()` / `FEEDBACK_AGENT_LABEL` on `@shipeasy/sdk/devtools`;
+  `FeedbackConnectorData` widens to carry the PR merged marker + agent trace.
+
 ### Report forms — visual redesign (folded in from 7.5.1 prep)
 
 - Bug and feature-request forms rebuilt: screen heading + explainer, field

@@ -78,6 +78,23 @@ export interface DevtoolsConfig {
   adminBaseUrl?: string;
 }
 
+// ── sheet navigation ─────────────────────────────────────────────────────────
+
+/** Lets a section panel with its own internal drill-in (e.g. Feedback's
+ *  list → detail) hand the sheet header a Back handler + title, so the header's
+ *  single ‹ Back drives it — no per-panel back button. `setBack(null)` /
+ *  `setTitle(null)` restore the header to the section default. */
+export interface SheetNav {
+  setBack(handler: (() => void) | null): void;
+  setTitle(title: string | null): void;
+}
+
+export const SheetNavContext = createContext<SheetNav | null>(null);
+
+export function useSheetNav(): SheetNav | null {
+  return useContext(SheetNavContext);
+}
+
 // ── capabilities ─────────────────────────────────────────────────────────────
 
 /** Project devtools capabilities from the configured `@shipeasy/sdk/client`

@@ -85,3 +85,5 @@ export {
   ruleSummary,
 } from "./gate-flow";
 export type { GateFlowStep, StepMatch, StepSource } from "./gate-flow";
+export { FEEDBACK_AGENT_LABEL, feedbackAgentInfo } from "./feedback-state";
+export type { FeedbackAgentInfo, FeedbackAgentState } from "./feedback-state";

@@ -112,9 +112,15 @@ overlay); tapping a row opens that panel with a **‹ Back** affordance:
   collapsed-by-default card that expands to its resolved param fields (variant
   override → universe default). **Force assignment** picks a variant live;
   **Restore live** clears it.
-- **Feedback** — bugs + feature requests with Active/All filtering, detail
-  views, inline **status / priority editing**, attachment previews + screenshot
-  upload (expo-image-picker), and the create forms.
+- **Feedback** — bugs + feature requests, **open items only** (resolved /
+  won't-fix are never listed). Each row **tints by its AI/PR state** — cyan when
+  an agent opened a PR that's ready for review (with a tappable **PR link**),
+  amber when the agent posted a question back and is awaiting a reply, green
+  when the PR **merged**. Tapping a row opens the detail (its **metadata** block
+  matches the experiment/detail style) with inline **status / priority
+  editing**, attachment previews + screenshot upload (expo-image-picker), and
+  the create forms. The detail's Back is the sheet header's ‹ Back (no per-panel
+  button) — panels drive it through the `SheetNav` context.
 - **I18n** — profile selector, searchable key list, per-key value editing
   applied to the profile. (The web overlay's in-page click-to-edit mode is
   DOM-only and has no RN equivalent.)

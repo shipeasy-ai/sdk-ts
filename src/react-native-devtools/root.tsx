@@ -41,6 +41,7 @@ import { Icon } from "./icons";
 import type { DevtoolsIconName } from "./icons";
 import {
   ScreenCaptureContext,
+  SheetNavContext,
   ensureEventCapture,
   useDevtoolsAuth,
   useDevtoolsCapabilities,
@@ -48,7 +49,7 @@ import {
   useProject,
   useShakeToOpen,
 } from "./hooks";
-import type { DevtoolsConfig, ScreenCapture, ShakeOptions } from "./hooks";
+import type { DevtoolsConfig, ScreenCapture, SheetNav, ShakeOptions } from "./hooks";
 import { Button, Muted, ThemeContext, Title, useTheme } from "./ui";
 
 export interface DevtoolsHandle {
@@ -209,12 +210,28 @@ function Sheet(props: {
   // viewer; an Experiments row opens the full-page detail screen.
   const [editorConfig, setEditorConfig] = useState<ConfigRecord | null>(null);
   const [detailExperiment, setDetailExperiment] = useState<ExperimentRecord | null>(null);
+  // A section panel with its own internal drill-in (Feedback: list → detail)
+  // hands the header a Back handler + title via SheetNav, so the header's single
+  // ‹ Back drives it — no per-panel back button.
+  const [sectionBack, setSectionBack] = useState<(() => void) | null>(null);
+  const [sectionTitle, setSectionTitle] = useState<string | null>(null);
+  const nav = useMemo<SheetNav>(
+    () => ({
+      // Wrap in a thunk: a bare `setSectionBack(fn)` would treat `fn` as a
+      // state updater and call it immediately.
+      setBack: (handler) => setSectionBack(() => handler),
+      setTitle: (title) => setSectionTitle(title),
+    }),
+    [],
+  );
 
   // Opening a section from the menu clears any stale drill-in target so the
   // section lands on its list, not a previously-open sub-screen.
   const openSection = (key: Screen) => {
     setEditorConfig(null);
     setDetailExperiment(null);
+    setSectionBack(null);
+    setSectionTitle(null);
     setScreen(key);
   };
 
@@ -241,15 +258,17 @@ function Sheet(props: {
         ? "Report a bug"
         : screen === "feature"
           ? "Request a feature"
-          : (activeSection?.label ?? null);
+          : (sectionTitle ?? activeSection?.label ?? null);
   const goBack = () => {
     if (editorConfig) setEditorConfig(null);
     else if (detailExperiment) setDetailExperiment(null);
+    else if (sectionBack) sectionBack();
     else setScreen("home");
   };
 
   return (
-    <View style={styles.sheetInner}>
+    <SheetNavContext.Provider value={nav}>
+      <View style={styles.sheetInner}>
       <View style={[styles.header, { borderBottomColor: t.border }]}>
         {subTitle ? (
           <Pressable
@@ -368,7 +387,8 @@ function Sheet(props: {
           onRequestFeature={() => setScreen("feature")}
         />
       )}
-    </View>
+      </View>
+    </SheetNavContext.Provider>
   );
 }
 
