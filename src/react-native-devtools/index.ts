@@ -54,6 +54,7 @@ export type {
 export { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
 export { ConfigViewerScreen } from "./config-viewer";
 export { ExperimentDetailScreen } from "./experiment-detail";
+export { ValueTree, ValueContents } from "./value-tree";
 export { FeedbackPanel } from "./feedback-panel";
 export { UserPanel } from "./user-panel";
 export { EventsPanel } from "./events-panel";

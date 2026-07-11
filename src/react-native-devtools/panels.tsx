@@ -240,6 +240,19 @@ export function GatesPanel(props: { client: DevtoolsClient }): ReactNode {
 /** A config list row — a navigational entry that drills into the full-page
  *  nested viewer (ConfigViewerScreen). Shows a compact value preview + whether
  *  a local override is active. */
+/** A scannable shape summary for a config's value — the top-level field names
+ *  (or item/entry count), instead of an unreadable one-line JSON dump. */
+function configSummary(value: unknown): string {
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>);
+    if (keys.length === 0) return "no fields";
+    const shown = keys.slice(0, 4).join(", ");
+    return keys.length > 4 ? `${shown} +${keys.length - 4} more` : shown;
+  }
+  return String(value ?? "—");
+}
+
 function ConfigRow(props: {
   config: ConfigRecord;
   bridge: DevtoolsEngineBridge | null;
@@ -251,14 +264,10 @@ function ConfigRow(props: {
   const forced = Object.prototype.hasOwnProperty.call(overrides, config.name);
   const live = bridge ? bridge.getConfig(config.name) : undefined;
   const effective = forced ? overrides[config.name] : live !== undefined ? live : config.valueJson;
-  const preview = JSON.stringify(effective ?? {});
   return (
     <Row onPress={() => props.onOpen(config)}>
       <View style={styles.rowTop}>
-        <NameCell
-          name={config.name}
-          sub={preview.length > 60 ? `${preview.slice(0, 60)}…` : preview}
-        />
+        <NameCell name={config.name} sub={configSummary(effective)} />
         {forced ? <Badge label="override" tone="accent" /> : null}
         <Text style={[styles.chevron, { color: t.fgMuted }]}>›</Text>
       </View>

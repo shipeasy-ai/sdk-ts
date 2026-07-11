@@ -15,16 +15,10 @@ import type {
 } from "../devtools/types";
 import type { DevtoolsEngineBridge } from "../devtools/bridge";
 import { useUniverses } from "./hooks";
+import { ValueTree } from "./value-tree";
 import { Badge, Chip, ChipRow, KV, Muted, SectionLabel, useTheme } from "./ui";
 
 type UniverseParam = NonNullable<UniverseRecord["paramSchema"]>[number];
-
-function fmtValue(v: unknown): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "string") return v;
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
-}
 
 function pct(basisPoints: number): string {
   return `${basisPoints / 100}%`;
@@ -95,10 +89,11 @@ function VariantNode(props: {
             <Muted>No params.</Muted>
           ) : (
             fields.map((f) => (
-              <KV
+              <ValueTree
                 key={f.name}
-                k={`${f.name}${f.overridden ? "" : " ·default"}`}
-                v={`${fmtValue(f.value)}  (${f.type})`}
+                label={f.name}
+                hint={f.overridden ? f.type : `${f.type} · default`}
+                value={f.value}
                 accent={f.overridden}
               />
             ))
@@ -188,7 +183,7 @@ export function ExperimentDetailScreen(props: {
       </SectionLabel>
       {schema && schema.length > 0 ? (
         schema.map((p) => (
-          <KV key={p.name} k={`${p.name} · ${p.type}`} v={`default: ${fmtValue(p.default)}`} />
+          <ValueTree key={p.name} label={p.name} hint={`${p.type} · default`} value={p.default} />
         ))
       ) : (
         <Muted>

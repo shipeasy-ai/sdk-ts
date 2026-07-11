@@ -319,7 +319,17 @@ function DetailView(props: {
 
 // ── list + panel ─────────────────────────────────────────────────────────────
 
-type View_ = { name: "list" } | { name: "detail"; id: string; title: string } | { name: "create" };
+type View_ = { name: "list" } | { name: "detail"; id: string } | { name: "create" };
+
+// Header title for a detail screen — the item TYPE, never the (often long)
+// item title, which won't fit the header.
+const DETAIL_TITLE: Record<OpsItemType, string> = {
+  bug: "Bug detail",
+  feature_request: "Feature detail",
+  error: "Error detail",
+  alert: "Alert detail",
+  measure_plan: "Ticket detail",
+};
 
 export function FeedbackPanel(props: {
   client: DevtoolsClient;
@@ -360,7 +370,7 @@ export function FeedbackPanel(props: {
     nav.setBack(nested ? () => backToList.current() : null);
     nav.setTitle(
       view.name === "detail"
-        ? view.title
+        ? DETAIL_TITLE[sub]
         : view.name === "create"
           ? sub === "bug"
             ? "New bug"
@@ -462,7 +472,7 @@ export function FeedbackPanel(props: {
                   <FeedbackRow
                     key={item.id}
                     item={item}
-                    onPress={() => setView({ name: "detail", id: item.id, title: item.title })}
+                    onPress={() => setView({ name: "detail", id: item.id })}
                   />
                 ))}
               </View>

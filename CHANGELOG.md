@@ -110,6 +110,14 @@
 - **The RN overlay's I18n panel is removed** for now (the section no longer
   appears in the drill-in menu; the SDK's i18n runtime is unchanged).
 
+- **Polish.** The feedback detail header reads "Bug/Feature/Error/Alert detail"
+  (the item type) instead of the item's long title. Config list rows show a
+  scannable field summary instead of a raw one-line JSON dump. The config
+  viewer's read-only value tree is extracted as a reusable `ValueTree` /
+  `ValueContents` (exported) and now renders structured values wherever they
+  appear — experiment variant params + universe defaults, and forced config
+  overrides in the Active-overrides screen — instead of stringified JSON.
+
 ### Report forms — visual redesign (folded in from 7.5.1 prep)
 
 - Bug and feature-request forms rebuilt: screen heading + explainer, field

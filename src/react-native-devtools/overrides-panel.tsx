@@ -6,28 +6,30 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import type { DevtoolsEngineBridge } from "../devtools/bridge";
+import { ValueContents } from "./value-tree";
 import { Badge, Button, Chip, Muted, SectionLabel, useTheme } from "./ui";
-
-function preview(v: unknown): string {
-  const s = typeof v === "string" ? v : JSON.stringify(v);
-  return s !== undefined && s.length > 48 ? `${s.slice(0, 48)}…` : String(s);
-}
 
 function OverrideRow(props: {
   name: string;
-  value: ReactNode;
+  /** Inline value shown on the header row (e.g. an ON/OFF or variant badge). */
+  value?: ReactNode;
+  /** Structured value rendered below the header (e.g. a forced config's tree). */
+  body?: ReactNode;
   onClear: () => void;
 }): ReactNode {
   const t = useTheme();
   return (
     <View style={[styles.row, { backgroundColor: t.surface, borderColor: t.border, borderRadius: t.radius }]}>
-      <View style={styles.rowMain}>
-        <Text numberOfLines={1} style={[styles.rowName, { color: t.fg }]}>
-          {props.name}
-        </Text>
+      <View style={styles.rowHead}>
+        <View style={styles.rowMain}>
+          <Text numberOfLines={1} style={[styles.rowName, { color: t.fg }]}>
+            {props.name}
+          </Text>
+        </View>
+        {props.value}
+        <Chip label="Clear" tone="danger" onPress={props.onClear} />
       </View>
-      {props.value}
-      <Chip label="Clear" tone="danger" onPress={props.onClear} />
+      {props.body ? <View style={styles.rowBody}>{props.body}</View> : null}
     </View>
   );
 }
@@ -113,7 +115,7 @@ export function OverridesPanel(props: { bridge: DevtoolsEngineBridge | null }): 
             <OverrideRow
               key={name}
               name={name}
-              value={<Muted style={styles.cfgPreview} numberOfLines={1}>{preview(value)}</Muted>}
+              body={<ValueContents value={value} />}
               onClear={() => bridge.removeOverride("config", name)}
             />
           ))}
@@ -124,7 +126,6 @@ export function OverridesPanel(props: { bridge: DevtoolsEngineBridge | null }): 
 }
 
 const styles = StyleSheet.create({
-  cfgPreview: { flexShrink: 1, maxWidth: 130, textAlign: "right" },
   clearAll: { paddingHorizontal: 12 },
   empty: { alignItems: "center", gap: 10, padding: 28, paddingTop: 48 },
   emptyGlyph: { fontSize: 30 },
@@ -133,14 +134,13 @@ const styles = StyleSheet.create({
   headText: { flex: 1 },
   list: { paddingBottom: 24 },
   row: {
-    alignItems: "center",
     borderWidth: 1,
-    flexDirection: "row",
-    gap: 8,
     marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
+  rowBody: { marginTop: 8 },
+  rowHead: { alignItems: "center", flexDirection: "row", gap: 8 },
   rowMain: { flex: 1, marginRight: 4 },
   rowName: { fontSize: 14, fontWeight: "600" },
 });
