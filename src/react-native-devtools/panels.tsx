@@ -12,7 +12,13 @@ import type { ConfigRecord, ExperimentRecord, GateRecord } from "../devtools/typ
 import type { DevtoolsEngineBridge } from "../devtools/bridge";
 import { buildGateFlow, evalStepMatch, ruleSummary } from "../devtools/gate-flow";
 import type { GateFlowStep, StepSource } from "../devtools/gate-flow";
-import { useConfigs, useEngineBridge, useExperimentsByStatus, useGates } from "./hooks";
+import {
+  useArchivedExperiments,
+  useConfigs,
+  useEngineBridge,
+  useExperiments,
+  useGates,
+} from "./hooks";
 import type { QueryState } from "./hooks";
 import type { DevtoolsTheme } from "./theme";
 import {
@@ -346,9 +352,10 @@ function ExperimentRow(props: {
   );
 }
 
-// Experiments are grouped by lifecycle status. Running is preloaded + open;
-// the rest are folded and don't fetch until first expanded (lazy — see
-// useExperimentsByStatus). "stopped" is the paused/disabled bucket.
+// Experiments are grouped by lifecycle status, each section showing a count
+// badge. Running is open by default; the rest are folded (their rows stay
+// unmounted until expanded). "stopped" is the paused/disabled bucket. Counts
+// load upfront: one call for running/draft/stopped, one for the archive tab.
 const EXPERIMENT_SECTIONS: Array<{ status: ExperimentRecord["status"]; label: string }> = [
   { status: "running", label: "Running" },
   { status: "draft", label: "Draft" },
@@ -357,16 +364,15 @@ const EXPERIMENT_SECTIONS: Array<{ status: ExperimentRecord["status"]; label: st
 ];
 
 function ExperimentSection(props: {
-  client: DevtoolsClient;
   bridge: DevtoolsEngineBridge | null;
-  status: ExperimentRecord["status"];
   label: string;
+  items: ExperimentRecord[];
+  loading: boolean;
   defaultOpen: boolean;
 }): ReactNode {
   const t = useTheme();
   const [open, setOpen] = useState(props.defaultOpen);
-  const query = useExperimentsByStatus(props.client, props.status, open);
-  const items = query.data ?? [];
+  const { items, loading } = props;
   return (
     <View style={styles.section}>
       <Pressable
@@ -378,19 +384,19 @@ function ExperimentSection(props: {
       >
         <Text style={[styles.sectionCaret, { color: t.fgMuted }]}>{open ? "▾" : "▸"}</Text>
         <Text style={[styles.sectionTitle, { color: t.fg }]}>{props.label}</Text>
-        {open && query.loading ? (
+        {loading ? (
           <ActivityIndicator size="small" color={t.accent} />
-        ) : open && !query.error ? (
+        ) : (
           <View style={[styles.sectionCount, { backgroundColor: t.accentSoft }]}>
             <Text style={[styles.sectionCountText, { color: t.accent }]}>{items.length}</Text>
           </View>
-        ) : null}
+        )}
       </Pressable>
       {open ? (
-        query.error ? (
-          <ErrorState message={query.error} onRetry={query.refresh} />
-        ) : query.loading && items.length === 0 ? null : items.length === 0 ? (
-          <Muted style={styles.sectionEmpty}>No {props.label.toLowerCase()} experiments.</Muted>
+        items.length === 0 ? (
+          <Muted style={styles.sectionEmpty}>
+            {loading ? "Loading…" : `No ${props.label.toLowerCase()} experiments.`}
+          </Muted>
         ) : (
           items.map((e) => <ExperimentRow key={e.id} experiment={e} bridge={props.bridge} />)
         )
@@ -401,18 +407,28 @@ function ExperimentSection(props: {
 
 export function ExperimentsPanel(props: { client: DevtoolsClient }): ReactNode {
   const bridge = useEngineBridge();
+  const active = useExperiments(props.client);
+  const archived = useArchivedExperiments(props.client);
+  const source = (status: ExperimentRecord["status"]) =>
+    status === "archived" ? archived : active;
+
+  if (active.error) return <ErrorState message={active.error} onRetry={active.refresh} />;
+
   return (
     <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
-      {EXPERIMENT_SECTIONS.map((s) => (
-        <ExperimentSection
-          key={s.status}
-          client={props.client}
-          bridge={bridge}
-          status={s.status}
-          label={s.label}
-          defaultOpen={s.status === "running"}
-        />
-      ))}
+      {EXPERIMENT_SECTIONS.map((s) => {
+        const q = source(s.status);
+        return (
+          <ExperimentSection
+            key={s.status}
+            bridge={bridge}
+            label={s.label}
+            items={(q.data ?? []).filter((e) => e.status === s.status)}
+            loading={q.loading && !q.data}
+            defaultOpen={s.status === "running"}
+          />
+        );
+      })}
     </ScrollView>
   );
 }
