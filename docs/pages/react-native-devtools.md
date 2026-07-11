@@ -92,8 +92,13 @@ overlay); tapping a row opens that panel with a **‹ Back** affordance:
   app passed, plus the attributes the SDK auto-collects on every identify()
   (`anonymous_id`, locale/timezone and device context). These are the live
   targeting inputs, verbatim — nothing here is editable.
-- **Feature Flags** — rollout, killswitch flag, the value this device is being
-  served, and **Force on / Force off / Restore** buttons.
+- **Feature Flags** — an **on/off switch per flag** on the row (forces the value
+  live). Expanding a flag shows the full **evaluation flow** — every gate step
+  (whitelist → conditions → public rollout), first-match-wins, with each
+  condition marked **pass / fail** for the currently identified user (evaluated
+  locally against the identify() attributes) and each rollout step's %. The
+  served value + source (live vs forced override) is shown up top; **Clear
+  override** restores the live value.
 - **Configs** — effective values with a JSON override editor (schema-checked at
   the root) and **Restore**.
 - **Experiments** — status, universe, weights, the live assignment, and

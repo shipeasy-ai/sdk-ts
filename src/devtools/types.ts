@@ -48,6 +48,32 @@ export interface ProjectRecord {
   modules: ProjectModules;
 }
 
+/** One attribute predicate inside a gate condition (e.g. `plan is one of
+ *  ["business"]`). Mirrors the admin `GateRule`. */
+export interface GateRule {
+  attr: string;
+  op: string;
+  value: unknown;
+}
+
+/** One entry in a gate's ordered gatekeeper stack — evaluated top-to-bottom,
+ *  first match wins. A subset of the admin `StackedGateEntry` (the fields the
+ *  overlay renders). */
+export interface GateStackEntry {
+  id?: string;
+  type?: "condition" | "rollout";
+  name?: string;
+  /** all rules must match ("all", default) vs any ("any"). */
+  pass?: "all" | "any";
+  rules?: GateRule[];
+  /** 0–10000 basis points. */
+  rolloutPct?: number;
+  bucketBy?: string;
+  locked?: boolean;
+  /** True when this condition is a whitelist (its rule's value is the list). */
+  whitelist?: boolean;
+}
+
 export interface GateRecord {
   id: string;
   name: string;
@@ -55,6 +81,10 @@ export interface GateRecord {
   killswitch: boolean;
   rolloutPct: number;
   updatedAt: string;
+  /** Legacy flat targeting rules (pre-stack gates). */
+  rules?: GateRule[] | null;
+  /** The gatekeeper stack (modern gates). Present → drives the flow view. */
+  stack?: GateStackEntry[] | null;
 }
 
 /** Permissive default schema. Used when a config record arrives without one. */

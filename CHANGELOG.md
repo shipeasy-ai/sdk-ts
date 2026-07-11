@@ -4,6 +4,16 @@
 
 ### React Native devtools overlay — home redesign, public feature requests, screenshots, key-based login
 
+- **Feature Flags panel — evaluation flow + per-flag switch.** Each flag row now
+  carries an on/off **switch** (forces the value live) in place of the old
+  live-value badge. Expanding a flag renders its full gatekeeper **flow**
+  (whitelist → conditions → public rollout, first-match-wins) — the same model
+  the dashboard's read-gate view uses — with each condition marked **pass/fail**
+  for the identified user (evaluated locally from identify() attributes; rollout
+  bucketing stays the edge's call) and the served value + source shown up top.
+  New shared `buildGateFlow` / `evalRule` / `evalStepMatch` / `ruleSummary`
+  helpers on `@shipeasy/sdk/devtools`; `GateRecord` gains `rules` + `stack`.
+
 - **Redesigned logged-out home**: the Shipeasy brand mark, dedicated
   **Report a bug** / **Request a feature** action cards (shown when the project
   opted into public tickets), and a **Connect to Shipeasy** button pinned to the

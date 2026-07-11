@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
+  Switch as RNSwitch,
   Text,
   TextInput,
   View,
@@ -67,6 +68,29 @@ export function Button(props: {
         <Text style={[styles.buttonText, { color: fg }]}>{props.title}</Text>
       )}
     </Pressable>
+  );
+}
+
+/** Themed on/off switch (the platform Switch, tinted to the overlay accent and
+ *  scaled down to sit inline on a row). */
+export function Toggle(props: {
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+}): ReactNode {
+  const t = useTheme();
+  return (
+    <RNSwitch
+      accessibilityLabel={props.accessibilityLabel}
+      value={props.value}
+      onValueChange={props.onValueChange}
+      disabled={props.disabled}
+      trackColor={{ true: t.accent, false: t.border }}
+      thumbColor={t.bg}
+      ios_backgroundColor={t.border}
+      style={styles.toggle}
+    />
   );
 }
 
@@ -380,4 +404,5 @@ const styles = StyleSheet.create({
   },
   sectionHint: { fontSize: 10 },
   sectionText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  toggle: { transform: [{ scale: 0.82 }] },
 });

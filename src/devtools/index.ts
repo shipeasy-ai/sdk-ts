@@ -25,6 +25,8 @@ export type {
   FeatureRequestRecord,
   FeedbackConnectorData,
   GateRecord,
+  GateRule,
+  GateStackEntry,
   KeyRecord,
   ProfileRecord,
   ProjectModules,
@@ -74,3 +76,12 @@ export type {
   FeatureFormValues,
   FormErrors,
 } from "./forms";
+export {
+  buildGateFlow,
+  evalRule,
+  evalStepMatch,
+  fmtValue,
+  OP_LABELS,
+  ruleSummary,
+} from "./gate-flow";
+export type { GateFlowStep, StepMatch, StepSource } from "./gate-flow";

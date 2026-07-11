@@ -5,13 +5,16 @@
 // web overlay's param+reload flow becomes bridge.setFlagOverride() etc.).
 
 import { useMemo, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import type { DevtoolsClient } from "../devtools/api";
 import type { ConfigRecord, ExperimentRecord, GateRecord } from "../devtools/types";
 import type { DevtoolsEngineBridge } from "../devtools/bridge";
+import { buildGateFlow, evalStepMatch, ruleSummary } from "../devtools/gate-flow";
+import type { GateFlowStep, StepSource } from "../devtools/gate-flow";
 import { useConfigs, useEngineBridge, useExperiments, useGates } from "./hooks";
 import type { QueryState } from "./hooks";
+import type { DevtoolsTheme } from "./theme";
 import {
   Badge,
   Button,
@@ -25,6 +28,7 @@ import {
   Row,
   SearchInput,
   SectionLabel,
+  Toggle,
   useTheme,
 } from "./ui";
 
@@ -92,52 +96,121 @@ function NoBridgeHint(): ReactNode {
 
 // ── Gates ────────────────────────────────────────────────────────────────────
 
+/** Left-stripe colour by rule source — mirrors the dashboard's gate-flow
+ *  palette (user=accent, request-attr=purple, whitelist=cyan, public=muted). */
+function stripeColor(source: StepSource, t: DevtoolsTheme): string {
+  switch (source) {
+    case "user":
+      return t.accent;
+    case "auto":
+      return "#c084fc";
+    case "whitelist":
+      return "#22d3ee";
+    case "public":
+      return t.border;
+  }
+}
+
+/** One node of the gate's evaluation flow: a source stripe, the step title +
+ *  its pass/fail-for-this-user (conditions) or rollout % (rollout/whitelist),
+ *  and a one-line predicate summary. */
+function FlowStepRow(props: {
+  step: GateFlowStep;
+  user: Record<string, unknown> | null;
+}): ReactNode {
+  const t = useTheme();
+  const { step } = props;
+  const match = evalStepMatch(step, props.user);
+  const pct = Math.round(step.rolloutPct / 100);
+  const partial = step.type === "condition" && !step.whitelist && pct < 100;
+  return (
+    <View style={styles.step}>
+      <View style={[styles.stepStripe, { backgroundColor: stripeColor(step.source, t) }]} />
+      <View style={styles.stepBody}>
+        <View style={styles.stepTop}>
+          <Text style={[styles.stepTitle, { color: t.fg }]} numberOfLines={1}>
+            {step.title}
+          </Text>
+          {match === "pass" ? (
+            <Badge label="pass" tone="ok" />
+          ) : match === "fail" ? (
+            <Badge label="fail" tone="danger" />
+          ) : step.whitelist ? (
+            <Text style={[styles.stepPct, { color: t.accent }]}>always</Text>
+          ) : (
+            <Text style={[styles.stepPct, { color: pct === 0 ? t.fgMuted : t.fg }]}>{pct}%</Text>
+          )}
+          {partial ? (
+            <Text style={[styles.stepPct, { color: t.fgMuted }]}>{pct}%</Text>
+          ) : null}
+        </View>
+        <Text style={[styles.stepSummary, { color: t.fgMuted }]} numberOfLines={2}>
+          {ruleSummary(step)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function GateRow(props: { gate: GateRecord; bridge: DevtoolsEngineBridge | null }): ReactNode {
+  const t = useTheme();
   const { gate, bridge } = props;
   const [open, setOpen] = useState(false);
   const live = bridge ? bridge.getFlag(gate.name) : null;
   const override = bridge ? (bridge.getOverrides().flags[gate.name] ?? null) : null;
   const forced = override !== null;
+  const effectiveOn = forced ? (override as boolean) : (live ?? false);
+  const user = bridge ? bridge.getUser() : null;
+  const flow = useMemo(() => buildGateFlow(gate), [gate]);
+
   return (
-    <Row onPress={() => setOpen((o) => !o)}>
+    <Row>
       <View style={styles.fill}>
         <View style={styles.rowTop}>
-          <NameCell
-            name={gate.name}
-            sub={`${gate.rolloutPct / 100}% rollout${gate.killswitch ? " · killswitch" : ""}`}
-          />
-          {forced ? <Badge label={`forced ${override ? "on" : "off"}`} tone="accent" /> : null}
-          {live !== null ? (
-            <Badge label={live ? "live: on" : "live: off"} tone={live ? "ok" : "muted"} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={gate.name}
+            onPress={() => setOpen((o) => !o)}
+            style={styles.fill}
+          >
+            <NameCell
+              name={gate.name}
+              sub={`${gate.rolloutPct / 100}% public${gate.killswitch ? " · killswitch" : ""}`}
+            />
+          </Pressable>
+          {forced ? <Badge label="forced" tone="accent" /> : null}
+          {bridge ? (
+            <Toggle
+              value={effectiveOn}
+              onValueChange={(v) => bridge.setFlagOverride(gate.name, v)}
+              accessibilityLabel={`${gate.name} on/off`}
+            />
           ) : (
             <Badge label={gate.enabled ? "enabled" : "disabled"} tone={gate.enabled ? "ok" : "muted"} />
           )}
         </View>
         {open ? (
           <View style={styles.detail}>
-            <KV k="enabled" v={gate.enabled ? "true" : "false"} />
-            <KV k="rollout" v={`${gate.rolloutPct / 100}%`} />
-            {live !== null ? <KV k="live value" v={String(live)} accent /> : null}
-            {forced ? <KV k="override" v={String(override)} accent /> : null}
-            {bridge ? (
-              <ChipRow>
-                <Chip
-                  label="Force on"
-                  selected={override === true}
-                  onPress={() => bridge.setFlagOverride(gate.name, true)}
-                />
-                <Chip
-                  label="Force off"
-                  selected={override === false}
-                  onPress={() => bridge.setFlagOverride(gate.name, false)}
-                />
-                {forced ? (
-                  <Chip label="Restore" onPress={() => bridge.removeOverride("flag", gate.name)} />
-                ) : null}
-              </ChipRow>
-            ) : (
+            <View style={styles.served}>
+              <Text style={[styles.servedLabel, { color: t.fgMuted }]}>Served to you</Text>
+              <Badge label={effectiveOn ? "ON" : "OFF"} tone={effectiveOn ? "ok" : "muted"} />
+              <Muted>
+                {forced ? "· forced override" : live !== null ? "· live evaluation" : "· not evaluated"}
+              </Muted>
+            </View>
+
+            <SectionLabel hint="first match wins">Evaluation flow</SectionLabel>
+            {flow.map((s) => (
+              <FlowStepRow key={s.key} step={s} user={user} />
+            ))}
+
+            {!bridge ? (
               <NoBridgeHint />
-            )}
+            ) : forced ? (
+              <ChipRow>
+                <Chip label="Clear override" onPress={() => bridge.removeOverride("flag", gate.name)} />
+              </ChipRow>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -371,4 +444,13 @@ const styles = StyleSheet.create({
   nameCell: { flex: 1, gap: 2, marginRight: 8 },
   noBridge: { marginTop: 4 },
   rowTop: { alignItems: "center", flexDirection: "row", gap: 8 },
+  served: { alignItems: "center", flexDirection: "row", gap: 6, marginBottom: 4 },
+  servedLabel: { fontSize: 12 },
+  step: { flexDirection: "row", gap: 8, marginBottom: 6 },
+  stepBody: { flex: 1, gap: 1 },
+  stepPct: { fontSize: 11.5, fontVariant: ["tabular-nums"], fontWeight: "600" },
+  stepStripe: { borderRadius: 999, width: 3 },
+  stepSummary: { fontSize: 11.5 },
+  stepTitle: { flex: 1, fontSize: 13, fontWeight: "600" },
+  stepTop: { alignItems: "center", flexDirection: "row", gap: 6 },
 });
