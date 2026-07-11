@@ -4,19 +4,24 @@
 
 ### React Native devtools overlay — home redesign, public feature requests, screenshots, key-based login
 
-- **Full-page nested config editor.** Tapping a config now drills into a
-  dedicated editor screen (`ConfigEditorScreen`) instead of an inline JSON box:
-  a tree view of the value with expand/collapse, typed leaf controls (text /
-  number / switch), add & remove fields on objects and arrays, and a raw-JSON
-  escape hatch. Applying writes an override (root schema-checked); Restore live
-  clears it. The config list rows become navigational.
+- **Full-page nested config viewer.** Tapping a config drills into a dedicated
+  **read-only** screen (`ConfigViewerScreen`) instead of an inline JSON box: a
+  tree of the value with expand/collapse and typed leaf readouts, plus a
+  raw-JSON view. Configs are inspected, not forced, from the RN overlay. The
+  config list rows are navigational.
 
-- **Experiments grouped by status.** The flat list becomes collapsible
-  **Running / Draft / Stopped / Archived** sections, each with a **count badge**.
-  Running is open by default; the rest are folded (rows stay unmounted until
-  expanded). Counts load upfront — one call for the active tab (running / draft /
-  stopped), one for the archive tab (`DevtoolsClient.experiments({ archived })`)
-  via the new `useExperiments` / `useArchivedExperiments` hooks.
+- **Experiments grouped by status, with a full-page detail drill-in.** The flat
+  list becomes collapsible **Running / Draft / Stopped / Archived** sections,
+  each with a **count badge**. Running is open by default; the rest are folded
+  (rows stay unmounted until expanded). Counts load upfront — one call for the
+  active tab (running / draft / stopped), one for the archive tab
+  (`DevtoolsClient.experiments({ archived })`) via the new `useExperiments` /
+  `useArchivedExperiments` hooks. Tapping a row opens `ExperimentDetailScreen`:
+  the experiment's metadata (universe, allocation, owner, audience, started,
+  min sample), the **universe param schema**, and every **variant** as a
+  collapsed-by-default card that expands to its resolved param fields (variant
+  override → universe default). **Force assignment** picks a variant live.
+  `ExperimentRecord` widens to carry the variant params + metadata.
 
 - **Feature Flags panel — evaluation flow + per-flag switch.** Each flag row now
   carries an on/off **switch** (forces the value live) in place of the old

@@ -23,11 +23,9 @@ import type { QueryState } from "./hooks";
 import type { DevtoolsTheme } from "./theme";
 import {
   Badge,
-  Button,
   Chip,
   ChipRow,
   ErrorState,
-  KV,
   Loading,
   Muted,
   Row,
@@ -240,7 +238,7 @@ export function GatesPanel(props: { client: DevtoolsClient }): ReactNode {
 // ── Configs ──────────────────────────────────────────────────────────────────
 
 /** A config list row — a navigational entry that drills into the full-page
- *  nested editor (ConfigEditorScreen). Shows a compact value preview + whether
+ *  nested viewer (ConfigViewerScreen). Shows a compact value preview + whether
  *  a local override is active. */
 function ConfigRow(props: {
   config: ConfigRecord;
@@ -287,66 +285,36 @@ export function ConfigsPanel(props: {
 
 // ── Experiments ──────────────────────────────────────────────────────────────
 
+/** An experiment list row — a navigational entry that drills into the full-page
+ *  detail screen (ExperimentDetailScreen). Shows the universe + variant count
+ *  and the caller's live/forced assignment at a glance. */
 function ExperimentRow(props: {
   experiment: ExperimentRecord;
   bridge: DevtoolsEngineBridge | null;
+  onOpen: (e: ExperimentRecord) => void;
 }): ReactNode {
+  const t = useTheme();
   const { experiment: e, bridge } = props;
-  const [open, setOpen] = useState(false);
   const liveEntry = bridge ? bridge.getExperiment(e.name) : null;
   const forcedGroup = bridge ? (bridge.getOverrides().experiments[e.name] ?? null) : null;
-  const effectiveGroup =
-    forcedGroup ?? (liveEntry?.inExperiment ? liveEntry.group : null);
+  const effectiveGroup = forcedGroup ?? (liveEntry?.inExperiment ? liveEntry.group : null);
   return (
-    <Row onPress={() => setOpen((o) => !o)}>
-      <View style={styles.fill}>
-        <View style={styles.rowTop}>
-          <NameCell
-            name={e.name}
-            sub={`${e.universe} · ${e.groups.map((g) => g.name).join(" / ") || "no groups"}`}
-          />
-          {forcedGroup ? <Badge label={`forced: ${forcedGroup}`} tone="accent" /> : null}
-          {!forcedGroup && effectiveGroup ? <Badge label={effectiveGroup} tone="ok" /> : null}
-          <Badge
-            label={e.status}
-            tone={e.status === "running" ? "ok" : e.status === "draft" ? "accent" : "muted"}
-          />
-        </View>
-        {open ? (
-          <View style={styles.detail}>
-            {e.groups.map((g) => (
-              <KV
-                key={g.name}
-                k={g.name}
-                v={`${g.weight}%${effectiveGroup === g.name ? (forcedGroup ? " · forced" : " · live") : ""}`}
-                accent={effectiveGroup === g.name}
-              />
-            ))}
-            {bridge ? (
-              <>
-                <SectionLabel hint="applies live">Force variant</SectionLabel>
-                <ChipRow>
-                  {e.groups.map((g) => (
-                    <Chip
-                      key={g.name}
-                      label={g.name}
-                      selected={forcedGroup === g.name}
-                      onPress={() => bridge.setExperimentOverride(e.name, g.name)}
-                    />
-                  ))}
-                  {forcedGroup ? (
-                    <Chip
-                      label="Restore"
-                      onPress={() => bridge.removeOverride("experiment", e.name)}
-                    />
-                  ) : null}
-                </ChipRow>
-              </>
-            ) : (
-              <NoBridgeHint />
-            )}
-          </View>
+    <Row onPress={() => props.onOpen(e)}>
+      <View style={styles.rowTop}>
+        <NameCell
+          name={e.name}
+          sub={`${e.universe} · ${e.groups.length} variant${e.groups.length === 1 ? "" : "s"}`}
+        />
+        {forcedGroup ? (
+          <Badge label={`forced: ${forcedGroup}`} tone="accent" />
+        ) : effectiveGroup ? (
+          <Badge label={effectiveGroup} tone="ok" />
         ) : null}
+        <Badge
+          label={e.status}
+          tone={e.status === "running" ? "ok" : e.status === "draft" ? "accent" : "muted"}
+        />
+        <Text style={[styles.chevron, { color: t.fgMuted }]}>›</Text>
       </View>
     </Row>
   );
@@ -369,6 +337,7 @@ function ExperimentSection(props: {
   items: ExperimentRecord[];
   loading: boolean;
   defaultOpen: boolean;
+  onOpen: (e: ExperimentRecord) => void;
 }): ReactNode {
   const t = useTheme();
   const [open, setOpen] = useState(props.defaultOpen);
@@ -398,14 +367,19 @@ function ExperimentSection(props: {
             {loading ? "Loading…" : `No ${props.label.toLowerCase()} experiments.`}
           </Muted>
         ) : (
-          items.map((e) => <ExperimentRow key={e.id} experiment={e} bridge={props.bridge} />)
+          items.map((e) => (
+            <ExperimentRow key={e.id} experiment={e} bridge={props.bridge} onOpen={props.onOpen} />
+          ))
         )
       ) : null}
     </View>
   );
 }
 
-export function ExperimentsPanel(props: { client: DevtoolsClient }): ReactNode {
+export function ExperimentsPanel(props: {
+  client: DevtoolsClient;
+  onOpen: (e: ExperimentRecord) => void;
+}): ReactNode {
   const bridge = useEngineBridge();
   const active = useExperiments(props.client);
   const archived = useArchivedExperiments(props.client);
@@ -426,6 +400,7 @@ export function ExperimentsPanel(props: { client: DevtoolsClient }): ReactNode {
             items={(q.data ?? []).filter((e) => e.status === s.status)}
             loading={q.loading && !q.data}
             defaultOpen={s.status === "running"}
+            onOpen={props.onOpen}
           />
         );
       })}

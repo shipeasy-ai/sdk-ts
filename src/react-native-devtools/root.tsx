@@ -24,10 +24,11 @@ import {
   Text,
   View,
 } from "react-native";
-import type { ConfigRecord, ProjectModules } from "../devtools/types";
+import type { ConfigRecord, ExperimentRecord, ProjectModules } from "../devtools/types";
 import { BugForm } from "./bug-form";
 import { FeatureForm } from "./feature-form";
-import { ConfigEditorScreen } from "./config-editor";
+import { ConfigViewerScreen } from "./config-viewer";
+import { ExperimentDetailScreen } from "./experiment-detail";
 import { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
 import { FeedbackPanel } from "./feedback-panel";
 import { UserPanel } from "./user-panel";
@@ -204,8 +205,18 @@ function Sheet(props: {
   const project = useProject(auth.client);
   const bridge = useEngineBridge();
   const { screen, setScreen } = props;
-  // Configs drill a second level: a row opens the full-page nested editor.
+  // Two sections drill a second level: a Configs row opens the full-page nested
+  // viewer; an Experiments row opens the full-page detail screen.
   const [editorConfig, setEditorConfig] = useState<ConfigRecord | null>(null);
+  const [detailExperiment, setDetailExperiment] = useState<ExperimentRecord | null>(null);
+
+  // Opening a section from the menu clears any stale drill-in target so the
+  // section lands on its list, not a previously-open sub-screen.
+  const openSection = (key: Screen) => {
+    setEditorConfig(null);
+    setDetailExperiment(null);
+    setScreen(key);
+  };
 
   // The public bug button renders ONLY when the project opted in (surfaced via
   // /sdk/evaluate). A logged-in session can always file (authed path).
@@ -220,17 +231,20 @@ function Sheet(props: {
   // section key shows that panel. A sub-screen (a section, or the bug/feature
   // forms) swaps the header brand for a ‹ Back that returns to home/menu.
   const activeSection = sections.find((s) => s.key === screen) ?? null;
-  // The config editor is a level below the Configs section: its Back returns to
-  // the config list, not all the way to the menu.
+  // A drill-in sub-screen (config viewer / experiment detail) is a level below
+  // its section: its Back returns to that section's list, not to the menu.
   const subTitle = editorConfig
     ? editorConfig.name
-    : screen === "bug"
-      ? "Report a bug"
-      : screen === "feature"
-        ? "Request a feature"
-        : (activeSection?.label ?? null);
+    : detailExperiment
+      ? detailExperiment.name
+      : screen === "bug"
+        ? "Report a bug"
+        : screen === "feature"
+          ? "Request a feature"
+          : (activeSection?.label ?? null);
   const goBack = () => {
     if (editorConfig) setEditorConfig(null);
+    else if (detailExperiment) setDetailExperiment(null);
     else setScreen("home");
   };
 
@@ -297,16 +311,20 @@ function Sheet(props: {
                 <UserPanel />
               ) : activeSection.key === "configs" ? (
                 editorConfig ? (
-                  <ConfigEditorScreen
-                    config={editorConfig}
-                    bridge={bridge}
-                    onClose={() => setEditorConfig(null)}
-                  />
+                  <ConfigViewerScreen config={editorConfig} bridge={bridge} />
                 ) : (
                   <ConfigsPanel client={auth.client} onOpen={setEditorConfig} />
                 )
               ) : activeSection.key === "experiments" ? (
-                <ExperimentsPanel client={auth.client} />
+                detailExperiment ? (
+                  <ExperimentDetailScreen
+                    experiment={detailExperiment}
+                    client={auth.client}
+                    bridge={bridge}
+                  />
+                ) : (
+                  <ExperimentsPanel client={auth.client} onOpen={setDetailExperiment} />
+                )
               ) : activeSection.key === "feedback" ? (
                 <FeedbackPanel
                   client={auth.client}
@@ -329,7 +347,7 @@ function Sheet(props: {
                 key={s.key}
                 icon={s.icon}
                 label={s.label}
-                onPress={() => setScreen(s.key)}
+                onPress={() => openSection(s.key)}
               />
             ))}
             <SectionRow

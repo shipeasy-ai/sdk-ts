@@ -99,15 +99,19 @@ overlay); tapping a row opens that panel with a **‹ Back** affordance:
   locally against the identify() attributes) and each rollout step's %. The
   served value + source (live vs forced override) is shown up top; **Clear
   override** restores the live value.
-- **Configs** — each config drills into a **full-page nested editor**: a tree
-  view of the effective value with expand/collapse, typed leaf controls
-  (text / number / switch), add & remove fields on objects and arrays, plus a
-  **raw JSON** escape hatch. Applying writes a local override (schema-checked at
-  the root); **Restore live** clears it.
+- **Configs** — each config drills into a **full-page nested viewer**: a
+  **read-only** tree of the effective value with expand/collapse and typed leaf
+  readouts, plus a **raw JSON** view. Configs are inspected, not forced, from
+  the overlay.
 - **Experiments** — grouped into collapsible **status sections** (Running,
   Draft, Stopped, Archived), each with a **count badge**. **Running** is open by
-  default; the rest are folded (their rows stay unmounted until expanded). Each
-  row shows universe, weights, the live assignment, and per-variant forcing.
+  default; the rest are folded (their rows stay unmounted until expanded).
+  Tapping a row drills into a **full-page detail screen**: the experiment's
+  metadata (universe, allocation, owner, audience, started, min sample), the
+  **universe param schema** it draws from, and every **variant** as a
+  collapsed-by-default card that expands to its resolved param fields (variant
+  override → universe default). **Force assignment** picks a variant live;
+  **Restore live** clears it.
 - **Feedback** — bugs + feature requests with Active/All filtering, detail
   views, inline **status / priority editing**, attachment previews + screenshot
   upload (expo-image-picker), and the create forms.
@@ -123,9 +127,10 @@ Live state comes from the app's configured `@shipeasy/sdk/client` singleton via
 a `globalThis` bridge — the overlay never imports the client module. On the
 web, devtools overrides ride URL params and reload the page; React Native has
 no URL, so the RN overlay drives the Engine's **programmatic overrides**
-instead: forcing a gate, variant, or config applies immediately and notifies
-`onChange` subscribers. If the app hasn't configured the client SDK, panels
-still list the project's resources but hide live values and forcing.
+instead: forcing a gate or experiment variant applies immediately and notifies
+`onChange` subscribers (configs are read-only in the RN overlay). If the app
+hasn't configured the client SDK, panels still list the project's resources but
+hide live values and forcing.
 
 ## Public bug reports and feature requests
 

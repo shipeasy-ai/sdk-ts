@@ -103,14 +103,38 @@ export interface ConfigRecord {
   updatedAt: string;
 }
 
+/** One experiment variant (group): its label, split weight, and the per-variant
+ *  param overrides delivered when a caller is hashed into it (a subset of the
+ *  universe's param schema; unset keys inherit the universe default). */
+export interface ExperimentVariant {
+  name: string;
+  /** Allocation weight in basis points (0–10000). */
+  weight: number;
+  params?: Record<string, unknown> | null;
+}
+
 export interface ExperimentRecord {
   id: string;
   name: string;
   /** Name of the universe this experiment runs in. */
   universe: string;
   status: "draft" | "running" | "stopped" | "archived";
-  groups: Array<{ name: string; weight: number }>;
+  groups: ExperimentVariant[];
   updatedAt: string;
+  // ── extended metadata ──────────────────────────────────────────────────────
+  // Present on the list wire; projected here for the drill-in detail screen.
+  // Optional so older/narrower callers stay valid.
+  description?: string | null;
+  hypothesis?: string | null;
+  ownerEmail?: string | null;
+  audience?: string | null;
+  /** Unit of randomisation override, or null to inherit the universe's. */
+  bucketBy?: string | null;
+  /** Share of the gated audience allocated, in basis points (0–10000). */
+  allocationPct?: number;
+  /** ISO-8601 timestamp of the last transition to `running`, or null. */
+  startedAt?: string | null;
+  minSampleSize?: number;
 }
 
 export interface ProfileRecord {
