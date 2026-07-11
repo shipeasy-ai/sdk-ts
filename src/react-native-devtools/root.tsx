@@ -212,19 +212,38 @@ function Sheet(props: {
   const modules = project.data?.modules ?? null;
   const sections = SECTIONS.filter((s) => modules === null || modules[s.module]);
   // Logged-in nav is a drill-in: `screen === "home"` shows the section menu; a
-  // section key shows that panel with a Back affordance.
+  // section key shows that panel. A sub-screen (a section, or the bug/feature
+  // forms) swaps the header brand for a ‹ Back that returns to home/menu.
   const activeSection = sections.find((s) => s.key === screen) ?? null;
+  const subTitle =
+    screen === "bug"
+      ? "Report a bug"
+      : screen === "feature"
+        ? "Request a feature"
+        : (activeSection?.label ?? null);
 
   return (
     <View style={styles.sheetInner}>
       <View style={[styles.header, { borderBottomColor: t.border }]}>
-        <View style={styles.headerBrand}>
-          <BrandMark size={22} />
-          <Text style={[styles.headerTitle, { color: t.fg }]}>
-            Shipeasy{" "}
-            <Text style={[styles.headerTitleDim, { color: t.fgMuted }]}>Inspector</Text>
-          </Text>
-        </View>
+        {subTitle ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => setScreen("home")}
+            style={styles.headerBack}
+          >
+            <Text style={[styles.backChevron, { color: t.accent }]}>‹</Text>
+            <Text style={[styles.headerTitle, { color: t.fg }]}>{subTitle}</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.headerBrand}>
+            <BrandMark size={22} />
+            <Text style={[styles.headerTitle, { color: t.fg }]}>
+              Shipeasy{" "}
+              <Text style={[styles.headerTitleDim, { color: t.fgMuted }]}>Inspector</Text>
+            </Text>
+          </View>
+        )}
         {auth.session ? (
           <Pressable
             accessibilityRole="button"
@@ -261,15 +280,6 @@ function Sheet(props: {
       ) : auth.session && auth.client ? (
         activeSection ? (
           <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back to menu"
-              onPress={() => setScreen("home")}
-              style={styles.backRow}
-            >
-              <Text style={[styles.backChevron, { color: t.accent }]}>‹</Text>
-              <Text style={[styles.backTitle, { color: t.fg }]}>{activeSection.label}</Text>
-            </Pressable>
             <View style={styles.panel}>
               {activeSection.key === "user" ? (
                 <UserPanel />
@@ -507,9 +517,7 @@ const styles = StyleSheet.create({
   },
   actionSub: { fontSize: 12, lineHeight: 16 },
   actionTitle: { fontSize: 15, fontWeight: "600" },
-  backChevron: { fontSize: 26, fontWeight: "500", marginTop: -3 },
-  backRow: { alignItems: "center", flexDirection: "row", gap: 4, paddingHorizontal: 12, paddingVertical: 10 },
-  backTitle: { fontSize: 16, fontWeight: "700", letterSpacing: -0.2 },
+  backChevron: { fontSize: 24, fontWeight: "500", marginTop: -2 },
   backdrop: { backgroundColor: "rgba(0,0,0,0.55)", flex: 1, justifyContent: "flex-end" },
   brandMark: { alignItems: "center", justifyContent: "center" },
   // Invisible but mounted — captureScreen must shoot the app, and toggling the
@@ -527,6 +535,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 9,
   },
+  headerBack: { alignItems: "center", flexDirection: "row", gap: 3, marginLeft: -4 },
   headerBrand: { alignItems: "center", flexDirection: "row", gap: 8 },
   headerTitle: { fontSize: 15, fontWeight: "700", letterSpacing: -0.2 },
   headerTitleDim: { fontWeight: "500" },
