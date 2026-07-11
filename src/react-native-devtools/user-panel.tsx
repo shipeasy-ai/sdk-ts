@@ -1,31 +1,45 @@
-// User panel — mirrors the web overlay's: shows the identify() payload from
-// the engine bridge, lets the developer edit properties to simulate another
-// user, and re-evaluates. Unlike the web overlay (which only re-renders), the
-// bridge re-runs identify() so gates/experiments/configs re-resolve for real.
+// User panel — a read-only mirror of the engine bridge's identify() payload.
+// It shows exactly what the app handed identify() (caller fields) plus the
+// attributes the SDK auto-collects on every identify() (anonymous_id + browser/
+// device context). Nothing here is editable: this is an inspector, not a
+// simulator — the values are the live targeting inputs, verbatim.
 
-import { useState } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import { useEngineBridge } from "./hooks";
-import { Badge, Button, CenterState, Field, KV, Muted, SectionLabel, useTheme } from "./ui";
+import { Badge, CenterState, KV, Muted, SectionLabel, useTheme } from "./ui";
 
-/** Scalar props only — `$`-prefixed keys are devtools sentinels (`$mock`
- *  marks a simulated user) and objects aren't editable inline. */
-function scalarProps(user: Record<string, unknown>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(user)) {
-    if (k.startsWith("$") || v == null || typeof v === "object") continue;
-    out[k] = String(v);
+/** Attributes the SDK injects on every identify() (see `collectBrowserAttrs` +
+ *  the always-on `anonymous_id` in the client engine). Everything else in the
+ *  payload came straight from the app's identify() call. */
+const AUTO_KEYS = new Set([
+  "anonymous_id",
+  "locale",
+  "timezone",
+  "referrer",
+  "path",
+  "screen_width",
+  "screen_height",
+  "user_agent",
+]);
+
+/** Render any identify() value verbatim: scalars as-is, objects/arrays as JSON
+ *  so nested targeting attributes are shown in full rather than dropped. */
+function render(v: unknown): string {
+  if (v == null) return "null";
+  if (typeof v === "object") {
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
   }
-  return out;
+  return String(v);
 }
 
 export function UserPanel(): ReactNode {
   const t = useTheme();
   const bridge = useEngineBridge();
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [reevaluating, setReevaluating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   if (!bridge) {
     return (
@@ -38,38 +52,31 @@ export function UserPanel(): ReactNode {
   }
 
   const user = bridge.getUser();
-  if (!user && Object.keys(edits).length === 0) {
+  if (!user) {
     return (
       <CenterState>
         <Muted style={styles.centerText}>
-          No identified user yet. Once the app calls identify(), the user's properties show here
-          and you can simulate other users.
+          No identified user yet. Once the app calls identify(), the user's properties show here.
         </Muted>
       </CenterState>
     );
   }
 
-  const base = user ? scalarProps(user) : {};
-  const merged = { ...base, ...edits };
-  const isMock = !!user?.$mock;
-  const idVal = merged.user_id || merged.id || merged.anonymous_id || "—";
-  const emailVal = merged.email || merged.user_email || "";
-  const dirty = Object.entries(edits).filter(([k, v]) => (base[k] ?? "") !== v);
+  // Split the payload into what the app passed vs what the SDK auto-collected.
+  // `$`-prefixed keys are devtools sentinels — never part of identify().
+  const callerFields: [string, unknown][] = [];
+  const autoFields: [string, unknown][] = [];
+  for (const [k, v] of Object.entries(user)) {
+    if (k.startsWith("$")) continue;
+    (AUTO_KEYS.has(k) ? autoFields : callerFields).push([k, v]);
+  }
 
-  const reevaluate = async (props: Record<string, string>) => {
-    setError(null);
-    setReevaluating(true);
-    try {
-      await bridge.identify(props);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Re-evaluate failed.");
-    } finally {
-      setReevaluating(false);
-    }
-  };
+  const idVal =
+    (user.user_id as string) || (user.id as string) || (user.anonymous_id as string) || "—";
+  const emailVal = (user.email as string) || (user.user_email as string) || "";
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
+    <ScrollView contentContainerStyle={styles.scroll}>
       <View style={[styles.who, { borderColor: t.border, borderRadius: t.radius }]}>
         <View style={[styles.avatar, { backgroundColor: t.accentSoft }]}>
           <Text style={[styles.avatarText, { color: t.accent }]}>
@@ -77,50 +84,35 @@ export function UserPanel(): ReactNode {
           </Text>
         </View>
         <View style={styles.whoInfo}>
-          <View style={styles.whoTop}>
-            <Text style={[styles.whoEmail, { color: t.fg }]} numberOfLines={1}>
-              {emailVal || idVal}
-            </Text>
-            {isMock ? <Badge label="mock" tone="accent" /> : null}
-          </View>
+          <Text style={[styles.whoEmail, { color: t.fg }]} numberOfLines={1}>
+            {emailVal || idVal}
+          </Text>
           <Muted numberOfLines={1}>{idVal}</Muted>
         </View>
       </View>
 
-      <SectionLabel hint="edit to simulate">User properties</SectionLabel>
-      {Object.keys(merged).length === 0 ? (
-        <Muted>No user properties yet.</Muted>
+      <SectionLabel hint="from identify()">User properties</SectionLabel>
+      {callerFields.length === 0 ? (
+        <Muted>The app called identify() with no properties.</Muted>
       ) : (
-        Object.entries(merged).map(([k, v]) => (
-          <Field
-            key={k}
-            label={`user.${k}`}
-            value={v}
-            autoCapitalize="none"
-            onChangeText={(next) => setEdits((e) => ({ ...e, [k]: next }))}
-          />
-        ))
+        callerFields.map(([k, v]) => <KV key={k} k={`user.${k}`} v={render(v)} />)
+      )}
+
+      <SectionLabel hint="auto-collected">Attributes</SectionLabel>
+      {autoFields.length === 0 ? (
+        <Muted>No auto-collected attributes.</Muted>
+      ) : (
+        autoFields.map(([k, v]) => <KV key={k} k={k} v={render(v)} accent />)
       )}
 
       <SectionLabel hint="read-only">Device context</SectionLabel>
       <KV k="ctx.platform" v={Platform.OS} accent />
       <KV k="ctx.platform_version" v={String(Platform.Version)} accent />
 
-      {error ? <Text style={[styles.error, { color: t.danger }]}>{error}</Text> : null}
-      <Button
-        title={dirty.length > 0 ? "Re-evaluate with changes" : "Re-evaluate"}
-        onPress={() => void reevaluate(merged)}
-        loading={reevaluating}
-      />
-      <Button
-        title="Reset"
-        variant="ghost"
-        style={styles.reset}
-        onPress={() => {
-          setEdits({});
-          void reevaluate(base);
-        }}
-      />
+      <View style={styles.footnote}>
+        <Badge label="read-only" tone="muted" />
+        <Muted style={styles.footnoteText}>Live targeting inputs, exactly as identified.</Muted>
+      </View>
     </ScrollView>
   );
 }
@@ -135,8 +127,8 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 17, fontWeight: "700" },
   centerText: { textAlign: "center" },
-  error: { fontSize: 13, marginBottom: 10 },
-  reset: { marginTop: 8 },
+  footnote: { alignItems: "center", flexDirection: "row", gap: 8, marginTop: 16 },
+  footnoteText: { flexShrink: 1 },
   scroll: { paddingBottom: 32 },
   who: {
     alignItems: "center",
@@ -148,5 +140,4 @@ const styles = StyleSheet.create({
   },
   whoEmail: { flexShrink: 1, fontSize: 15, fontWeight: "600" },
   whoInfo: { flex: 1, gap: 2 },
-  whoTop: { alignItems: "center", flexDirection: "row", gap: 8 },
 });

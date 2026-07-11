@@ -24,6 +24,12 @@
   project picker (mirrors the browser overlay). `startDeviceAuth` /
   `DevtoolsConfig` gain `clientKey`.
 - `HomeScreen` exported for design/embedding surfaces.
+- **User tab is now a read-only inspector**: it lists the exact `identify()`
+  payload — caller-supplied fields split from the SDK's auto-collected
+  attributes (`anonymous_id`, locale/timezone, device context), with objects
+  rendered as JSON. The property-editing / "Re-evaluate to simulate another
+  user" affordance is removed; the panel shows the live targeting inputs
+  verbatim.
 
 ### Report forms — visual redesign (folded in from 7.5.1 prep)
 

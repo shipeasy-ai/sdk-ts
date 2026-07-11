@@ -2,8 +2,8 @@
 
 The SDK ships a shake-to-open devtools overlay for React Native / Expo apps at
 feature parity with the in-browser overlay: inspect the project's live gates,
-configs and experiments on-device, **force values live** (no reload), simulate
-users, watch the SDK event stream, browse and edit translations, triage
+configs and experiments on-device, **force values live** (no reload), inspect
+the identified user, watch the SDK event stream, browse and edit translations, triage
 feedback, and file bug reports **and feature requests** — including a **public**
 path that works without any login when the project has opted in.
 
@@ -85,9 +85,10 @@ use — a malicious app squatting your scheme intercepts nothing usable.
 Once logged in, the overlay shows one tab per module the project has enabled
 (disabled modules are hidden, matching the web overlay):
 
-- **User** — the app's `identify()` payload; edit properties and
-  **Re-evaluate** to simulate another user (this re-runs the real evaluation,
-  so gates/experiments/configs re-resolve live).
+- **User** — a read-only view of the exact `identify()` payload: the fields the
+  app passed, plus the attributes the SDK auto-collects on every identify()
+  (`anonymous_id`, locale/timezone and device context). These are the live
+  targeting inputs, verbatim — nothing here is editable.
 - **Gates** — rollout, killswitch flag, the value this device is being served,
   and **Force on / Force off / Restore** buttons.
 - **Configs** — effective values with a JSON override editor (schema-checked at
