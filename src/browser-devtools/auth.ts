@@ -88,7 +88,6 @@ export async function startDeviceAuth(
       if (done) return;
       done = true;
       window.removeEventListener("message", onMessage);
-      clearInterval(closedPoll);
       clearTimeout(timeout);
       if (err) reject(err);
       else resolve(session!);
@@ -109,17 +108,17 @@ export async function startDeviceAuth(
 
     window.addEventListener("message", onMessage);
 
-    // Detect popup closed without completing. Skip the first 1500ms so a
-    // briefly-blank reused window or a slow cross-origin navigation doesn't
-    // fire a false "closed" detection before the page has even loaded.
-    const startedAt = Date.now();
-    const closedPoll = setInterval(() => {
-      if (Date.now() - startedAt < 1500) return;
-      if (popup.closed && !done) {
-        finish(new Error("Sign-in window closed before approval."));
-      }
-    }, 500);
-
+    // We deliberately do NOT poll `popup.closed` to reject the flow early.
+    // Under Cross-Origin-Opener-Policy, navigating the popup to an OAuth
+    // provider (e.g. accounts.google.com serves COOP `same-origin-allow-popups`)
+    // neuters the opener's handle to the popup, so `popup.closed` reports
+    // `true` while the window is genuinely open and mid-sign-in. Rejecting on
+    // that false positive removed the "message" listener before the approval
+    // postMessage arrived — the popup delivered a valid token but the overlay
+    // stayed on the "Connect" screen. `postMessage` (popup → opener) survives
+    // the COOP split, so resolve-on-message plus this timeout are the reliable
+    // completion/failure paths; if the user abandons the popup, re-clicking
+    // Connect starts a fresh attempt.
     const timeout = setTimeout(() => {
       finish(new Error("Sign-in timed out after 10 minutes."));
     }, TIMEOUT_MS);
