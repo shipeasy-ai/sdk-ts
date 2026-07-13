@@ -192,10 +192,10 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-hook-form": "^7.81.0",
-    "react-native": "^0.81.6",
+    "react-native": "^0.86.0",
     "tsup": "^8.3.0",
-    "typescript": "^6.0.3",
-    "vite": "^6.4.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4",
     "vitest": "^4.1.9",
     "wrangler": "^4.83.0",
     "zod": "^4.3.6"
