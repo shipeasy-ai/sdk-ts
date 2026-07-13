@@ -1,5 +1,21 @@
 # Changelog
 
+## 7.6.1 (2026-07-13)
+
+### Fix: browser devtools login stuck on "Connect" after OAuth sign-in
+
+- **Device-auth no longer tears down its listener on a COOP false-positive.**
+  When the sign-in popup navigated to an OAuth provider that serves
+  `Cross-Origin-Opener-Policy` (e.g. `accounts.google.com` sends
+  `same-origin-allow-popups`), the opener's handle to the popup was neutered and
+  `popup.closed` reported `true` while the window was genuinely open and
+  mid-sign-in. The `startDeviceAuth` closed-poll then rejected the flow and
+  removed the `message` listener before the approval `postMessage` arrived — so
+  Google/GitHub sign-in delivered a valid token but the overlay stayed on the
+  "Connect" screen. The `popup.closed` poll is removed; `postMessage`
+  (popup → opener) survives the COOP split, so resolve-on-message plus the
+  10-minute timeout are the reliable completion/failure paths.
+
 ## 7.6.0 (2026-07-10)
 
 ### React Native devtools overlay — home redesign, public feature requests, screenshots, key-based login
