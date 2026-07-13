@@ -11,11 +11,17 @@ import type {
 import { I } from "../icons";
 import { captureScreenshot, startRecording, type RecordingHandle } from "./capture";
 import { createAnnotator } from "./annotator";
-import { escapeHtml, fmtBytes, timeAgo, emptyState, loadingState } from "./common";
+import { escapeHtml, fmtBytes, timeAgo, loadingState } from "./common";
+
+// The ops queue holds four item types, all rows of the same `/api/admin/ops`
+// table. Bugs + feature requests are user-fileable (create form); errors (from
+// `see()`) and alerts (fired guardrails) are system-generated and read-only.
+export type Sub = "bugs" | "features" | "errors" | "alerts";
+const SUB_ORDER: readonly Sub[] = ["bugs", "features", "alerts", "errors"];
 
 interface FeedbackHook {
-  sub: "bugs" | "features";
-  setSub: (s: "bugs" | "features") => void;
+  sub: Sub;
+  setSub: (s: Sub) => void;
   /** Optional one-shot signal from the rail's quick-actions hovercard. When
    * set, the panel opens directly into the matching form instead of the list.
    * Cleared via `consumePendingForm` so re-renders don't re-trigger. */
@@ -99,31 +105,29 @@ function prLinkHtml(cd: FeedbackConnectorData | null | undefined): string {
 // the user was triaging on, instead of resetting to the "active" default.
 const FEEDBACK_STATUS_FILTER_KEY = "se_l_fb_status_filter";
 
-function loadStatusFilter(defaults: {
-  bugs: ReadonlyArray<string>;
-  features: ReadonlyArray<string>;
-}): { bugs: Set<string>; features: Set<string> } {
+function loadStatusFilter(
+  defaults: Record<Sub, ReadonlyArray<string>>,
+): Record<Sub, Set<string>> {
+  let saved: Partial<Record<Sub, string[]>> = {};
   try {
     const raw = localStorage.getItem(FEEDBACK_STATUS_FILTER_KEY);
-    if (raw) {
-      const saved = JSON.parse(raw) as { bugs?: string[]; features?: string[] };
-      return {
-        bugs: new Set(Array.isArray(saved.bugs) ? saved.bugs : defaults.bugs),
-        features: new Set(Array.isArray(saved.features) ? saved.features : defaults.features),
-      };
-    }
+    if (raw) saved = JSON.parse(raw) as Partial<Record<Sub, string[]>>;
   } catch {
     /* ignore */
   }
-  return { bugs: new Set(defaults.bugs), features: new Set(defaults.features) };
+  const out = {} as Record<Sub, Set<string>>;
+  for (const s of SUB_ORDER) {
+    const v = saved[s];
+    out[s] = new Set(Array.isArray(v) ? v : defaults[s]);
+  }
+  return out;
 }
 
-function saveStatusFilter(filter: { bugs: Set<string>; features: Set<string> }): void {
+function saveStatusFilter(filter: Record<Sub, Set<string>>): void {
   try {
-    localStorage.setItem(
-      FEEDBACK_STATUS_FILTER_KEY,
-      JSON.stringify({ bugs: [...filter.bugs], features: [...filter.features] }),
-    );
+    const obj: Record<string, string[]> = {};
+    for (const s of SUB_ORDER) obj[s] = [...filter[s]];
+    localStorage.setItem(FEEDBACK_STATUS_FILTER_KEY, JSON.stringify(obj));
   } catch {
     /* ignore */
   }
@@ -399,9 +403,12 @@ export async function renderFeedbackPanel(
   // set means "no filter" (show everything). The default is the "active" preset
   // (every status except terminal/resolved) — what users usually want when
   // triaging. Panel-scoped so the selection survives sub-tab switches.
-  const statusFilter: { bugs: Set<string>; features: Set<string> } = loadStatusFilter({
+  const statusFilter: Record<Sub, Set<string>> = loadStatusFilter({
     bugs: BUG_ACTIVE_STATUSES,
     features: FR_ACTIVE_STATUSES,
+    // Errors + alerts are ops rows with the same status set as bugs.
+    errors: BUG_ACTIVE_STATUSES,
+    alerts: BUG_ACTIVE_STATUSES,
   });
 
   // Quick client-side title search. Filters the already-fetched list by
@@ -409,8 +416,9 @@ export async function renderFeedbackPanel(
   // panel scope so it survives re-paints; the last fetched lists are cached
   // here too so typing re-filters in place (no refetch, input keeps focus).
   let searchQuery = "";
-  let lastBugs: BugRecord[] | null = null;
-  let lastFeatures: FeatureRequestRecord[] | null = null;
+  // Last fetched list per sub, so the status filter + search re-filter in place
+  // without a refetch (keeps input focus).
+  const lastList: Partial<Record<Sub, FeedbackListItem[]>> = {};
 
   // Caches for the expanded-row attachment preview. paint() rebuilds the DOM
   // on every expand/collapse, so we keep state at panel scope so that:
@@ -497,115 +505,197 @@ export async function renderFeedbackPanel(
     await refresh();
   }
 
+  // Per-sub display + behaviour. `fileable` gates the "+ new" button and the
+  // inline create form (errors/alerts are system-generated, so read-only).
+  function subMeta(sub: Sub): { label: string; icon: string; fileable: boolean } {
+    switch (sub) {
+      case "bugs":
+        return { label: "Bugs", icon: I.bug, fileable: true };
+      case "features":
+        return { label: "Feats", icon: I.lightbulb, fileable: true };
+      case "alerts":
+        return { label: "Alerts", icon: I.bell, fileable: false };
+      case "errors":
+        return { label: "Errors", icon: I.alert, fileable: false };
+    }
+  }
+
+  function statusPresetFor(sub: Sub): ReadonlyArray<string> {
+    return sub === "features" ? FR_ACTIVE_STATUSES : BUG_ACTIVE_STATUSES;
+  }
+
+  // Every sub is a row of the same `/api/admin/ops` table (BugRecord shape), so
+  // one fetch dispatch + one list config surface covers all four.
+  async function fetchSub(sub: Sub): Promise<FeedbackListItem[]> {
+    switch (sub) {
+      case "bugs":
+        return dropTerminal(await api.bugs(), BUG_TERMINAL_STATUSES);
+      case "features":
+        return dropTerminal(await api.featureRequests(), FR_TERMINAL_STATUSES);
+      case "alerts":
+        return dropTerminal(await api.alerts(), BUG_TERMINAL_STATUSES);
+      case "errors":
+        return dropTerminal(await api.errors(), BUG_TERMINAL_STATUSES);
+    }
+  }
+
+  function cfgFor(sub: Sub): FeedbackListCfg<FeedbackListItem> {
+    switch (sub) {
+      case "bugs":
+        return bugListCfg() as unknown as FeedbackListCfg<FeedbackListItem>;
+      case "features":
+        return featureListCfg() as unknown as FeedbackListCfg<FeedbackListItem>;
+      case "alerts":
+        return alertListCfg();
+      case "errors":
+        return errorListCfg();
+    }
+  }
+
+  // Per-sub empty-state art: the tab's glyph in a tinted disc + a friendly
+  // headline and blurb tailored to what that queue is for.
+  function subEmpty(sub: Sub): { icon: string; tint: string; title: string; msg: string } {
+    switch (sub) {
+      case "bugs":
+        return {
+          icon: I.bug,
+          tint: "var(--danger)",
+          title: "No open bugs",
+          msg: "Nothing broken on this page. Spot something off? File it — a screenshot or recording attaches automatically.",
+        };
+      case "features":
+        return {
+          icon: I.lightbulb,
+          tint: "var(--accent)",
+          title: "No feature requests",
+          msg: "Capture asks from the field with priority, status, and a clean trail back to the page they came from.",
+        };
+      case "alerts":
+        return {
+          icon: I.bell,
+          tint: "var(--warn)",
+          title: "All quiet",
+          msg: "No guardrails are firing. Alerts land here the moment a metric threshold is breached.",
+        };
+      case "errors":
+        return {
+          icon: I.alert,
+          tint: "var(--danger)",
+          title: "Zero errors",
+          msg: "Nothing thrown lately. Errors captured by see() surface here, grouped and counted.",
+        };
+    }
+  }
+
+  function emptyCard(sub: Sub, override?: { title: string; msg: string }): string {
+    const e = subEmpty(sub);
+    const cta =
+      !override && subMeta(sub).fileable
+        ? `<button class="ibtn pri se-fb-empty-cta" data-action="file-empty">${I.plus} ${sub === "bugs" ? "File a bug" : "New request"}</button>`
+        : "";
+    return `<div class="se-fb-empty">
+      <div class="se-fb-empty-ic" style="color:${e.tint};background:color-mix(in oklab, ${e.tint} 13%, transparent)">${e.icon}</div>
+      <div class="se-fb-empty-t">${escapeHtml(override?.title ?? e.title)}</div>
+      <div class="se-fb-empty-m">${escapeHtml(override?.msg ?? e.msg)}</div>
+      ${cta}
+    </div>`;
+  }
+
   async function refresh(): Promise<void> {
+    const meta = subMeta(hook.sub);
+    const cfg = cfgFor(hook.sub);
+    // Icon-only tabs so all four fit the panel width; the label lives in the
+    // tooltip + aria-label, the count badge rides alongside the glyph.
+    const subtabs = SUB_ORDER.map((s) => {
+      const m = subMeta(s);
+      return `<button class="${hook.sub === s ? "active" : ""}" data-sub="${s}" data-tip="${m.label}" aria-label="${m.label}">${m.icon}<span class="c">…</span></button>`;
+    }).join("");
     container.innerHTML = `
-      <div class="se-fb-subtabs">
-        <button class="${hook.sub === "bugs" ? "active" : ""}" data-sub="bugs">${I.bug} Bugs <span class="c">…</span></button>
-        <button class="${hook.sub === "features" ? "active" : ""}" data-sub="features">${I.sparkles} Feature requests <span class="c">…</span></button>
-      </div>
+      <div class="se-fb-subtabs">${subtabs}</div>
       <div class="se-feedback-head">
-        <button class="ibtn pri" data-action="file">+ ${hook.sub === "bugs" ? "File a bug" : "Feature"}</button>
+        ${
+          meta.fileable
+            ? `<button class="ibtn pri icon" data-action="file"
+          title="${hook.sub === "bugs" ? "File a bug" : "Request a feature"}"
+          aria-label="${hook.sub === "bugs" ? "File a bug" : "Request a feature"}">${I.plus}</button>`
+            : ""
+        }
         <input class="se-input se-fb-search" data-fb-search type="search"
-          placeholder="Search ${hook.sub === "bugs" ? "bugs" : "feature requests"}…"
+          placeholder="Search ${escapeHtml(cfg.nounPlural)}…"
           aria-label="Search by title" value="${escapeHtml(searchQuery)}" />
         <span class="se-fb-filter-drop" data-status-filter></span>
-        <span class="grow"></span>
-        ${
-          api.hideAdminLinks
-            ? ""
-            : `<a class="ibtn" target="_blank" rel="noopener" href="${escapeHtml(api.adminUrl)}/dashboard/${hook.sub === "bugs" ? "bugs" : "feature-requests"}">${I.external} Open dashboard</a>`
-        }
       </div>
       <div class="se-feedback-list" data-list></div>`;
 
     container.querySelectorAll<HTMLButtonElement>("[data-sub]").forEach((btn) => {
-      btn.addEventListener("click", () => hook.setSub(btn.dataset.sub as "bugs" | "features"));
+      btn.addEventListener("click", () => hook.setSub(btn.dataset.sub as Sub));
     });
-    container.querySelector('[data-action="file"]')!.addEventListener("click", () => {
+    container.querySelector('[data-action="file"]')?.addEventListener("click", () => {
       formMode = hook.sub === "bugs" ? "bug" : "feature";
       void render();
     });
+
+    // Re-filter the cached list in place — no refetch, so the search input keeps
+    // focus and the filter menu stays open across toggles.
+    const reFilter = () => {
+      const list = container.querySelector<HTMLElement>("[data-list]");
+      const cached = lastList[hook.sub];
+      if (list && cached) renderList(list, cached, cfg);
+    };
+
     const filterSlot = container.querySelector<HTMLElement>("[data-status-filter]");
     if (filterSlot) {
+      // Resolved is never loaded, so it never appears as a filter option.
+      const preset = statusPresetFor(hook.sub);
       attachStatusFilterDropdown(filterSlot, {
-        // Resolved is never loaded, so it never appears as a filter option.
-        statuses: hook.sub === "bugs" ? BUG_ACTIVE_STATUSES : FR_ACTIVE_STATUSES,
-        statusCls: hook.sub === "bugs" ? BUG_STATUS_CLS : FR_STATUS_CLS,
-        activePreset: hook.sub === "bugs" ? BUG_ACTIVE_STATUSES : FR_ACTIVE_STATUSES,
+        statuses: preset,
+        statusCls: cfg.statusCls,
+        activePreset: preset,
         selected: statusFilter[hook.sub],
-        // Re-filter the cached list in place — no refetch, and the menu stays
-        // open so multiple statuses can be toggled in one go.
         onChange: () => {
           saveStatusFilter(statusFilter);
-          const list = container.querySelector<HTMLElement>("[data-list]");
-          if (!list) return;
-          if (hook.sub === "bugs") {
-            if (lastBugs) renderList(list, lastBugs, bugListCfg());
-          } else if (lastFeatures) {
-            renderList(list, lastFeatures, featureListCfg());
-          }
+          reFilter();
         },
       });
     }
-    // Live title search re-filters the cached list in place — no refetch, so
-    // the input keeps focus while typing. Falls back to a no-op until the
-    // first fetch populates the cache.
     container
       .querySelector<HTMLInputElement>("[data-fb-search]")
       ?.addEventListener("input", (ev) => {
         searchQuery = (ev.target as HTMLInputElement).value;
-        const list = container.querySelector<HTMLElement>("[data-list]");
-        if (!list) return;
-        if (hook.sub === "bugs") {
-          if (lastBugs) renderList(list, lastBugs, bugListCfg());
-        } else if (lastFeatures) {
-          renderList(list, lastFeatures, featureListCfg());
-        }
+        reFilter();
       });
 
     const listEl = container.querySelector<HTMLElement>("[data-list]")!;
     listEl.innerHTML = loadingState();
 
-    if (hook.sub === "bugs") {
-      let items: BugRecord[];
-      try {
-        items = dropTerminal(await api.bugs(), BUG_TERMINAL_STATUSES);
-      } catch (err) {
-        listEl.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed: ${escapeHtml(String(err))}</div>`;
-        return;
-      }
-      // Update count badge
-      const cBadge = container.querySelector<HTMLElement>('[data-sub="bugs"] .c')!;
-      cBadge.textContent = String(items.length);
-      const cBadgeOther = container.querySelector<HTMLElement>('[data-sub="features"] .c')!;
-      try {
-        const fr = dropTerminal(await api.featureRequests(), FR_TERMINAL_STATUSES);
-        cBadgeOther.textContent = String(fr.length);
-      } catch {
-        cBadgeOther.textContent = "?";
-      }
-      lastBugs = items;
-      renderList(listEl, items, bugListCfg());
-    } else {
-      let items: FeatureRequestRecord[];
-      try {
-        items = dropTerminal(await api.featureRequests(), FR_TERMINAL_STATUSES);
-      } catch (err) {
-        listEl.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed: ${escapeHtml(String(err))}</div>`;
-        return;
-      }
-      const cBadge = container.querySelector<HTMLElement>('[data-sub="features"] .c')!;
-      cBadge.textContent = String(items.length);
-      const cBadgeOther = container.querySelector<HTMLElement>('[data-sub="bugs"] .c')!;
-      try {
-        const bs = dropTerminal(await api.bugs(), BUG_TERMINAL_STATUSES);
-        cBadgeOther.textContent = String(bs.length);
-      } catch {
-        cBadgeOther.textContent = "?";
-      }
-      lastFeatures = items;
-      renderList(listEl, items, featureListCfg());
+    let items: FeedbackListItem[];
+    try {
+      items = await fetchSub(hook.sub);
+    } catch (err) {
+      listEl.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed: ${escapeHtml(String(err))}</div>`;
+      return;
     }
+    lastList[hook.sub] = items;
+
+    // Fill every tab's count badge — the active one from the fetch we just did,
+    // the rest lazily (all memoized in the api layer, so it's cheap).
+    for (const s of SUB_ORDER) {
+      const cBadge = container.querySelector<HTMLElement>(`[data-sub="${s}"] .c`);
+      if (!cBadge) continue;
+      if (s === hook.sub) {
+        cBadge.textContent = String(items.length);
+        continue;
+      }
+      void fetchSub(s)
+        .then((list) => {
+          cBadge.textContent = String(list.length);
+        })
+        .catch(() => {
+          cBadge.textContent = "?";
+        });
+    }
+
+    renderList(listEl, items, cfg);
   }
 
   // Per-sub descriptor consumed by the shared `renderList`. Captures every
@@ -613,20 +703,23 @@ export async function renderFeedbackPanel(
   // text fields, the dashboard path, and the Edit handler — so the row + detail
   // markup and all the wiring live in one place ("same table, similar fields").
   interface FeedbackListCfg<T extends FeedbackListItem> {
-    sub: "bugs" | "features";
-    nounPlural: string; // "bugs" | "feature requests"
-    dashboardPath: string; // "bugs" | "feature-requests"
+    sub: Sub;
+    nounPlural: string; // "bugs" | "feature requests" | "errors" | "alerts"
+    dashboardPath: string; // "bugs" | "feature-requests" | "errors" | "alerts"
     emptyMessage: string;
+    // Empty → the status badge renders read-only (no picker). Used by the
+    // system-generated errors/alerts subs.
     statusOptions: ReadonlyArray<BadgeOption<string>>;
     statusCls: Record<string, string>;
-    applyStatus: (item: T, next: string) => Promise<void>;
-    // Secondary badge: the shared priority field (bugs + features). `html` seeds
-    // the row slot; `wire` attaches the click-to-edit dropdown.
-    secondaryHtml: (item: T) => string;
-    wireSecondary: (slot: HTMLElement, item: T) => void;
+    applyStatus?: (item: T, next: string) => Promise<void>;
+    // Secondary badge: the shared priority field (bugs + features). Omitted for
+    // errors/alerts, which have no editable priority in the overlay.
+    secondaryHtml?: (item: T) => string;
+    wireSecondary?: (slot: HTMLElement, item: T) => void;
     hydrateText: (slot: HTMLElement, id: string) => void;
     hydrateAttach: (slot: HTMLElement, id: string) => void;
-    openEdit: (id: string) => Promise<void>;
+    // Omitted for read-only subs → no inline Edit affordance on the row.
+    openEdit?: (id: string) => Promise<void>;
   }
 
   function renderList<T extends FeedbackListItem>(
@@ -647,36 +740,29 @@ export async function renderFeedbackPanel(
 
     if (items.length === 0) {
       if (query) {
-        listEl.innerHTML = `<div class="se-empty">No ${cfg.nounPlural} match <em>${escapeHtml(searchQuery.trim())}</em>.</div>`;
+        listEl.innerHTML = emptyCard(cfg.sub, {
+          title: "No matches",
+          msg: `Nothing titled “${searchQuery.trim()}”. Clear the search to see the full queue.`,
+        });
         return;
       }
       // The project has items but the status filter excluded them all.
       if (all.length > 0) {
-        listEl.innerHTML = `<div class="se-empty">No ${cfg.nounPlural} match the selected statuses.</div>`;
+        listEl.innerHTML = emptyCard(cfg.sub, {
+          title: "Nothing in this view",
+          msg: "No items match the selected statuses — widen the filter to see more.",
+        });
         return;
       }
-      // Genuinely empty project → onboarding card.
-      const { html, wire } = emptyState({
-        title: `No <em>${cfg.nounPlural}</em> yet`,
-        message: cfg.emptyMessage,
-        actions: [
-          {
-            icon: "+",
-            label: cfg.sub === "bugs" ? "File a bug" : "Feature",
-            onClick: () => {
-              formMode = cfg.sub === "bugs" ? "bug" : "feature";
-              void render();
-            },
-          },
-          ...(api.hideAdminLinks
-            ? []
-            : [
-                { label: "Open dashboard", href: `${api.adminUrl}/dashboard/${cfg.dashboardPath}` },
-              ]),
-        ],
-      });
-      listEl.innerHTML = html;
-      wire(listEl);
+      // Genuinely empty queue → tailored empty state (+ a create CTA on the
+      // user-fileable subs).
+      listEl.innerHTML = emptyCard(cfg.sub);
+      listEl
+        .querySelector<HTMLElement>('[data-action="file-empty"]')
+        ?.addEventListener("click", () => {
+          formMode = cfg.sub === "bugs" ? "bug" : "feature";
+          void render();
+        });
       return;
     }
 
@@ -685,14 +771,14 @@ export async function renderFeedbackPanel(
       listEl.innerHTML = items
         .map(
           (it) => `
-          <div class="se-feedback-row${expanded.has(it.id) ? " expanded" : ""}" data-id="${escapeHtml(it.id)}">
-            <span class="chev">▸</span>
+          <div class="se-feedback-row${expanded.has(it.id) ? " expanded" : ""}" data-id="${escapeHtml(it.id)}" data-pri="${escapeHtml((it as { priority?: string | null }).priority ?? "")}">
+            <span class="chev">${I.chevronRight}</span>
             <div class="grow">
               <div class="row-name">${escapeHtml(it.title)}</div>
               <div class="row-sub">${escapeHtml(timeAgo(it.createdAt))}${it.reporterEmail ? " · " + escapeHtml(it.reporterEmail) : ""}</div>
             </div>
-            <span class="se-bdrop-slot" data-secondary="${escapeHtml(it.id)}">${cfg.secondaryHtml(it)}</span>
-            <span class="se-bdrop-slot" data-status="${escapeHtml(it.id)}">${badge(it.status, cfg.statusCls[it.status])}<span class="se-bdrop-caret">▾</span></span>
+            <span class="se-bdrop-slot" data-secondary="${escapeHtml(it.id)}">${cfg.secondaryHtml ? cfg.secondaryHtml(it) : ""}</span>
+            <span class="se-bdrop-slot" data-status="${escapeHtml(it.id)}">${badge(it.status, cfg.statusCls[it.status] ?? "badge-off")}${cfg.statusOptions.length ? `<span class="se-bdrop-caret">▾</span>` : ""}</span>
           </div>
           <div class="se-feedback-detail${expanded.has(it.id) ? " open" : ""}">
             <div class="inner"><div class="pad">
@@ -703,7 +789,7 @@ export async function renderFeedbackPanel(
                     : ""
                 }
                 ${prLinkHtml(it.connectorData)}
-                <button class="ibtn se-fb-edit" data-edit="${escapeHtml(it.id)}">${I.pencil} Edit</button>
+                ${cfg.openEdit ? `<button class="ibtn se-fb-edit" data-edit="${escapeHtml(it.id)}">${I.pencil} Edit</button>` : ""}
               </div>
               <div class="se-text-slot" data-text-slot="${escapeHtml(it.id)}"></div>
               <div class="se-attach-slot" data-attach-slot="${escapeHtml(it.id)}"></div>
@@ -727,32 +813,42 @@ export async function renderFeedbackPanel(
         });
       });
 
-      // Status + secondary dropdowns on every row (collapsed + expanded).
-      listEl.querySelectorAll<HTMLElement>("[data-status]").forEach((slot) => {
-        const item = items.find((x) => x.id === slot.dataset.status);
-        if (!item) return;
-        attachBadgeDropdown(slot, {
-          current: item.status,
-          options: cfg.statusOptions,
-          onPick: (next) => cfg.applyStatus(item, next),
+      // Status + secondary dropdowns on every row (collapsed + expanded). Both
+      // are skipped for read-only subs (no status picker, no priority badge).
+      const applyStatus = cfg.applyStatus;
+      if (cfg.statusOptions.length && applyStatus) {
+        listEl.querySelectorAll<HTMLElement>("[data-status]").forEach((slot) => {
+          const item = items.find((x) => x.id === slot.dataset.status);
+          if (!item) return;
+          attachBadgeDropdown(slot, {
+            current: item.status,
+            options: cfg.statusOptions,
+            onPick: (next) => applyStatus(item, next),
+          });
         });
-      });
-      listEl.querySelectorAll<HTMLElement>("[data-secondary]").forEach((slot) => {
-        const item = items.find((x) => x.id === slot.dataset.secondary);
-        if (item) cfg.wireSecondary(slot, item);
-      });
+      }
+      const wireSecondary = cfg.wireSecondary;
+      if (wireSecondary) {
+        listEl.querySelectorAll<HTMLElement>("[data-secondary]").forEach((slot) => {
+          const item = items.find((x) => x.id === slot.dataset.secondary);
+          if (item) wireSecondary(slot, item);
+        });
+      }
 
       // Lazy-load text + attachments and wire Edit for any expanded rows.
+      const openEdit = cfg.openEdit;
       for (const id of expanded) {
         const tSlot = listEl.querySelector<HTMLElement>(`[data-text-slot="${id}"]`);
         if (tSlot) cfg.hydrateText(tSlot, id);
         const aSlot = listEl.querySelector<HTMLElement>(`[data-attach-slot="${id}"]`);
         if (aSlot) cfg.hydrateAttach(aSlot, id);
-        const editBtn = listEl.querySelector<HTMLElement>(`[data-edit="${id}"]`);
-        editBtn?.addEventListener("click", (e) => {
-          e.stopPropagation();
-          void cfg.openEdit(id);
-        });
+        if (openEdit) {
+          const editBtn = listEl.querySelector<HTMLElement>(`[data-edit="${id}"]`);
+          editBtn?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            void openEdit(id);
+          });
+        }
       }
     };
     paint();
@@ -849,6 +945,46 @@ export async function renderFeedbackPanel(
         void render();
       },
     };
+  }
+
+  // Read-only ops subs: errors (from `see()`) and alerts (fired guardrails).
+  // Same ops table + status set as bugs, but system-generated — no priority, no
+  // status picker, no create/edit. Detail text + attachments (if any) hydrate
+  // from the shared ops detail endpoint.
+  function readonlyOpsCfg(
+    sub: "errors" | "alerts",
+    nounPlural: string,
+    dashboardPath: string,
+    emptyMessage: string,
+  ): FeedbackListCfg<FeedbackListItem> {
+    return {
+      sub,
+      nounPlural,
+      dashboardPath,
+      emptyMessage,
+      statusCls: BUG_STATUS_CLS,
+      statusOptions: [],
+      hydrateText: (slot, id) => hydrateBugTextSlot(slot, ensureBugDetail(id)),
+      hydrateAttach: (slot, id) => hydrateAttachmentSlot(slot, ensureBugDetail(id)),
+    };
+  }
+
+  function errorListCfg(): FeedbackListCfg<FeedbackListItem> {
+    return readonlyOpsCfg(
+      "errors",
+      "errors",
+      "errors",
+      "Errors captured by see() surface here, grouped and counted — nothing to wire.",
+    );
+  }
+
+  function alertListCfg(): FeedbackListCfg<FeedbackListItem> {
+    return readonlyOpsCfg(
+      "alerts",
+      "alerts",
+      "alerts",
+      "Guardrail alerts that have fired show up here with their current status.",
+    );
   }
 
   function hydrateBugTextSlot(slot: HTMLElement, detailPromise: Promise<BugDetail>): void {

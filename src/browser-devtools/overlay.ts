@@ -14,7 +14,7 @@ import { renderGatesPanel } from "./panels/gates";
 import { renderExperimentsPanel } from "./panels/experiments";
 import { renderConfigsPanel } from "./panels/configs";
 import { renderLabelsPanel, toggleEditLabels, scanAndReplaceMarkers } from "./panels/i18n";
-import { renderFeedbackPanel } from "./panels/feedback";
+import { renderFeedbackPanel, type Sub as FeedbackSub } from "./panels/feedback";
 import { renderEventsPanel } from "./panels/events";
 import type { DevtoolsOptions, DevtoolsSession, ProjectRecord } from "./types";
 import { projectOwnsHost } from "./types";
@@ -180,17 +180,17 @@ function saveTabView(tabView: Record<PanelKey, ViewState>): void {
   }
 }
 
-function loadFeedbackSub(): "bugs" | "features" {
+function loadFeedbackSub(): FeedbackSub {
   try {
     const raw = localStorage.getItem(FEEDBACK_SUB_KEY);
-    if (raw === "bugs" || raw === "features") return raw;
+    if (raw === "bugs" || raw === "features" || raw === "errors" || raw === "alerts") return raw;
   } catch {
     /* ignore */
   }
   return "bugs";
 }
 
-function saveFeedbackSub(sub: "bugs" | "features"): void {
+function saveFeedbackSub(sub: FeedbackSub): void {
   try {
     localStorage.setItem(FEEDBACK_SUB_KEY, sub);
   } catch {
@@ -325,7 +325,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
   // Labels-tab locale
   let labelLocale = "en-US";
   // Feedback subtab (persisted across reloads)
-  let feedbackSub: "bugs" | "features" = loadFeedbackSub();
+  let feedbackSub: FeedbackSub = loadFeedbackSub();
   // One-shot signal from the rail hovercard's quick-actions ("File a bug" /
   // "Request a feature"). Read once by renderFeedbackPanel, then cleared.
   let feedbackPendingForm: "bug" | "feature" | null = null;
@@ -527,8 +527,8 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       card.className = "se-qa";
       card.innerHTML =
         `<span class="qa-hd">Quick actions</span>` +
-        `<button data-qa="bug">${I.bug}<span>File a bug</span><span class="sub">screenshot · video</span></button>` +
-        `<button data-qa="feature">${I.sparkles}<span>Request a feature</span></button>`;
+        `<button data-qa="bug">${I.bug}<span>File a bug</span></button>` +
+        `<button data-qa="feature">${I.lightbulb}<span>Request a feature</span></button>`;
       shadow.appendChild(card);
       position();
       // Two RAFs so the browser commits the initial transform before the
@@ -882,11 +882,6 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
         </div>
         ${headExtrasHtml(tab)}
         <div class="actions">
-          ${
-            resolveHideAdminLinks(opts)
-              ? ""
-              : `<a class="ib" data-action="open-dashboard" href="${escapeHtml(opts.adminUrl)}/dashboard" target="_blank" rel="noopener" title="Open dashboard">${I.external}</a>`
-          }
           <button class="ib" data-action="refresh" title="Refresh">${I.refresh}</button>
           <button class="ib" data-action="collapse" title="${opts.hideRail ? "Close" : "Collapse"}">${I.x}</button>
         </div>

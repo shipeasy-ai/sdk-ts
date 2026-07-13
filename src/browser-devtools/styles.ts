@@ -24,9 +24,16 @@ export const STYLES = `
   --warn-bg-strong:color-mix(in oklab, var(--warn) 22%, var(--bg-3));
   --warn-border:color-mix(in oklab, var(--warn) 32%, var(--line));
   --warn-bg-overbar:color-mix(in oklab, var(--warn) 10%, var(--bg-1));
-  --mono:'Geist Mono', ui-monospace, monospace;
+  /* The app retired its monospace face — every former --mono surface now uses
+     the subtitle font (Inter). Kept the var name so call sites don't churn. */
+  --mono:'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --sans:'Geist', ui-sans-serif, system-ui, sans-serif;
   --serif:'Instrument Serif', serif;
+  /* Priority accents for the issue-row left tint. */
+  --pri-critical:#a78bfa;
+  --pri-high:var(--danger);
+  --pri-medium:var(--warn);
+  --pri-low:var(--info);
   color: var(--fg);
   font-family: var(--sans);
   font-size: 13px;
@@ -86,10 +93,15 @@ button { font-family: inherit; }
 .dtf-panel.collapsed[data-edge="left"]   .dtf-panel-rail { flex-direction:column; }
 .dtf-panel.collapsed[data-edge="top"]    .dtf-panel-rail,
 .dtf-panel.collapsed[data-edge="bottom"] .dtf-panel-rail { flex-direction:row; }
-.dtf-panel-rail .mk { border-radius:5px;
-  background:conic-gradient(from 140deg, var(--accent), #0a0a0b 40%, var(--accent) 80%);
-  box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 0 10px color-mix(in oklab, var(--accent) 35%, transparent);
+/* Brand mark — mirrors apps/ui BrandMark: a conic-gradient rounded square with
+   an inner bg cut-out (a gradient frame, not a solid tile). */
+.dtf-panel-rail .mk { position:relative; border-radius:27%;
+  background:conic-gradient(from 140deg, var(--accent), var(--bg-1) 40%, var(--accent) 80%);
+  box-shadow:0 0 0 1px rgba(255,255,255,0.10), 0 0 10px color-mix(in oklab, var(--accent) 35%, transparent);
   flex-shrink:0; cursor:grab; user-select:none; touch-action:none; }
+.dtf-panel-rail .mk::before { content:""; position:absolute; inset:27%;
+  background:var(--bg-1); border-radius:24%;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06); }
 .dtf-panel-rail .mk:active, .dtf-panel-rail .mk.dragging { cursor:grabbing;
   box-shadow:0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent); }
 .dtf-panel-rail .ri { position:relative; display:grid; place-items:center;
@@ -150,10 +162,13 @@ button { font-family: inherit; }
 
 .dtf-head { display:flex; align-items:center; gap:10px; padding:11px 12px 10px;
   border-bottom:1px solid var(--line); }
-.dtf-head .mk { width:14px; height:14px; border-radius:3px;
-  background:conic-gradient(from 140deg, var(--accent), #0a0a0b 40%, var(--accent) 80%);
-  box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 0 8px color-mix(in oklab, var(--accent) 30%, transparent);
+.dtf-head .mk { position:relative; width:14px; height:14px; border-radius:27%;
+  background:conic-gradient(from 140deg, var(--accent), var(--bg-1) 40%, var(--accent) 80%);
+  box-shadow:0 0 0 1px rgba(255,255,255,0.10), 0 0 8px color-mix(in oklab, var(--accent) 30%, transparent);
   cursor:grab; flex-shrink:0; }
+.dtf-head .mk::before { content:""; position:absolute; inset:27%;
+  background:var(--bg-1); border-radius:24%;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06); }
 .dtf-head .mk.dragging { cursor:grabbing; }
 .dtf-head .ti { font-size:12px; font-weight:600; letter-spacing:.01em; flex:1;
   display:flex; align-items:baseline; gap:8px; min-width:0; }
@@ -793,21 +808,34 @@ button { font-family: inherit; }
   min-height:14px; }
 
 /* feedback (bugs / feature requests) */
-.se-fb-subtabs { display:flex; gap:0; padding:0 10px;
+.se-fb-subtabs { display:flex; gap:2px; padding:0 8px;
   border-bottom:1px solid var(--line); background:var(--bg-1); }
-.se-fb-subtabs button { display:inline-flex; align-items:center; gap:6px;
-  background:transparent; border:0; color:var(--fg-3);
-  font-family:var(--mono); font-size:11px; padding:8px 10px;
+/* Icon-only tabs: glyph + count badge, centred, so all four fit. */
+.se-fb-subtabs button { display:inline-flex; align-items:center; justify-content:center;
+  gap:5px; flex:1; background:transparent; border:0; color:var(--fg-3);
+  font-family:var(--mono); font-size:11px; padding:8px 6px;
   cursor:pointer; border-bottom:1.5px solid transparent;
   margin-bottom:-1px; }
 .se-fb-subtabs button:hover { color:var(--fg); }
 .se-fb-subtabs button.active { color:var(--fg); border-bottom-color:var(--accent); }
-.se-fb-subtabs button .c { font-family:var(--mono); font-size:10.5px;
+.se-fb-subtabs button .c { font-family:var(--mono); font-size:10px;
   color:var(--fg-2); background:var(--bg-3);
-  padding:1px 6px; border-radius:3px; }
+  padding:1px 5px; border-radius:3px; }
 .se-fb-subtabs button.active .c { color:var(--accent);
   background:color-mix(in oklab, var(--accent) 10%, var(--bg-3)); }
-.se-fb-subtabs button svg { width:11px; height:11px; }
+.se-fb-subtabs button svg { width:14px; height:14px; }
+/* Instant styled tooltip for the icon-only tabs (below the tab, centred). */
+.se-fb-subtabs button { position:relative; }
+.se-fb-subtabs button[data-tip]::after { content:attr(data-tip);
+  position:absolute; top:calc(100% + 5px); left:50%; transform:translateX(-50%) translateY(-2px);
+  background:var(--bg-3); color:var(--fg); border:1px solid var(--line-2);
+  font-family:var(--sans); font-size:10px; line-height:1; letter-spacing:.01em;
+  white-space:nowrap; padding:4px 7px; border-radius:5px;
+  box-shadow:0 6px 16px rgba(0,0,0,.35); opacity:0; pointer-events:none;
+  transition:opacity .12s ease, transform .12s ease; z-index:30; }
+.se-fb-subtabs button[data-tip]:hover::after,
+.se-fb-subtabs button[data-tip]:focus-visible::after {
+  opacity:1; transform:translateX(-50%) translateY(0); }
 
 .se-feedback-head { display:flex; align-items:center; gap:6px;
   padding:8px 10px; border-bottom:1px solid var(--line-2); }
@@ -827,13 +855,21 @@ button { font-family: inherit; }
 .se-fb-filter-drop .se-bdrop-menu { left:auto; right:0; }
 .se-fb-quick-label { flex:1; font-family:var(--sans); font-size:11px; }
 .se-bdrop-sep { height:1px; margin:4px 2px; background:var(--line-2); }
-.se-fb-search { flex:1; min-width:90px; max-width:240px; padding:4px 8px;
+/* Fill the head's remaining width (the filter dropdown keeps its intrinsic size). */
+.se-fb-search { flex:1 1 auto; min-width:90px; padding:4px 8px;
   font-size:11px; height:24px; }
 .se-fb-search::-webkit-search-cancel-button { cursor:pointer; }
 .se-feedback-list { display:flex; flex-direction:column; gap:1px; }
+/* 3px left rail reserved on every row (transparent) so the priority tint never
+   shifts the layout; coloured per data-pri below. */
 .se-feedback-row { display:flex; align-items:center; gap:8px;
   padding:8px 12px; border-bottom:1px solid var(--line-2);
+  border-left:3px solid transparent;
   color:var(--fg-2); cursor:pointer; text-decoration:none; }
+.se-feedback-row[data-pri="critical"] { border-left-color:var(--pri-critical); }
+.se-feedback-row[data-pri="high"] { border-left-color:var(--pri-high); }
+.se-feedback-row[data-pri="medium"] { border-left-color:var(--pri-medium); }
+.se-feedback-row[data-pri="nice_to_have"] { border-left-color:var(--pri-low); }
 .se-feedback-row:hover { background:var(--bg-2); }
 .se-feedback-row.expanded { background:var(--bg-2); }
 .se-feedback-row .row-name { font-size:11.5px; color:var(--fg);
@@ -841,10 +877,12 @@ button { font-family: inherit; }
 .se-feedback-row .row-sub { font-family:var(--mono); font-size:9.5px;
   color:var(--fg-4); margin-top:2px; }
 .se-feedback-row .grow { flex:1; min-width:0; }
-.se-feedback-row .chev { color:var(--fg-4); font-size:10px; width:10px;
-  display:inline-block; text-align:center; flex-shrink:0;
-  transition:transform .15s ease; }
-.se-feedback-row.expanded .chev { transform:rotate(90deg); color:var(--fg-2); }
+.se-feedback-row .chev { color:var(--fg-4); width:16px; height:16px;
+  display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition:transform .15s ease, color .15s ease; }
+.se-feedback-row .chev svg { width:15px; height:15px; }
+.se-feedback-row:hover .chev { color:var(--fg-2); }
+.se-feedback-row.expanded .chev { transform:rotate(90deg); color:var(--fg); }
 .se-feedback-detail { display:grid; grid-template-rows:0fr;
   transition:grid-template-rows .22s ease;
   background:var(--bg-2); border-bottom:1px solid var(--line-2); }
@@ -1191,8 +1229,21 @@ button { font-family: inherit; }
 .ibtn.recording { background:color-mix(in oklab, var(--danger) 18%, var(--bg-3));
   color:var(--danger); border-color:color-mix(in oklab, var(--danger) 35%, var(--line)); }
 .ibtn svg { width:11px; height:11px; }
+/* Icon-only variant — square, slightly larger glyph (e.g. the feedback "new" button). */
+.ibtn.icon { padding:5px; gap:0; }
+.ibtn.icon svg { width:13px; height:13px; }
 
 .se-empty { padding:24px 16px; text-align:center; color:var(--fg-3); font-size:11.5px; }
+
+/* Tailored per-tab empty state: tinted icon disc + headline + blurb (+ CTA). */
+.se-fb-empty { display:flex; flex-direction:column; align-items:center; text-align:center;
+  gap:9px; padding:34px 22px 38px; }
+.se-fb-empty-ic { display:grid; place-items:center; width:42px; height:42px;
+  border-radius:12px; }
+.se-fb-empty-ic svg { width:21px; height:21px; }
+.se-fb-empty-t { font-size:13px; font-weight:600; color:var(--fg); letter-spacing:-0.01em; }
+.se-fb-empty-m { font-size:11.5px; line-height:1.55; color:var(--fg-3); max-width:246px; }
+.se-fb-empty-cta { margin-top:5px; }
 
 /* auth-locked modal — covers the whole panel pane when no session */
 .auth-locked { position:absolute; inset:0; z-index:50;
