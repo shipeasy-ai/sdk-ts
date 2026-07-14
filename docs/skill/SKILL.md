@@ -94,13 +94,20 @@ Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/i18n.md> · snippets
 ## Error reporting (see)
 
 ```ts
-import { see } from "@shipeasy/sdk/server"; // or /client
+import { see, addExtras, runWithExtras } from "@shipeasy/sdk/server"; // or /client
 
 try { await submitOrder(order); }
-catch (e) { see(e).causes_the("checkout").to("use cached prices").extras({ order_id: order.id }); }
+catch (e) { see(e).causes_the("checkout").to("use cached prices", { order_id: order.id }); }
+// extras inline on .to (no ordering to remember), or chained: .extras({...}).to(...)
 
 see.Violation("large query").causes_the("results").to("be trimmed").extras({ rows });
 see.ControlFlowException(e).because("because it wasn't an encoded Foo"); // expected — reports nothing
+
+// Ambient per-scope extras — buffer from any layer; every later see() merges them in.
+runWithExtras(async () => {                    // server: per-request ALS scope
+  addExtras({ order_id: order.id, tenant });   // browser: call addExtras() directly, one user/page
+  try { await charge(order); } catch (e) { see(e).causes_the("checkout").to("use cached prices"); }
+});
 ```
 
 Fire-and-forget on the next microtask (no `.send()`). Don't catch what you can't

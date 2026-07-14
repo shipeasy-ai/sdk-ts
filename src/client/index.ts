@@ -14,8 +14,10 @@ import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
   buildSeeEvent,
+  createObjectExtrasStore,
   isExpected,
   markCorrelated,
+  mergeAmbientExtras,
   SeeLimiter,
   startControlFlowChain,
   startSeeChain,
@@ -2685,6 +2687,48 @@ export interface SeeApi {
   ControlFlowException(err: unknown): SeeControlFlowChain;
 }
 
+// see() ambient extras (addExtras / clearExtras).
+//
+// Scoping design (browser): a single module-level buffer. The browser SDK
+// serves ONE user per page, so there is no concurrency to isolate — an
+// AsyncLocalStorage would only add weight and doesn't exist in the DOM. Every
+// see() report on the page merges the buffer in until you clear it; call
+// `clearExtras()` on a client-side route change if you don't want it to persist.
+const _seeExtrasStore = createObjectExtrasStore();
+
+/**
+ * Attach ambient context that merges into EVERY {@link see} report that fires
+ * later on this page — from any layer, not just the catch block:
+ *
+ * ```ts
+ * addExtras({ route: "/checkout", cart_id: cart.id });
+ * // ...later...
+ * try { pay(); } catch (e) {
+ *   see(e).causes_the("checkout").to("show a retry"); // carries route + cart_id
+ * }
+ * ```
+ *
+ * Module-level (one user per page). A chained `.extras` / `.to` extra of the
+ * same key overrides an ambient one. Call {@link clearExtras} on a route change
+ * to reset it. Never throws.
+ */
+export function addExtras(extras: SeeExtras): void {
+  try {
+    _seeExtrasStore.add(extras);
+  } catch {
+    /* ambient extras are best-effort — never throw into product code */
+  }
+}
+
+/** Drop the ambient extras buffer for this page. */
+export function clearExtras(): void {
+  try {
+    _seeExtrasStore.clear();
+  } catch {
+    /* best-effort */
+  }
+}
+
 function dispatchSee(
   problem: unknown,
   consequence: Consequence,
@@ -2695,7 +2739,11 @@ function dispatchSee(
     logger.warn("[shipeasy] see() called before shipeasy({ clientKey }) — error dropped");
     return;
   }
-  _client.reportError(problem, consequence, extras, kind);
+  // Merge the ambient buffer UNDER the chain's own extras (chain wins on a key
+  // collision). Read at flush time so extras buffered anywhere on the page
+  // attach to this report.
+  const merged = mergeAmbientExtras(extras, _seeExtrasStore.current());
+  _client.reportError(problem, consequence, merged, kind);
 }
 
 /**

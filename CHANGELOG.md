@@ -1,5 +1,31 @@
 # Changelog
 
+## 7.7.0 (2026-07-13)
+
+### see(): inline extras on `.to`, ambient per-request extras, no ordering footgun
+
+- **`.to(outcome, extras)`** — the terminal now takes the extras inline, e.g.
+  `see(e).causes_the("checkout").to("use cached prices", { order_id: oid })`.
+  Equivalent to a final `.extras(...)`; folds under any later `.extras` (later
+  wins). The chain already tolerated a trailing `.extras()` (it flushes on the
+  next microtask), so there was never a hard ordering trap — but now you can put
+  the extras where the consequence is, in one call.
+- **`addExtras(...)` / `clearExtras()`** — an ambient per-request extras buffer,
+  exported from both `@shipeasy/sdk/server` and `@shipeasy/sdk/client`. Call
+  `addExtras({ order_id: id, tenant: t })` from anywhere (any layer, not just the
+  catch) and every `see()` report that fires later in the same scope merges it
+  in. A chained `.extras` / `.to` extra overrides an ambient key of the same
+  name (chain merges OVER ambient); ambient extras are sanitized exactly like
+  chained ones.
+  - **Server** — the buffer is backed by `AsyncLocalStorage`, so concurrent
+    requests never bleed. Wrap a request in the new **`runWithExtras(fn)`** (or
+    the framework equivalent) to get a per-request scope; outside such a scope
+    `addExtras` writes a module-level fallback buffer that you clear yourself
+    with `clearExtras()`. The `seeExtrasContext` ALS is exported for advanced
+    request-hook wiring, mirroring `seeContext`.
+  - **Client (browser)** — a single module-level buffer (one user per page).
+    Call `clearExtras()` on a client-side route change to reset it.
+
 ## 7.6.1 (2026-07-13)
 
 ### Fix: browser devtools login stuck on "Connect" after OAuth sign-in

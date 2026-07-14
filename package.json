@@ -1,6 +1,6 @@
 {
   "name": "@shipeasy/sdk",
-  "version": "7.6.1",
+  "version": "7.7.0",
   "description": "Shipeasy SDK — feature gates, runtime configs, experiments, and metrics for the Shipeasy hosted service.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://shipeasy.ai",

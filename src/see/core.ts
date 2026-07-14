@@ -349,6 +349,76 @@ export function sanitizeExtras(
   return n > 0 ? out : undefined;
 }
 
+// ---- Ambient per-request extras ----
+//
+// A buffer of extras that merge into EVERY see() report firing later in the
+// same scope. Lets a request attach context (order id, route, tenant) from
+// anywhere without threading it into the catch block:
+//
+//   addExtras({ order_id: id });
+//   // ...later, elsewhere in the same request...
+//   see(e).causes_the("checkout").to("use cached prices");   // report carries order_id
+//
+// The *scoping* of "the same scope" differs per side and is owned by each
+// entrypoint (see the store implementations there):
+//   • server — backed by AsyncLocalStorage so concurrent requests never bleed,
+//     with a module-level fallback for environments without an active ALS run.
+//   • client (browser) — a single module-level buffer (one user per page).
+//
+// Values are stored raw and sanitized (scalar-only, truncated, 20-key cap) at
+// build time, exactly like chained extras. A chained `.extras` / `.to` extra of
+// the same key wins over an ambient one (chain merges OVER ambient).
+
+/**
+ * A pluggable buffer of ambient per-request see() extras. Each entrypoint
+ * supplies its own scoping (ALS on the server, a module buffer in the browser);
+ * the shared dispatch path only needs `add` / `current` / `clear`.
+ */
+export interface AmbientExtrasStore {
+  /** Merge fields into the current scope's buffer (string keys, later wins). */
+  add(extras: SeeExtras): void;
+  /** A snapshot of the current scope's buffer, or undefined when empty. */
+  current(): SeeExtras | undefined;
+  /** Drop the current scope's buffer so extras never leak to the next request. */
+  clear(): void;
+}
+
+/**
+ * A plain object-backed ambient buffer. Used directly by the browser entry
+ * (single user, module-level) and as the ALS-less fallback on the server.
+ * Never throws — `add`/`current`/`clear` are all best-effort.
+ */
+export function createObjectExtrasStore(): AmbientExtrasStore {
+  let buf: SeeExtras | undefined;
+  return {
+    add(extras: SeeExtras): void {
+      if (!extras || typeof extras !== "object") return;
+      buf = { ...(buf ?? {}), ...extras };
+    },
+    current(): SeeExtras | undefined {
+      return buf && Object.keys(buf).length > 0 ? { ...buf } : undefined;
+    },
+    clear(): void {
+      buf = undefined;
+    },
+  };
+}
+
+/**
+ * Merge a chain's own extras OVER an ambient buffer, so a chained key of the
+ * same name wins over an ambient one. Returns the chain extras unchanged when
+ * there is no ambient buffer (the common, zero-overhead path). Sanitization
+ * happens later at build time, so raw values pass through here.
+ */
+export function mergeAmbientExtras(
+  chainExtras: SeeExtras | undefined,
+  ambient: SeeExtras | undefined,
+): SeeExtras | undefined {
+  if (!ambient || Object.keys(ambient).length === 0) return chainExtras;
+  if (!chainExtras || Object.keys(chainExtras).length === 0) return ambient;
+  return { ...ambient, ...chainExtras };
+}
+
 // ---- Event construction ----
 
 export interface SeeContext {
@@ -480,8 +550,16 @@ export interface SeeExtrasTail {
 }
 
 export interface SeeOutcomeStep {
-  /** The user-visible impact: `.causes_the("checkout").to("use cached prices")`. */
-  to(outcome: string): SeeExtrasTail;
+  /**
+   * The user-visible impact: `.causes_the("checkout").to("use cached prices")`.
+   *
+   * Extras may be folded into the terminal inline as `.to(outcome, extras)` —
+   * equivalent to a final `.extras(...)` (merged over any earlier `.extras`,
+   * later wins), so there is no ordering to remember. A stray `.extras` chained
+   * AFTER `.to` is still harmless: it merges too but only if the microtask
+   * hasn't flushed yet (same as before).
+   */
+  to(outcome: string, extras?: SeeExtras): SeeExtrasTail;
 }
 
 export interface SeeChain {
@@ -536,8 +614,12 @@ export function startSeeChain(getProblem: () => unknown, dispatch: SeeDispatch):
     },
   };
   const step: SeeOutcomeStep = {
-    to(o: string): SeeExtrasTail {
+    to(o: string, x?: SeeExtras): SeeExtrasTail {
       outcome = String(o);
+      // Inline extras fold in exactly like a final `.extras(...)` — merged over
+      // any earlier `.extras` (later wins). No ordering trap: `.to(outcome, x)`
+      // and `.extras(x).to(outcome)` are equivalent.
+      if (x && typeof x === "object") collected = { ...collected, ...x };
       return tail;
     },
   };

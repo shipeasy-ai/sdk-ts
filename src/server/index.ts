@@ -8,11 +8,14 @@ import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
   buildSeeEvent,
+  createObjectExtrasStore,
   isExpected,
+  mergeAmbientExtras,
   SeeLimiter,
   startControlFlowChain,
   startSeeChain,
   startSeeViolationChain,
+  type AmbientExtrasStore,
   type Consequence,
   type SeeChain,
   type SeeControlFlowChain,
@@ -1493,6 +1496,131 @@ export const seeContext: AsyncLocalStorage<SeeCorrelationStore> =
     | undefined) ??
   ((globalThis as GlobalWithSeeALS)[_SEE_CORR_ALS_SYM] = new AsyncLocalStorage<SeeCorrelationStore>());
 
+// see() ambient per-request extras (addExtras / clearExtras).
+//
+// Scoping design (server): the buffer is backed by AsyncLocalStorage so
+// concurrent requests never bleed into each other. When there IS an active ALS
+// store (a `seeExtrasContext.run(...)` frame — seeded by `runWithExtras`, and
+// automatically wrapped around each request by the same safety-net hook that
+// seeds the correlation store), `addExtras` writes into that request's own
+// mutable buffer. When there is NO active ALS store (a bare script, a job with
+// no request scope, or a runtime that lost the async context across a resource
+// boundary), it falls back to a single module-level buffer — the least
+// surprising behaviour for a non-request context, matching the browser side.
+//
+// Parked on a registry-shared Symbol (like the other ALS instances above) so
+// every one of Next's bundle layers shares ONE instance. `run()` is used, never
+// `enterWith` (workerd lacks it).
+interface SeeExtrasStore {
+  buffer: SeeExtras;
+}
+const _SEE_EXTRAS_ALS_SYM = Symbol.for("@shipeasy/sdk:see-extras-als");
+type GlobalWithExtrasALS = Record<symbol, unknown> & {
+  [_SEE_EXTRAS_ALS_SYM]?: AsyncLocalStorage<SeeExtrasStore>;
+};
+export const seeExtrasContext: AsyncLocalStorage<SeeExtrasStore> =
+  ((globalThis as GlobalWithExtrasALS)[_SEE_EXTRAS_ALS_SYM] as
+    | AsyncLocalStorage<SeeExtrasStore>
+    | undefined) ??
+  ((globalThis as GlobalWithExtrasALS)[_SEE_EXTRAS_ALS_SYM] = new AsyncLocalStorage<SeeExtrasStore>());
+
+// Module-level fallback used only when no ALS store is active.
+const _seeExtrasFallback: AmbientExtrasStore = createObjectExtrasStore();
+
+/**
+ * The ambient store the dispatch path reads/writes: prefers the current
+ * request's ALS buffer, otherwise the module-level fallback. Best-effort — a
+ * runtime without `node:async_hooks` support degrades to the fallback.
+ */
+const seeExtrasStore: AmbientExtrasStore = {
+  add(extras: SeeExtras): void {
+    if (!extras || typeof extras !== "object") return;
+    let store: SeeExtrasStore | undefined;
+    try {
+      store = seeExtrasContext.getStore();
+    } catch {
+      /* no ALS — fall through to the module buffer */
+    }
+    if (store) {
+      store.buffer = { ...store.buffer, ...extras };
+    } else {
+      _seeExtrasFallback.add(extras);
+    }
+  },
+  current(): SeeExtras | undefined {
+    let store: SeeExtrasStore | undefined;
+    try {
+      store = seeExtrasContext.getStore();
+    } catch {
+      store = undefined;
+    }
+    if (store) {
+      return Object.keys(store.buffer).length > 0 ? { ...store.buffer } : undefined;
+    }
+    return _seeExtrasFallback.current();
+  },
+  clear(): void {
+    let store: SeeExtrasStore | undefined;
+    try {
+      store = seeExtrasContext.getStore();
+    } catch {
+      store = undefined;
+    }
+    if (store) {
+      store.buffer = {};
+    } else {
+      _seeExtrasFallback.clear();
+    }
+  },
+};
+
+/**
+ * Attach ambient context that merges into EVERY {@link see} report firing later
+ * in the same request/scope — from any layer, not just the catch block:
+ *
+ * ```ts
+ * addExtras({ order_id: order.id, tenant: tenant.slug });
+ * // ...later, deep in a service...
+ * try { charge(order); } catch (e) {
+ *   see(e).causes_the("checkout").to("use cached prices"); // carries order_id + tenant
+ * }
+ * ```
+ *
+ * Scoped per request via AsyncLocalStorage (concurrent requests never bleed)
+ * when called inside a request scope — wrap a request with {@link runWithExtras}
+ * (or rely on the SDK's request hook), otherwise it writes a module-level buffer
+ * you clear yourself with {@link clearExtras}. A chained `.extras` / `.to` extra
+ * of the same key overrides an ambient one. Never throws.
+ */
+export function addExtras(extras: SeeExtras): void {
+  try {
+    seeExtrasStore.add(extras);
+  } catch {
+    /* ambient extras are best-effort — never throw into product code */
+  }
+}
+
+/** Drop the ambient extras buffer for the current request/scope. */
+export function clearExtras(): void {
+  try {
+    seeExtrasStore.clear();
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
+ * Run `fn` inside a fresh ambient-extras scope so `addExtras(...)` calls made
+ * within it (and any `see()` reports they enrich) are isolated to this scope and
+ * cannot bleed into a concurrent request. Wrap each request handler with this
+ * (or the framework equivalent) to get per-request `addExtras`; outside such a
+ * scope, `addExtras` writes a module-level buffer instead. Returns whatever
+ * `fn` returns.
+ */
+export function runWithExtras<T>(fn: () => T): T {
+  return seeExtrasContext.run({ buffer: {} }, fn);
+}
+
 // Re-exported so a server error boundary (e.g. Next's onRequestError) can skip
 // errors a handler already reported + marked via see.ControlFlowException.
 export { isExpected };
@@ -2440,7 +2568,11 @@ function dispatchSee(
     logger.warn("[shipeasy] see() called before shipeasy({ serverKey }) — error dropped");
     return;
   }
-  _server.reportError(problem, consequence, extras, kind);
+  // Merge the ambient per-request buffer UNDER the chain's own extras (chain
+  // wins on a key collision). Read at flush time so extras buffered anywhere in
+  // the request attach to this report.
+  const merged = mergeAmbientExtras(extras, seeExtrasStore.current());
+  _server.reportError(problem, consequence, merged, kind);
 }
 
 /**

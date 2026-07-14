@@ -22,6 +22,51 @@ The chain dispatches on the **next microtask** — no `.send()`. It ships
 immediately (`sendBeacon` in the browser, fire-and-forget `fetch` on the
 server), spam-guarded by a 30s dedup window and a per-session cap.
 
+`.causes_the` sets the subject; `.to(outcome)` is the terminal. You can attach
+context with `.extras(obj)` or fold it into the terminal inline as
+`.to(outcome, obj)` — both are equivalent, so there is no ordering to remember:
+
+```ts
+// these two are the same report:
+see(e).causes_the("checkout").extras({ order_id: order.id }).to("use cached prices");
+see(e).causes_the("checkout").to("use cached prices", { order_id: order.id });
+```
+
+### Attach context from anywhere — `addExtras()`
+
+To attach context without threading it into the catch block, buffer it earlier
+with `addExtras`. Every `see()` report that fires later in the **same scope**
+merges it in:
+
+```ts
+import { see, addExtras, clearExtras, runWithExtras } from "@shipeasy/sdk/server";
+
+// server: wrap the request so addExtras is isolated per request (AsyncLocalStorage)
+runWithExtras(async () => {
+  addExtras({ order_id: order.id, tenant: tenant.slug }); // from any layer, early
+
+  // ...later, deep in a service...
+  try {
+    await charge(order);
+  } catch (e) {
+    see(e).causes_the("checkout").to("use cached prices");
+    // report carries order_id + tenant automatically
+  }
+});
+```
+
+- **Server** — the buffer is backed by `AsyncLocalStorage`, so concurrent
+  requests never bleed into each other. Wrap each request in `runWithExtras(fn)`
+  (or wire the `seeExtrasContext` ALS into your framework's request hook) to get
+  a per-request scope. Outside such a scope `addExtras` writes a module-level
+  fallback buffer — call `clearExtras()` when the unit of work ends (job/script).
+- **Browser** — a single module-level buffer (one user per page). Import
+  `addExtras` / `clearExtras` from `@shipeasy/sdk/client`; call `clearExtras()`
+  on a client-side route change if you don't want the context to persist.
+
+A chained `.extras` / `.to` extra of the same key overrides an ambient one
+(chain merges **over** ambient); ambient extras are sanitized like any other.
+
 ## Report a non-exception problem — `see.Violation(name)`
 
 The `name` is a stable identifier (it participates in the issue fingerprint),

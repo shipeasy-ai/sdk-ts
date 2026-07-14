@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   buildSeeEvent,
   causesThe,
+  createObjectExtrasStore,
   findCausedBy,
   findCorrelation,
   isExpected,
@@ -9,6 +10,7 @@ import {
   markCorrelated,
   markExpected,
   markReported,
+  mergeAmbientExtras,
   sanitizeExtras,
   SeeLimiter,
   SEE_MAX_EXTRA_KEYS,
@@ -340,6 +342,26 @@ describe("see chain (startSeeChain / startSeeViolationChain)", () => {
     expect(calls[0].extras).toEqual({ x: 3, y: 2 });
   });
 
+  it("supports inline extras on .to(outcome, extras)", async () => {
+    const { calls, dispatch } = collect();
+    startSeeChain(() => "p", dispatch).causes_the("checkout").to("use cached prices", {
+      order_id: "o1",
+    });
+    await tick();
+    expect(calls[0].consequence.outcome).toBe("use cached prices");
+    expect(calls[0].extras).toEqual({ order_id: "o1" });
+  });
+
+  it(".to(outcome, extras) merges with a trailing .extras() (later wins)", async () => {
+    const { calls, dispatch } = collect();
+    startSeeChain(() => "p", dispatch)
+      .causes_the("a")
+      .to("b", { x: 1, y: 2 })
+      .extras({ y: 3, z: 4 });
+    await tick();
+    expect(calls[0].extras).toEqual({ x: 1, y: 3, z: 4 });
+  });
+
   it("an abandoned chain still dispatches with default consequence", async () => {
     const { calls, dispatch } = collect();
     startSeeChain(() => "p", dispatch);
@@ -362,6 +384,38 @@ describe("see chain (startSeeChain / startSeeViolationChain)", () => {
     expect((v as { violationName: string }).violationName).toBe("large query");
     expect(calls[0].consequence.subject).toBe("results");
     expect(calls[0].extras).toEqual({ rows: 5000 });
+  });
+});
+
+describe("ambient extras (createObjectExtrasStore / mergeAmbientExtras)", () => {
+  it("add() accumulates and current() snapshots; clear() empties", () => {
+    const store = createObjectExtrasStore();
+    expect(store.current()).toBeUndefined();
+    store.add({ a: 1 });
+    store.add({ b: 2, a: 3 }); // later wins on a collision
+    expect(store.current()).toEqual({ a: 3, b: 2 });
+    // current() returns a copy — mutating it doesn't corrupt the buffer
+    const snap = store.current()!;
+    (snap as Record<string, unknown>).a = 99;
+    expect(store.current()).toEqual({ a: 3, b: 2 });
+    store.clear();
+    expect(store.current()).toBeUndefined();
+  });
+
+  it("mergeAmbientExtras folds ambient UNDER chain extras (chain wins)", () => {
+    expect(mergeAmbientExtras({ a: 1, b: 2 }, { b: 9, c: 3 })).toEqual({ a: 1, b: 2, c: 3 });
+  });
+
+  it("mergeAmbientExtras returns the chain extras unchanged when ambient is empty", () => {
+    const chain = { a: 1 };
+    expect(mergeAmbientExtras(chain, undefined)).toBe(chain);
+    expect(mergeAmbientExtras(chain, {})).toBe(chain);
+  });
+
+  it("mergeAmbientExtras returns ambient when the chain has none", () => {
+    const ambient = { a: 1 };
+    expect(mergeAmbientExtras(undefined, ambient)).toBe(ambient);
+    expect(mergeAmbientExtras({}, ambient)).toBe(ambient);
   });
 });
 
@@ -555,6 +609,40 @@ describe("client see() wiring", () => {
     mod.see(err).causes_the("a").to("b");
     await tick();
     expect(sendBeacon).toHaveBeenCalledTimes(1);
+  });
+
+  it("addExtras merges into a later see() report and attaches to multiple reports", async () => {
+    const { mod, sendBeacon } = await bootClient();
+    mod.addExtras({ route: "/checkout", cart_id: "c1" });
+    mod.see(new Error("first")).causes_the("a").to("b");
+    mod.see(new Error("second")).causes_the("c").to("d");
+    await tick();
+    expect(sendBeacon).toHaveBeenCalledTimes(2);
+    for (const call of sendBeacon.mock.calls) {
+      const ev = JSON.parse(await (call[1] as Blob).text()).events[0];
+      expect(ev.extras).toMatchObject({ route: "/checkout", cart_id: "c1" });
+    }
+    mod.clearExtras();
+  });
+
+  it("a chained extra overrides an ambient key of the same name", async () => {
+    const { mod, sendBeacon } = await bootClient();
+    mod.addExtras({ tenant: "ambient" });
+    mod.see(new Error("boom")).causes_the("a").to("b").extras({ tenant: "chain" });
+    await tick();
+    const ev = JSON.parse(await (sendBeacon.mock.calls[0][1] as Blob).text()).events[0];
+    expect(ev.extras.tenant).toBe("chain");
+    mod.clearExtras();
+  });
+
+  it("clearExtras empties the ambient buffer", async () => {
+    const { mod, sendBeacon } = await bootClient();
+    mod.addExtras({ gone: "yes" });
+    mod.clearExtras();
+    mod.see(new Error("after-clear")).causes_the("a").to("b");
+    await tick();
+    const ev = JSON.parse(await (sendBeacon.mock.calls[0][1] as Blob).text()).events[0];
+    expect(ev.extras?.gone).toBeUndefined();
   });
 
   it("auto-capture: leaves window.onerror untouched — no generic page-level capture", async () => {
@@ -792,6 +880,82 @@ describe("server see() wiring", () => {
     await tick();
     const outScope = JSON.parse(fetchMock.mock.calls[1][1].body).events[0];
     expect(outScope.correlation_id).toBeUndefined();
+    mod._resetShipeasyServerForTests();
+  });
+
+  it("addExtras merges into a later see() report and attaches to multiple reports", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 202 });
+    vi.stubGlobal("fetch", fetchMock);
+    const mod = await import("../server/index");
+    mod._resetShipeasyServerForTests();
+    mod.flags.configure({ apiKey: "sk_test", baseUrl: "https://edge.test", disableTelemetry: true });
+    await mod.runWithExtras(async () => {
+      mod.addExtras({ order_id: "o42", tenant: "acme" });
+      mod.see(new Error("first")).causes_the("checkout").to("use cached prices");
+      mod.see(new Error("second")).causes_the("search").to("be trimmed");
+      await tick();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchMock.mock.calls) {
+      const ev = JSON.parse(call[1].body).events[0];
+      expect(ev.extras).toMatchObject({ order_id: "o42", tenant: "acme" });
+    }
+    mod._resetShipeasyServerForTests();
+  });
+
+  it("a chained extra overrides an ambient key; clearExtras empties the buffer", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 202 });
+    vi.stubGlobal("fetch", fetchMock);
+    const mod = await import("../server/index");
+    mod._resetShipeasyServerForTests();
+    mod.flags.configure({ apiKey: "sk_test", baseUrl: "https://edge.test", disableTelemetry: true });
+    await mod.runWithExtras(async () => {
+      mod.addExtras({ tenant: "ambient" });
+      mod.see(new Error("override")).causes_the("a").to("b").extras({ tenant: "chain" });
+      await tick();
+      mod.clearExtras();
+      mod.see(new Error("after-clear")).causes_the("c").to("d");
+      await tick();
+    });
+    const overridden = JSON.parse(fetchMock.mock.calls[0][1].body).events[0];
+    expect(overridden.extras.tenant).toBe("chain");
+    const cleared = JSON.parse(fetchMock.mock.calls[1][1].body).events[0];
+    expect(cleared.extras?.tenant).toBeUndefined();
+    mod._resetShipeasyServerForTests();
+  });
+
+  it("concurrent runWithExtras ALS scopes do not bleed into each other", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 202 });
+    vi.stubGlobal("fetch", fetchMock);
+    const mod = await import("../server/index");
+    mod._resetShipeasyServerForTests();
+    mod.flags.configure({ apiKey: "sk_test", baseUrl: "https://edge.test", disableTelemetry: true });
+
+    // Two interleaved "requests", each in its own ALS scope. The buffers must
+    // not leak across scopes even though they run concurrently.
+    const reqA = mod.runWithExtras(async () => {
+      mod.addExtras({ req: "A" });
+      await Promise.resolve(); // yield so B interleaves
+      mod.see(new Error("err-A")).causes_the("A").to("x");
+      await tick();
+    });
+    const reqB = mod.runWithExtras(async () => {
+      mod.addExtras({ req: "B" });
+      await Promise.resolve();
+      mod.see(new Error("err-B")).causes_the("B").to("y");
+      await tick();
+    });
+    await Promise.all([reqA, reqB]);
+
+    const bySubject: Record<string, Record<string, unknown>> = {};
+    for (const call of fetchMock.mock.calls) {
+      const ev = JSON.parse(call[1].body).events[0];
+      bySubject[ev.subject] = ev.extras;
+    }
+    expect(bySubject.A).toMatchObject({ req: "A" });
+    expect(bySubject.A.req).not.toBe("B");
+    expect(bySubject.B).toMatchObject({ req: "B" });
+    expect(bySubject.B.req).not.toBe("A");
     mod._resetShipeasyServerForTests();
   });
 });
