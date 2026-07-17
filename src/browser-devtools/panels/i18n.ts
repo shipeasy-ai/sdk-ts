@@ -1,4 +1,5 @@
 import { LABEL_MARKER_START } from "../../i18n-markers";
+import { see } from "../../devtools/self-report";
 import { STYLES } from "../styles";
 
 // Accept both the legacy 2-section marker (`￹key￺value￻`, SDK ≤ 2.1.10) and
@@ -467,6 +468,7 @@ async function saveLabel(surface: Surface, template: string, popper: HTMLElement
     saveBtn.disabled = false;
     saveBtn.textContent = "Save";
     if (errEl) errEl.textContent = err instanceof Error ? err.message : String(err);
+    see(err).causes_the("label").to("not be saved");
   }
 }
 
@@ -964,6 +966,7 @@ export async function renderLabelsPanel(
     keys = await api.keys(resolvedProfileId ?? undefined);
   } catch (err) {
     container.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed to load labels: ${escapeHtml(String(err))}</div>`;
+    see(err).causes_the("label list").to("fail to load");
     return;
   }
   panelKeys = keys;
@@ -1069,6 +1072,7 @@ export async function renderLabelsPanel(
           publishBtn.disabled = false;
           publishBtn.textContent = `Publish ${pending.length}`;
           publishBtn.title = err instanceof Error ? err.message : String(err);
+          see(err).causes_the("label edits").to("not be published");
         }
       });
     }

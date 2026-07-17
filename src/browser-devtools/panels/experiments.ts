@@ -1,4 +1,5 @@
 import type { DevtoolsApi } from "../api";
+import { see } from "../../devtools/self-report";
 import { getExpOverride, setExpOverride } from "../overrides";
 import type { ExperimentRecord, ShipeasySdkBridge } from "../types";
 import { I } from "../icons";
@@ -140,6 +141,7 @@ export async function renderExperimentsPanel(
     experiments = await api.experiments();
   } catch (err) {
     container.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed to load experiments: ${escapeHtml(String(err))}</div>`;
+    see(err).causes_the("experiment list").to("fail to load");
     return;
   }
   if (experiments.length === 0) {

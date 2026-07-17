@@ -1,4 +1,5 @@
 import type { DevtoolsApi } from "../api";
+import { see } from "../../devtools/self-report";
 import type {
   AttachmentRecord,
   BugDetail,
@@ -216,6 +217,7 @@ function attachBadgeDropdown<T extends string>(
           await opts.onPick(o.value);
         } catch (err) {
           console.error("Failed to update", err);
+          see(err).causes_the("feedback status change").to("not be saved");
         }
       });
       menu.appendChild(row);
@@ -673,6 +675,7 @@ export async function renderFeedbackPanel(
       items = await fetchSub(hook.sub);
     } catch (err) {
       listEl.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed: ${escapeHtml(String(err))}</div>`;
+      see(err).causes_the("feedback list").to("fail to load");
       return;
     }
     lastList[hook.sub] = items;
@@ -1004,6 +1007,7 @@ export async function renderFeedbackPanel(
       .catch((err) => {
         if (!slot.isConnected) return;
         slot.innerHTML = `<div class="se-attach-slot-loading err">Failed: ${escapeHtml(String(err))}</div>`;
+        see(err).causes_the("bug details").to("fail to load");
       });
   }
 
@@ -1026,6 +1030,7 @@ export async function renderFeedbackPanel(
       .catch((err) => {
         if (!slot.isConnected) return;
         slot.innerHTML = `<div class="se-attach-slot-loading err">Failed: ${escapeHtml(String(err))}</div>`;
+        see(err).causes_the("feature request details").to("fail to load");
       });
   }
 
@@ -1081,6 +1086,7 @@ export async function renderFeedbackPanel(
               });
             } catch (err) {
               console.error(err);
+              see(err).causes_the("attachment preview").to("not open");
             }
           });
         });
@@ -1441,6 +1447,7 @@ export function wireAttachments(
       });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err), true);
+      see(err).causes_the("screenshot").to("not be captured");
     }
   });
   const recordBtn = modal.querySelector<HTMLButtonElement>('[data-action="record"]')!;
@@ -1467,6 +1474,7 @@ export function wireAttachments(
       setStatus("");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err), true);
+      see(err).causes_the("screen recording").to("not be saved");
     } finally {
       recordBtn.disabled = false;
       finalizing = false;
@@ -1687,6 +1695,10 @@ ${ATTACHMENTS_FIELD_HTML}
       handle.close();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err), true);
+      see(err)
+        .causes_the("bug report")
+        .to(isEdit ? "not be saved" : "not be filed")
+        .extras({ has_attachments: attachments.length > 0 });
     }
   }
 }
@@ -1939,6 +1951,10 @@ ${ATTACHMENTS_FIELD_HTML}
       handle.close();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err), true);
+      see(err)
+        .causes_the("feature request")
+        .to(isEdit ? "not be saved" : "not be filed")
+        .extras({ has_attachments: attachments.length > 0 });
     }
   }
 }

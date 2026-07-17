@@ -1,4 +1,5 @@
 import type { DevtoolsApi } from "../api";
+import { see } from "../../devtools/self-report";
 import { getGateOverride, setGateOverride } from "../overrides";
 import type { GateRecord, ShipeasySdkBridge } from "../types";
 import { I } from "../icons";
@@ -146,6 +147,7 @@ export async function renderGatesPanel(
     gates = await api.gates();
   } catch (err) {
     container.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed to load feature flags: ${escapeHtml(String(err))}</div>`;
+    see(err).causes_the("feature flag list").to("fail to load");
     return;
   }
 

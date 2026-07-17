@@ -1,4 +1,5 @@
 import { Validator } from "@cfworker/json-schema";
+import { see } from "../../devtools/self-report";
 import type { DevtoolsApi } from "../api";
 import { getConfigOverride, setConfigOverride } from "../overrides";
 import type { ConfigRecord, ShipeasySdkBridge } from "../types";
@@ -131,6 +132,7 @@ export async function renderConfigsPanel(
     configs = await api.configs();
   } catch (err) {
     container.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed to load configs: ${escapeHtml(String(err))}</div>`;
+    see(err).causes_the("config list").to("fail to load");
     return;
   }
   if (configs.length === 0) {

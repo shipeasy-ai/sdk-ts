@@ -19,6 +19,7 @@ import { renderEventsPanel } from "./panels/events";
 import type { DevtoolsOptions, DevtoolsSession, ProjectRecord } from "./types";
 import { projectOwnsHost } from "./types";
 import { getControlsState, refreshControls, subscribeControls } from "./controls";
+import { see, configureSelfReport } from "../devtools/self-report";
 import { I } from "./icons";
 
 type PanelKey = "user" | "gates" | "experiments" | "configs" | "labels" | "feedback" | "events";
@@ -237,6 +238,11 @@ interface ViewState {
 }
 
 export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () => void } {
+  // Arm self-monitoring for this mount: overlay faults report into Shipeasy's
+  // monitoring project (NOT the customer's), tagged with the project whose
+  // overlay threw. Inert unless a real monitor key is baked (see self-report.ts).
+  configureSelfReport({ affectedProjectId: opts.projectId });
+
   // Shadow host
   const host = document.createElement("div");
   host.setAttribute("id", "shipeasy-devtools");
@@ -823,6 +829,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
         statusEl.textContent = "";
         cta.disabled = false;
         cta.textContent = "Retry connect →";
+        see(err).causes_the("devtools sign-in").to("not complete");
       }
     });
   }
@@ -1232,6 +1239,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
         );
       } catch (err) {
         errEl.textContent = err instanceof Error ? err.message : String(err);
+        see(err).causes_the("label edit").to("have no profile to anchor to");
         return null;
       }
     }
@@ -1278,6 +1286,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
         lockButtons(false);
         saveBtn.textContent = "Save as draft";
         errEl.textContent = err instanceof Error ? err.message : String(err);
+        see(err).causes_the("label draft").to("not be saved");
       }
     });
 
@@ -1299,6 +1308,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
         lockButtons(false);
         applyBtn.textContent = "Apply changes";
         errEl.textContent = err instanceof Error ? err.message : String(err);
+        see(err).causes_the("label edits").to("not be applied");
       }
     });
   }
@@ -1469,6 +1479,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       // overriding the SDK key). Surface it loudly so it lands in the console
       // and any log capture instead of looking like "nothing happened".
       console.error("[shipeasy devtools] project load failed — tabs will be hidden:", err);
+      see(err).causes_the("devtools tabs").to("stay hidden");
     }
   }
 
