@@ -700,8 +700,11 @@ describe("server shipeasy() — single server key, no client key", () => {
 
   it("missing server key → skips flags, experiments AND i18n, logs one error", async () => {
     vi.resetModules();
+    // The no-key warning is suppressed in dev/test (isDevOrTestEnv) so it only
+    // surfaces on real deploys — force a prod-like env to exercise the warning.
+    vi.stubEnv("SHIPEASY_ENV", "production");
     const calls = stubFetchOk();
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { shipeasy } = await import("../server");
     await shipeasy({});
     // Assert on the endpoints this test is about — no flags / experiments / i18n
@@ -711,6 +714,7 @@ describe("server shipeasy() — single server key, no client key", () => {
     const dataFetches = calls.filter((c) => /\/sdk\/(flags|experiments|i18n)/.test(c.url));
     expect(dataFetches).toEqual([]);
     expect(errSpy.mock.calls.flat().join(" ")).toContain("No server key");
+    vi.unstubAllEnvs();
   });
 
   it("server key present → fetches flags/experiments AND i18n, all with the server key", async () => {

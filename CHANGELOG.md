@@ -1,5 +1,34 @@
 # Changelog
 
+## 7.8.0 (2026-07-18)
+
+### Signed DevTools override cookies — overrides that reach the server (all kinds)
+
+- **Server-trusted overrides.** DevTools overrides (feature flags, kill switches,
+  configs, experiments) previously lived only in the URL query string and were
+  applied purely client-side, so SSR (nav, route guards, `window.__SE_BOOTSTRAP`)
+  never saw them. The overlay now also writes a **signed `se_ov` cookie**, and the
+  server SDK verifies + applies it during `shipeasy()` — so an override finally
+  changes what the server renders, and survives client-side navigation.
+- **Unforgeable, any-user.** A paired-key HMAC handshake: the worker hands the SDK
+  a per-project **verify key** (`overrideKey`/`overrideKeyId` on the `/sdk/flags`
+  + `/sdk/evaluate` payload); the admin app hands the authenticated overlay a
+  per-session **signing key**. Only an authenticated DevTools session can mint a
+  cookie the server trusts; everything fails **closed** (missing key / forged /
+  expired cookie ⇒ real values resolve).
+- **Framework-general, not Next-specific.** `shipeasy({ overrideCookie })` accepts
+  the bare `se_ov` value **or** a full `Cookie:` header string. Read the cookie
+  however your framework exposes it (`next/headers`, `req.headers.cookie`,
+  `c.req.header('cookie')`, Rack `request.cookies`, …); on Next.js it's auto-read.
+  New `flags.verifyOverrides(cookie)` returns the verified map to feed `evaluate`.
+- `getKillswitch` in the SSR bootstrap now reflects a verified override.
+
+### Fixed
+
+- The "No server key" setup warning is now emitted only on real deploys
+  (`isDevOrTestEnv`), so it stops being noise in local dev / CI. (Downgraded from
+  `error` to `warn`.)
+
 ## 7.7.0 (2026-07-13)
 
 ### see(): inline extras on `.to`, ambient per-request extras, no ordering footgun

@@ -3,9 +3,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
-import { isProductionEnv, setI18nRenderKeysOnly } from "../env";
+import { isDevOrTestEnv, isProductionEnv, setI18nRenderKeysOnly } from "../env";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
+import {
+  verifyOverrideCookie,
+  extractOverrideCookie,
+  type OverrideMap,
+} from "../overrides/cookie";
 import {
   buildSeeEvent,
   createObjectExtrasStore,
@@ -292,6 +297,14 @@ export interface FlagsBlob {
   gates: Record<string, Gate>;
   configs: Record<string, { value: unknown }>;
   killswitches: Record<string, Killswitch>;
+  /**
+   * Per-project VERIFY key (base64url of `Kp`) for signed DevTools override
+   * cookies, injected by the worker. Absent when `SE_OVERRIDE_SECRET` is unset —
+   * then override cookies are never trusted (fail-closed). Paired with `overrideKeyId`.
+   */
+  overrideKey?: string;
+  /** Rotation id the override cookie's `keyId` must match. */
+  overrideKeyId?: string;
 }
 
 /** Body of `GET /sdk/experiments` — the snapshot's `experiments` field. See {@link Engine.fromSnapshot}. */
@@ -1286,7 +1299,28 @@ export class Engine {
    * `window.__SE_BOOTSTRAP` in the HTML, and the client SDK will read it
    * synchronously without waiting for identify() to resolve.
    */
-  evaluate(user: User, rawUrl?: string): BootstrapPayload {
+  /**
+   * Verify a signed DevTools override cookie (`se_ov`) against this project's
+   * VERIFY key from the flags blob, returning the override map or null. Async
+   * (Web Crypto) so it runs in `shipeasy()`; the verified map is then applied
+   * synchronously in {@link evaluate}. Fails closed (null) when the key is
+   * absent, the cookie is missing/forged/expired, or on any error.
+   */
+  async verifyOverrides(cookieInput: string | null | undefined): Promise<OverrideMap | null> {
+    const encodedKp = this.flagsBlob?.overrideKey;
+    const keyId = this.flagsBlob?.overrideKeyId;
+    if (!encodedKp || !keyId) return null;
+    const value = extractOverrideCookie(cookieInput);
+    if (!value) return null;
+    try {
+      const res = await verifyOverrideCookie(value, encodedKp, { keyId });
+      return res.ok ? res.payload.ov : null;
+    } catch {
+      return null;
+    }
+  }
+
+  evaluate(user: User, rawUrl?: string, verified?: OverrideMap | null): BootstrapPayload {
     const flags: Record<string, boolean> = {};
     const configs: Record<string, unknown> = {};
     const experiments: Record<string, ExperimentResult<Record<string, unknown>>> = {};
@@ -1336,6 +1370,25 @@ export class Engine {
       Object.assign(flags, ov.gates);
       Object.assign(configs, ov.configs);
       for (const [name, group] of Object.entries(ov.experiments)) {
+        const uni = this.expsBlob?.experiments[name]?.universe;
+        experiments[name] = { inExperiment: true, group, params: {}, ...(uni ? { universe: uni } : {}) };
+      }
+    }
+
+    // Verified signed-cookie overrides (all four kinds). Applied AFTER URL
+    // overrides so a same-request cookie wins. `gates` covers feature flags AND
+    // kill switches (shared namespace): apply to `flags`, and mirror onto the
+    // `killswitches` map for any name that is a known kill switch so getKillswitch
+    // consumers of the bootstrap see it too.
+    if (verified) {
+      Object.assign(flags, verified.gates);
+      for (const [name, val] of Object.entries(verified.gates)) {
+        if (this.flagsBlob?.killswitches && name in this.flagsBlob.killswitches) {
+          killswitches[name] = val;
+        }
+      }
+      Object.assign(configs, verified.configs);
+      for (const [name, group] of Object.entries(verified.exps)) {
         const uni = this.expsBlob?.experiments[name]?.universe;
         experiments[name] = { inExperiment: true, group, params: {}, ...(uni ? { universe: uni } : {}) };
       }
@@ -1784,11 +1837,22 @@ export interface ShipeasyServerConfig {
    * Never embedded in browser output. The browser uses its own client key via
    * `shipeasy({ clientKey })` from `@shipeasy/sdk/client` — the server never
    * sees or forwards the client key. If omitted, flag/experiment/i18n loading
-   * is skipped and an error is logged.
+   * is skipped and a warning is logged (suppressed in local dev / test).
    */
   serverKey?: string;
   /** Raw URL or query string for applying ?se_ks_* / ?se_cf_* / ?se_exp_* overrides. */
   urlOverrides?: string;
+  /**
+   * Signed DevTools override cookie (`se_ov`) for server-trusted overrides of all
+   * kinds (flags/kill switches/configs/experiments). Pass the bare cookie value
+   * OR a full `Cookie:` header string — the SDK parses `se_ov` out and verifies
+   * its signature against this project's key before applying. Framework-general:
+   * read the cookie however your framework exposes it (`next/headers`,
+   * `req.headers.cookie`, `c.req.header('cookie')`, Rack `request.cookies`, …).
+   * On Next.js it's auto-read from `cookies()` when omitted. Unverifiable/absent
+   * ⇒ ignored (real values resolve).
+   */
+  overrideCookie?: string;
   /** User attributes for flag and experiment evaluation. */
   user?: User;
   /** i18n profile to load for SSR translations, e.g. "en:prod". Defaults to "en:prod". */
@@ -1873,11 +1937,12 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   // (/sdk/i18n/strings now accepts the server key for server-side use). The
   // client key never reaches the server — the browser configures itself with
   // its own client key via `shipeasy({ clientKey })` from @shipeasy/sdk/client.
-  // If the server key is missing, skip every fetch and log a loud, actionable
-  // error rather than firing a doomed request.
+  // If the server key is missing, skip every fetch and warn with an actionable
+  // message rather than firing a doomed request. Stay quiet in local dev / test,
+  // where running without a key is expected and the warning is just noise.
   const serverKey = opts.serverKey ?? "";
-  if (!serverKey) {
-    logger.error(
+  if (!serverKey && !isDevOrTestEnv()) {
+    logger.warn(
       "[shipeasy] No server key — flags, experiments and SSR i18n skipped. Pass " +
         "`serverKey` to shipeasy() from @shipeasy/sdk/server with your server key " +
         "(SHIPEASY_SERVER_KEY). Set it as a Worker secret with " +
@@ -1928,6 +1993,24 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
       }
     } catch {}
   }
+  // Resolve the signed override cookie (`se_ov`): explicit opts.overrideCookie
+  // wins; otherwise soft-read it from Next's cookies() (falls back silently in
+  // non-Next runtimes, where the app passes opts.overrideCookie explicitly).
+  let resolvedOverrideCookie = opts.overrideCookie;
+  if (!resolvedOverrideCookie) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore — next/headers is an optional peer; absent in non-Next.js runtimes
+      const { cookies } = (await import("next/headers")) as {
+        cookies: () =>
+          | Promise<{ get: (n: string) => { value: string } | undefined }>
+          | { get: (n: string) => { value: string } | undefined };
+      };
+      const c = await Promise.resolve(cookies());
+      resolvedOverrideCookie = c.get?.("se_ov")?.value;
+    } catch {}
+  }
+
   // Set edit mode before i18n.init() idempotency check so the page's
   // ?se_edit_labels param always wins even when layout ran first.
   const editLabels = resolvedUrlOverrides
@@ -1975,7 +2058,15 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
     ? { anonymous_id: anonId, ...opts.user }
     : { ...opts.user };
 
-  const bootstrap = flags.evaluate(effectiveUser, resolvedUrlOverrides);
+  // Verify the signed override cookie AFTER initOnce (the flags blob carries the
+  // verify key). Async (Web Crypto); the verified map is applied synchronously
+  // inside evaluate(). Null when absent/forged/expired ⇒ real values resolve.
+  const verifiedOverrides =
+    serverKey && resolvedOverrideCookie
+      ? await flags.verifyOverrides(resolvedOverrideCookie)
+      : null;
+
+  const bootstrap = flags.evaluate(effectiveUser, resolvedUrlOverrides, verifiedOverrides);
   const i18nData = i18n.getForRequest();
 
   return {
@@ -2197,9 +2288,20 @@ export const flags = {
    * cached blob. Pass the request URL to apply ?se_ks_* / ?se_cf_* / ?se_exp_*
    * overrides. Returns an empty payload when the blob hasn't been fetched yet.
    */
-  evaluate(user: User, rawUrl?: string): BootstrapPayload {
+  evaluate(user: User, rawUrl?: string, verifiedOverrides?: OverrideMap | null): BootstrapPayload {
     const empty: BootstrapPayload = { flags: {}, configs: {}, experiments: {}, killswitches: {} };
-    return safeRun("flags.evaluate", empty, () => _server?.evaluate(user, rawUrl) ?? empty);
+    return safeRun("flags.evaluate", empty, () => _server?.evaluate(user, rawUrl, verifiedOverrides) ?? empty);
+  },
+  /**
+   * Verify a signed DevTools override cookie (`se_ov`) against this project's
+   * verify key, returning the override map to feed into {@link evaluate} (or null
+   * if absent/forged/expired). Accepts the bare cookie value or a `Cookie:`
+   * header string. Async (Web Crypto).
+   */
+  verifyOverrides(cookieInput: string | null | undefined): Promise<OverrideMap | null> {
+    return safeRun("flags.verifyOverrides", Promise.resolve(null), () =>
+      _server?.verifyOverrides(cookieInput) ?? Promise.resolve(null),
+    );
   },
 };
 

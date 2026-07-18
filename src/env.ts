@@ -37,6 +37,15 @@ export function isTestEnv(): boolean {
   return readNativeEnv() === "test";
 }
 
+/** True when the host runtime looks like a local dev or test run — the native
+ * `SHIPEASY_ENV` / `NODE_ENV` is `"test"`, `"development"`, or `"dev"`. Used to
+ * silence setup diagnostics (e.g. a missing key warning) that are expected noise
+ * locally and in CI, so they only surface on real staging/prod deploys. */
+export function isDevOrTestEnv(): boolean {
+  const native = readNativeEnv();
+  return native === "test" || native === "development" || native === "dev";
+}
+
 // ---- i18n renderKeysOnly toggle (shared across the server + client bundles) ----
 //
 // A process-wide test toggle: when on, `i18n.t()` renders the KEY instead of

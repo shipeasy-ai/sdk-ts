@@ -1,4 +1,8 @@
 import type { DevtoolsOptions, DevtoolsSession } from "./types";
+import {
+  setOverrideSigningGrant,
+  type OverrideSigningGrant,
+} from "./override-cookie";
 
 const SESSION_KEY = "se_dt_session";
 
@@ -96,13 +100,21 @@ export async function startDeviceAuth(
     function onMessage(ev: MessageEvent) {
       if (ev.origin !== adminOrigin) return;
       const data = ev.data as
-        | { type?: string; token?: string; projectId?: string }
+        | {
+            type?: string;
+            token?: string;
+            projectId?: string;
+            override?: OverrideSigningGrant;
+          }
         | null
         | undefined;
       if (!data || data.type !== "se:devtools-auth") return;
       if (!data.token || !data.projectId) return;
       const session: DevtoolsSession = { token: data.token, projectId: data.projectId };
       saveSession(session);
+      // Store the per-session signing grant (absent when SE_OVERRIDE_SECRET is
+      // unset) so the overlay can write server-trusted `se_ov` override cookies.
+      setOverrideSigningGrant(data.override, data.projectId);
       finish(null, session);
     }
 

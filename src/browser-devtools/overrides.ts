@@ -1,4 +1,6 @@
 import type { OverridePersistence } from "./types";
+import type { OverrideMap } from "../overrides/cookie";
+import { writeSignedOverrideCookie, clearSignedOverrideCookie } from "./override-cookie";
 
 /**
  * URL-only override store. The single source of truth for in-session
@@ -88,7 +90,40 @@ function applyAndReload(updates: Array<[string, string | null]>): void {
     if (v === null) url.searchParams.delete(k);
     else url.searchParams.set(k, v);
   }
-  window.location.assign(url.toString());
+  // Mirror the NEW override state into the signed `se_ov` cookie so the SERVER
+  // honors it too (URL params only reach the client). No-op without a signing
+  // grant. Await the cookie write before reloading so SSR sees it on the next
+  // request. Signing is async (Web Crypto); the reload runs in the callback.
+  const map = overrideMapFromParams(url.searchParams);
+  void (async () => {
+    try {
+      await writeSignedOverrideCookie(map);
+    } catch {
+      /* best-effort — the URL param still drives the client */
+    }
+    window.location.assign(url.toString());
+  })();
+}
+
+/** Build the signed-cookie {gates,configs,exps} map from the current URL params. */
+function overrideMapFromParams(params: URLSearchParams): OverrideMap {
+  const gates: Record<string, boolean> = {};
+  const configs: Record<string, unknown> = {};
+  const exps: Record<string, string> = {};
+  for (const [k, v] of params) {
+    if (k.startsWith("se_ks_")) {
+      const b = parseBool(v);
+      if (b !== null) gates[k.slice(6)] = b;
+    } else if (k.startsWith("se_gate_")) {
+      const b = parseBool(v);
+      if (b !== null) gates[k.slice(8)] = b;
+    } else if (k.startsWith("se_config_")) {
+      configs[k.slice(10)] = decodeConfigValue(v);
+    } else if (k.startsWith("se_exp_")) {
+      if (v && v !== "default" && v !== "none") exps[k.slice(7)] = v;
+    }
+  }
+  return { gates, configs, exps };
 }
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
@@ -284,6 +319,8 @@ export function clearAllOverrides(): void {
     if (SE_PARAM_RX.test(k)) url.searchParams.delete(k);
   }
   url.searchParams.set("se", "1");
+  // Also delete the server-trusted override cookie so SSR stops applying it.
+  clearSignedOverrideCookie();
   window.location.assign(url.toString());
 }
 
