@@ -1,6 +1,7 @@
 import type { DevtoolsApi } from "../api";
 import { see } from "../../devtools/self-report";
 import { getGateOverride, setGateOverride } from "../overrides";
+import { fetchEvaluatedFlags } from "../evaluate";
 import type { GateRecord, ShipeasySdkBridge } from "../types";
 import { I } from "../icons";
 import {
@@ -18,6 +19,14 @@ interface ViewOpts {
   search: string;
 }
 
+/** Context for pulling true evaluated statuses from the edge `/sdk/evaluate`. */
+export interface GateEvalContext {
+  edgeUrl: string;
+  clientKey: string;
+  /** The operator's project — project-whitelist gates key on `project_id`. */
+  projectId: string;
+}
+
 function bridge(): ShipeasySdkBridge | null {
   return (window as unknown as { __shipeasy?: ShipeasySdkBridge }).__shipeasy ?? null;
 }
@@ -33,10 +42,14 @@ interface RenderRow {
   updatedAt: string;
 }
 
-function buildRow(g: GateRecord): RenderRow {
+function buildRow(g: GateRecord, evaluated: Record<string, boolean> | null): RenderRow {
   const ov = getGateOverride(g.name);
+  // Ground truth = the edge's stack-aware verdict for the operator's context
+  // (whitelist gates evaluate ON here even though their flat `enabled` column is
+  // false). Fall back to the page's client bridge, then the flat column.
+  const edge = evaluated && g.name in evaluated ? evaluated[g.name] : null;
   const liveVal = bridge()?.getFlag(g.name);
-  const live = typeof liveVal === "boolean" ? liveVal : null;
+  const live = edge !== null ? edge : typeof liveVal === "boolean" ? liveVal : null;
   const effective = ov !== null ? ov : (live ?? g.enabled);
   return {
     name: g.name,
@@ -140,6 +153,7 @@ export async function renderGatesPanel(
   api: DevtoolsApi,
   view: ViewOpts,
   setOverrideCount: (n: number) => void,
+  evalCtx?: GateEvalContext,
 ): Promise<void> {
   container.innerHTML = loadingState();
   let gates: GateRecord[];
@@ -149,6 +163,24 @@ export async function renderGatesPanel(
     container.innerHTML = `<div class="se-empty" style="color:var(--danger)">Failed to load feature flags: ${escapeHtml(String(err))}</div>`;
     see(err).causes_the("feature flag list").to("fail to load");
     return;
+  }
+
+  // Pull the true, stack-aware statuses from the edge once, keyed by the
+  // operator's project (so project-whitelist gates like `release_module` show
+  // their real ON state instead of the lossy flat `enabled` column). Merge the
+  // page client's last identify() attrs so email/user-scoped gates evaluate
+  // closer to reality too; `project_id` wins. Best-effort — fall back to flat
+  // columns on any failure.
+  let evaluated: Record<string, boolean> | null = null;
+  if (evalCtx?.clientKey) {
+    try {
+      evaluated = await fetchEvaluatedFlags(evalCtx.edgeUrl, evalCtx.clientKey, {
+        ...(bridge()?.user ?? {}),
+        project_id: evalCtx.projectId,
+      });
+    } catch (err) {
+      see(err).causes_the("feature flag statuses").to("fall back to flat gate columns");
+    }
   }
 
   if (gates.length === 0) {
@@ -176,7 +208,7 @@ export async function renderGatesPanel(
   function paint(): void {
     const q = view.search.trim().toLowerCase();
     const filtered = q ? gates.filter((g) => g.name.toLowerCase().includes(q)) : gates;
-    const rows = filtered.map(buildRow);
+    const rows = filtered.map((g) => buildRow(g, evaluated));
     setOverrideCount(rows.filter((r) => r.override !== null).length);
 
     if (rows.length === 0) {

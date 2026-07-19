@@ -1,5 +1,27 @@
 # Changelog
 
+## 7.8.3 (2026-07-19)
+
+### Fix: DevTools gate panel shows true stack-aware statuses
+
+- **Statuses come from the edge, not the lossy flat columns.** The overlay's
+  feature-flag panel derived each gate's shown value from the admin list's flat
+  `enabled`/`rolloutPct` columns (a best-effort approximation of the gatekeeper
+  stack) and the host page's own client bridge. A project-whitelist gate
+  (`project_id in [...]` at 100%, then 0% public) collapses to
+  `enabled:false`/`rolloutPct:0`, so it rendered "off" even while it was really
+  **on** for the operator's project — and the page's client SDK never identifies
+  with `project_id`, so its bridge couldn't correct that. The panel now calls the
+  edge `/sdk/evaluate` once with the operator's context (crucially `project_id`,
+  merged over the page's last identify attrs) and displays that stack-aware
+  verdict, falling back to the client bridge then the flat column. Read-only: a
+  throwaway `anonymous_id`, no page-SDK identity mutation. New optional
+  `edgeUrl` option (`data-edge-url` attribute), defaulting to
+  `https://cdn.shipeasy.ai`.
+
+_(Overlay-only; ships via the bundled `se-devtools.js`, not the npm entry
+points — no runtime change to `@shipeasy/sdk/server` or `/client`.)_
+
 ## 7.8.2 (2026-07-19)
 
 ### Fix: DevTools override cookie now survives reloads (grant persistence)
