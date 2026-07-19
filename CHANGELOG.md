@@ -1,6 +1,21 @@
 # Changelog
 
-## 7.8.0 (2026-07-18)
+## 7.8.1 (2026-07-19)
+
+### Fix: honor the gatekeeper `stack` when evaluating gates locally
+
+- **Stacked gates now evaluate correctly in the server SDK.** `evalGateInternal`
+  previously read only the flat `rules` + `rolloutPct` columns and ignored a
+  gate's ordered `stack`. For a modern gatekeeper the flat columns are a lossy
+  approximation — e.g. a whitelist condition at 100% followed by a 0% public
+  rollout flattens to `rules: [project_id in [...]]`, `rolloutPct: 0`, which the
+  flat path wrongly reads as "matches the whitelist **AND** is in the 0% bucket"
+  = never true. The SDK now evaluates the `stack` top-to-bottom (condition rules
+  → per-condition rollout, ramps, `bucketBy`), passing on the first entry that
+  hits, exactly like `@shipeasy/core`'s `evalGatekeeper` and the edge worker. A
+  stack-less gate still uses the legacy flat path unchanged. This makes
+  `get_flag` / the SSR `flags` map agree with the canonical worker evaluation
+  for whitelisted/targeted callers.
 
 ### Signed DevTools override cookies — overrides that reach the server (all kinds)
 

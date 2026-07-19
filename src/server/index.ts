@@ -167,7 +167,51 @@ interface Gate {
   salt: string;
   enabled: 0 | 1 | boolean;
   killswitch?: 0 | 1 | boolean;
+  /**
+   * Ordered gatekeeper stack (modern gates). When present it — not the flat
+   * `rules`/`rolloutPct` above — drives evaluation: entries are tried
+   * top-to-bottom and the gate passes on the first whose rules match AND whose
+   * bucket hits. The flat columns remain only as a best-effort approximation
+   * for older SDKs; a stack-aware SDK MUST prefer this. Mirrors
+   * @shipeasy/core `Gatekeeper.stack`.
+   */
+  stack?: StackedGateEntry[] | null;
 }
+
+/** A rollout % that ramps linearly from→to over [startAt, startAt+durationMs]
+ *  against wall-clock `now`. Mirrors @shipeasy/core `Ramp`. */
+interface Ramp {
+  from: number; // start basis points (0–10000)
+  to: number; // end basis points (0–10000)
+  startAt: number; // epoch ms (UTC)
+  durationMs: number; // ramp length
+}
+
+/**
+ * One entry in a gate's ordered gatekeeper stack. A `condition` gates on its
+ * rules then buckets at its own rollout (absent ⇒ 100%: every match passes);
+ * a `rollout` buckets everyone who reached it (absent ⇒ 0%). Mirrors
+ * @shipeasy/core `StackedGateEntry`.
+ */
+type StackedGateEntry =
+  | {
+      id: string;
+      type: "condition";
+      pass?: "all" | "any";
+      rules: GateRule[];
+      rolloutPct?: number;
+      bucketBy?: string | null;
+      salt?: string;
+      ramp?: Ramp;
+    }
+  | {
+      id: string;
+      type: "rollout";
+      rolloutPct: number;
+      bucketBy?: string | null;
+      salt?: string;
+      ramp?: Ramp;
+    };
 
 interface ExperimentGroup {
   name: string;
@@ -412,9 +456,77 @@ function pickIdentifier(user: User, bucketBy?: string | null): string | undefine
   return user.user_id ?? user.anonymous_id;
 }
 
+function clampPct(n: number): number {
+  if (n < 0) return 0;
+  if (n > 10000) return 10000;
+  return n;
+}
+
+// Effective rollout % for a stack entry at time `now`. A condition with no
+// explicit rolloutPct defaults to 100% (match ⇒ pass); a rollout to 0%. A ramp
+// overrides the static % via truncating-toward-zero integer division — the
+// cross-SDK contract (experiment-platform/04-evaluation.md).
+function effectivePct(entry: StackedGateEntry, now: number): number {
+  const base = entry.type === "condition" ? (entry.rolloutPct ?? 10000) : (entry.rolloutPct ?? 0);
+  const ramp = entry.ramp;
+  if (!ramp) return base;
+  if (now <= ramp.startAt) return ramp.from;
+  if (now >= ramp.startAt + ramp.durationMs) return ramp.to;
+  const delta = ramp.to - ramp.from; // signed
+  const elapsed = now - ramp.startAt;
+  return clampPct(ramp.from + Math.trunc((delta * elapsed) / ramp.durationMs));
+}
+
+// Hash the caller into [0,10000) and test against `pct`. No-unit contract
+// (experiment-platform/18): a fully-rolled bucket is on for everyone without a
+// unit id; a fractional one needs a stable unit, so it is off.
+function bucketHit(pct: number, uid: string | undefined, salt: string): boolean {
+  if (pct <= 0) return false;
+  if (!uid) return pct >= 10000;
+  if (pct >= 10000) return true;
+  return murmur3(`${salt}:${uid}`) % 10000 < pct;
+}
+
+function evalStackEntry(
+  entry: StackedGateEntry,
+  user: User,
+  fallbackSalt: string,
+  now: number,
+): boolean {
+  if (entry.type === "condition") {
+    const rules = entry.rules ?? [];
+    if (rules.length === 0) return false;
+    const mode = entry.pass ?? "all";
+    const matched =
+      mode === "any" ? rules.some((r) => matchRule(r, user)) : rules.every((r) => matchRule(r, user));
+    if (!matched) return false;
+    // Rules matched — bucket at the per-condition rollout. A distinct default
+    // salt (the entry id) keeps each step's bucket independent yet stable.
+    const salt = entry.salt && entry.salt.length > 0 ? entry.salt : entry.id || fallbackSalt;
+    return bucketHit(effectivePct(entry, now), pickIdentifier(user, entry.bucketBy), salt);
+  }
+  // rollout — salt fallback is the gate salt so existing entries don't re-bucket.
+  const salt = entry.salt && entry.salt.length > 0 ? entry.salt : fallbackSalt;
+  return bucketHit(effectivePct(entry, now), pickIdentifier(user, entry.bucketBy), salt);
+}
+
 function evalGateInternal(gate: Gate, user: User): boolean {
   if (isEnabled(gate.killswitch)) return false;
   if (!isEnabled(gate.enabled)) return false;
+  // Modern gatekeepers ship an ordered `stack`; evaluate it top-to-bottom and
+  // pass on the first entry whose rules match AND whose bucket hits. This is the
+  // canonical model — the flat `rules`/`rolloutPct` below are a lossy
+  // approximation (a whitelist condition at 100% collapses to `rolloutPct: 0`
+  // once the public rollout is 0%, which the flat path would wrongly read as
+  // "never"). Mirrors @shipeasy/core evalGatekeeper — keep the two in sync.
+  const stack = gate.stack;
+  if (Array.isArray(stack) && stack.length > 0) {
+    const now = Date.now();
+    for (const entry of stack) {
+      if (evalStackEntry(entry, user, gate.salt, now)) return true;
+    }
+    return false;
+  }
   for (const rule of gate.rules ?? []) {
     if (!matchRule(rule, user)) return false;
   }
