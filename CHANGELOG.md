@@ -1,5 +1,26 @@
 # Changelog
 
+## 7.9.0 (unreleased)
+
+### Server identity resolver — kill the anon→identified flip without app glue
+
+- **New `setServerIdentity(resolver)` + `shipeasy({ identify })`.** Register a
+  request-scoped identity resolver **once**, outside your render path (Next
+  `instrumentation.ts`, a server bootstrap module). The SDK calls it per request
+  during `shipeasy()` and evaluates **both** the nav reads and the SSR bootstrap
+  tag against the resolved user — so the emitted `data-flags` already carry the
+  identified values and the browser SDK seeds with **no anon→identified flip**.
+  Identity comes from your own session (`await auth()`), the authoritative,
+  unspoofable source — no PII on the wire, no `user` hand-threaded through the
+  layout.
+- **Precedence (highest first):** explicit `shipeasy({ user })` › per-call
+  `shipeasy({ identify })` › the registered `setServerIdentity` resolver › the
+  signed `__se_id` cookie › `__se_anon_id`. A resolver that returns `null` or
+  throws leaves the request anonymous and never breaks the render. Flags are UX,
+  never authorization — the client may only be more restrictive than the server.
+- See `experiment-platform/18-identity-bucketing.md` for the full cross-SDK
+  identity-coherence contract.
+
 ## 7.8.4 (2026-07-19)
 
 ### Revert 7.8.3's devtools-side gate evaluation — mirror the host app instead

@@ -178,6 +178,42 @@ export default async function RootLayout({ children }) {
 For non-React SSR (Express, raw templates), `se.getBootstrapTags()` returns the
 same two tags as an HTML string. See [i18n](./i18n.md) for the loader details.
 
+## Server identity (no anon→identified flip)
+
+By default the SSR bootstrap above evaluates **anonymously** — the root layout
+has no user, so the browser SDK seeds anonymous flags and then flips when its own
+`identify()` resolves. Register a **server identity resolver** and every server
+evaluation (nav reads **and** the bootstrap tag) runs against the identified
+user, so client and server agree and there is no flip. Identity comes from your
+own session — the authoritative, unspoofable source.
+
+Register it **once, outside your render path** (Next `instrumentation.ts`, a
+server bootstrap module). The SDK calls it per request; read your session inside:
+
+```ts
+// instrumentation.ts — runs once at server startup; the resolver runs per request
+import { setServerIdentity } from "@shipeasy/sdk/server";
+import { auth } from "@/auth";
+
+export async function register() {
+  setServerIdentity(async () => {
+    const session = await auth(); // reads this request's session cookie
+    return session?.user?.email
+      ? { user_id: session.user.email, email: session.user.email }
+      : null; // null ⇒ anonymous request
+  });
+}
+```
+
+`shipeasy()` in your layout needs **no change** — it picks up the registered
+resolver automatically. Precedence, highest first: an explicit `user` passed to
+`shipeasy({ user })` › the `identify` option passed to `shipeasy({ identify })`
+(per-call) › the registered resolver › the signed `__se_id` cookie ›
+`__se_anon_id`. A resolver that returns `null` or throws leaves the request
+anonymous — it never breaks the render. Flags are UX, never authorization: the
+client can only be more restrictive than the server, never grant itself a flag
+the server denied.
+
 ## Environment variables (convention)
 
 | Variable | Side | Purpose |

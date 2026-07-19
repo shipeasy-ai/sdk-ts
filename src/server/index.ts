@@ -111,6 +111,64 @@ export interface User {
   [attr: string]: unknown;
 }
 
+/**
+ * Resolves the identified user for a request. Called once per `shipeasy()` by
+ * the SDK; read your own session inside it. May be sync or async; return
+ * `null`/`undefined` for an anonymous request. See {@link setServerIdentity}.
+ */
+export type IdentityResolver = () => User | null | undefined | Promise<User | null | undefined>;
+
+// Registry-global so the same resolver is visible no matter how many copies of
+// the SDK module a bundler produces (same rationale as the i18n/edit-mode
+// symbols below). Registered once — typically from Next `instrumentation.ts` —
+// and invoked per request inside shipeasy().
+const _IDENTITY_RESOLVER_SYM = Symbol.for("@shipeasy/sdk:server-identity-resolver");
+
+/**
+ * Register the authoritative, request-scoped identity resolver ONCE, outside
+ * your render path (Next `instrumentation.ts` `register()`, a server bootstrap
+ * module, …). The SDK calls it on every `shipeasy()` and evaluates both the nav
+ * reads and the bootstrap tag against the result, so client and server agree on
+ * the same user with no anon→identified flip. Inside the resolver, read your own
+ * session (it runs within the request, so `await auth()` / `cookies()` work).
+ *
+ * Precedence: an explicit `user`/`identify` passed to `shipeasy()` wins over
+ * this; this wins over the signed `__se_id` cookie; that wins over `__se_anon_id`.
+ * Pass `null` to clear a previously-registered resolver.
+ *
+ * ```ts
+ * // instrumentation.ts
+ * import { setServerIdentity } from "@shipeasy/sdk/server";
+ * export async function register() {
+ *   setServerIdentity(async () => {
+ *     const s = await auth();
+ *     return s?.user?.email ? { user_id: s.user.email, email: s.user.email } : null;
+ *   });
+ * }
+ * ```
+ */
+export function setServerIdentity(resolver: IdentityResolver | null): void {
+  (globalThis as Record<symbol, unknown>)[_IDENTITY_RESOLVER_SYM] = resolver ?? undefined;
+}
+
+function getRegisteredIdentityResolver(): IdentityResolver | undefined {
+  return (globalThis as Record<symbol, unknown>)[_IDENTITY_RESOLVER_SYM] as
+    | IdentityResolver
+    | undefined;
+}
+
+/** Run an identity resolver, swallowing any failure to a null (stay anonymous). */
+async function resolveIdentity(resolver: IdentityResolver | undefined): Promise<User | null> {
+  if (!resolver) return null;
+  try {
+    return (await resolver()) ?? null;
+  } catch {
+    // A resolver that throws (session store down, no request context) must never
+    // break the render — fall through to anonymous, exactly like a cookie miss.
+    return null;
+  }
+}
+
 export interface ExperimentResult<P> {
   inExperiment: boolean;
   group: string;
@@ -1965,8 +2023,28 @@ export interface ShipeasyServerConfig {
    * ⇒ ignored (real values resolve).
    */
   overrideCookie?: string;
-  /** User attributes for flag and experiment evaluation. */
+  /**
+   * User attributes for flag and experiment evaluation. Highest-precedence
+   * identity source — an explicit `user` here overrides both the registered
+   * {@link setServerIdentity} resolver and the signed `__se_id` cookie.
+   */
   user?: User;
+  /**
+   * Request-scoped identity resolver — the authoritative "who is this user"
+   * source. Called once per `shipeasy()` (i.e. per request); read your own
+   * session inside it (`await auth()`, a JWT cookie, a header). Its result is
+   * layered UNDER an explicit `user` and OVER the signed `__se_id` cookie, then
+   * used to evaluate BOTH the nav reads and the bootstrap tag — so the emitted
+   * `data-flags` already carry the identified user's values and the browser SDK
+   * seeds with no anon→identified flip.
+   *
+   * Prefer registering it ONCE via {@link setServerIdentity} (e.g. Next
+   * `instrumentation.ts`) so the identity plumbing lives outside your render
+   * path; this per-call option wins over the registered one when both are set.
+   * Returning `null`/`undefined` (or throwing — errors are swallowed) leaves the
+   * request anonymous. See experiment-platform/18-identity-bucketing.md.
+   */
+  identify?: IdentityResolver;
   /** i18n profile to load for SSR translations, e.g. "en:prod". Defaults to "en:prod". */
   i18nDefaultProfile?: string;
   /** i18n behaviour toggles (shared process-wide with the browser `i18n.t()`). */
@@ -2134,9 +2212,23 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
     serverKey ? i18n.init(serverKey, profile) : Promise.resolve(),
   ]);
 
+  // Resolve the request's IDENTITY (who the user is) before bucketing. The
+  // authoritative source is the app's own session, surfaced via an identity
+  // resolver — a per-call `opts.identify` (wins) or the register-once
+  // setServerIdentity() one. Its result is layered UNDER an explicit `opts.user`
+  // (explicit always wins) so both the nav reads and the bootstrap tag evaluate
+  // for the same identified user — no anon→identified flip on the client. A
+  // resolver that returns null / throws leaves the request anonymous.
+  // (Precedence source #3, the signed `__se_id` cookie, is layered in below.)
+  const resolvedIdentity = await resolveIdentity(opts.identify ?? getRegisteredIdentityResolver());
+  const identityUser: User | undefined =
+    resolvedIdentity || opts.user
+      ? { ...(resolvedIdentity ?? {}), ...(opts.user ?? {}) }
+      : undefined;
+
   // Resolve the stable anonymous bucketing unit. Precedence:
-  //   1. an explicit user_id from the caller (authenticated) — no anon needed
-  //   2. an explicit anonymous_id from the caller
+  //   1. an explicit user_id (from the caller OR the identity resolver) — no anon needed
+  //   2. an explicit anonymous_id
   //   3. the `__se_anon_id` cookie — minted by edge middleware on the first
   //      request (and forwarded to this render via the request headers), or
   //      persisted by a previous response's bootstrap script
@@ -2146,10 +2238,10 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   // and client bucket identically at any rollout %. The cookie name + format are
   // a cross-SDK contract — see experiment-platform/18-identity-bucketing.md.
   let anonId: string | undefined;
-  if (!opts.user?.user_id) {
-    if (opts.user?.anonymous_id) {
+  if (!identityUser?.user_id) {
+    if (identityUser?.anonymous_id) {
       // Explicit caller value — trusted, used verbatim.
-      anonId = opts.user.anonymous_id;
+      anonId = identityUser.anonymous_id as string;
     } else {
       try {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -2167,8 +2259,8 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
     }
   }
   const effectiveUser: User = anonId
-    ? { anonymous_id: anonId, ...opts.user }
-    : { ...opts.user };
+    ? { anonymous_id: anonId, ...identityUser }
+    : { ...identityUser };
 
   // Verify the signed override cookie AFTER initOnce (the flags blob carries the
   // verify key). Async (Web Crypto); the verified map is applied synchronously

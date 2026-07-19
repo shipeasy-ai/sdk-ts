@@ -793,6 +793,131 @@ describe("server shipeasy() — single server key, no client key", () => {
   });
 });
 
+describe("server shipeasy() — identity resolver (setServerIdentity / opts.identify)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  // /sdk/flags returns one targeting gate `vip` that is true ONLY for
+  // user_id === "resolver-user" — so a flag value proves exactly which identity
+  // reached flags.evaluate().
+  function stubFlagsWithVipGate() {
+    const fetchMock = vi.fn(async (url: string) => {
+      const isFlags = String(url).includes("/sdk/flags");
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => ({
+          version: "v1",
+          plan: "free",
+          gates: isFlags
+            ? {
+                vip: {
+                  rules: [{ attr: "user_id", op: "eq", value: "resolver-user" }],
+                  rolloutPct: 10000,
+                  salt: "s",
+                  enabled: 1,
+                },
+              }
+            : {},
+          configs: {},
+          killswitches: {},
+          universes: {},
+          experiments: {},
+          locale: "en",
+          strings: {},
+        }),
+      } as any;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  }
+
+  it("evaluates nav + bootstrap for the registered identity (no anon, gate matches)", async () => {
+    vi.resetModules();
+    stubFlagsWithVipGate();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { shipeasy, setServerIdentity } = await import("../server");
+    setServerIdentity(() => ({ user_id: "resolver-user", email: "r@x.test" }));
+    try {
+      const handle = await shipeasy({ serverKey: "srv_key" });
+      // The identity reached flags.evaluate() → the bootstrap flags (what the
+      // browser SDK seeds from) already carry the identified value: no flip.
+      expect(handle.flags.vip).toBe(true);
+      // An identified user mints no anon id — the bootstrap tag carries none.
+      expect(handle.getBootstrapData().bootstrap.attrs["data-anon-id"]).toBeUndefined();
+    } finally {
+      setServerIdentity(null);
+    }
+  });
+
+  it("opts.identify (per-call) overrides the registered resolver", async () => {
+    vi.resetModules();
+    stubFlagsWithVipGate();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { shipeasy, setServerIdentity } = await import("../server");
+    setServerIdentity(() => ({ user_id: "someone-else" }));
+    try {
+      const handle = await shipeasy({
+        serverKey: "srv_key",
+        identify: async () => ({ user_id: "resolver-user" }),
+      });
+      expect(handle.flags.vip).toBe(true);
+    } finally {
+      setServerIdentity(null);
+    }
+  });
+
+  it("explicit opts.user wins over the resolver (layered under)", async () => {
+    vi.resetModules();
+    stubFlagsWithVipGate();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { shipeasy, setServerIdentity } = await import("../server");
+    setServerIdentity(() => ({ user_id: "resolver-user" }));
+    try {
+      // opts.user overrides the resolver's user_id → the vip gate no longer matches.
+      const handle = await shipeasy({ serverKey: "srv_key", user: { user_id: "override" } });
+      expect(handle.flags.vip).toBe(false);
+    } finally {
+      setServerIdentity(null);
+    }
+  });
+
+  it("a resolver returning null leaves the request anonymous (anon id minted)", async () => {
+    vi.resetModules();
+    stubFlagsWithVipGate();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { shipeasy, setServerIdentity } = await import("../server");
+    setServerIdentity(() => null);
+    try {
+      const handle = await shipeasy({ serverKey: "srv_key" });
+      expect(handle.flags.vip).toBe(false);
+      // Anonymous → an anon id is minted + emitted for cross-runtime bucketing.
+      expect(handle.getBootstrapData().bootstrap.attrs["data-anon-id"]).toMatch(/^[^"]+$/);
+    } finally {
+      setServerIdentity(null);
+    }
+  });
+
+  it("a throwing resolver is swallowed (renders anonymously, never breaks SSR)", async () => {
+    vi.resetModules();
+    stubFlagsWithVipGate();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { shipeasy, setServerIdentity } = await import("../server");
+    setServerIdentity(() => {
+      throw new Error("session store down");
+    });
+    try {
+      const handle = await shipeasy({ serverKey: "srv_key" });
+      expect(handle.flags.vip).toBe(false);
+      expect(handle.getBootstrapData().bootstrap.attrs["data-anon-id"]).toMatch(/^[^"]+$/);
+    } finally {
+      setServerIdentity(null);
+    }
+  });
+});
+
 describe("server i18n SSR cache TTL", () => {
   // The cache is parked on globalThis (shared across module re-imports), so it
   // persists between vi.resetModules() runs the way it persists across requests
