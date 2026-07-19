@@ -1,5 +1,22 @@
 # Changelog
 
+## 7.8.2 (2026-07-19)
+
+### Fix: DevTools override cookie now survives reloads (grant persistence)
+
+- **Overrides reach the server again.** The per-session signing grant that lets
+  the overlay write the server-trusted `se_ov` cookie lived only in module
+  memory and was set once, from the auth popup's postMessage. But every override
+  reloads the page (wiping that memory) while the devtools **session token** is
+  persisted in `sessionStorage` — so after any reload the overlay looked
+  "connected" yet `writeSignedOverrideCookie` silently no-op'd (no grant), and an
+  override only changed the URL param (client-only), never the cookie. The grant
+  is now mirrored into `sessionStorage` next to the session token and rehydrated
+  on overlay init for the restored project, so overrides keep writing the cookie
+  across reloads. The grant is dropped on sign-out and when expired/project-
+  mismatched. `Ks` is tab-scoped and sits in the same trust boundary as the
+  already-persisted session token.
+
 ## 7.8.1 (2026-07-19)
 
 ### Fix: honor the gatekeeper `stack` when evaluating gates locally

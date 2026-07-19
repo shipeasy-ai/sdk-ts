@@ -30,6 +30,9 @@ export function clearSession(): void {
   } catch {
     /* ignore */
   }
+  // Drop the signing grant too (memory + sessionStorage) so a signed-out overlay
+  // can't keep minting server-trusted override cookies.
+  setOverrideSigningGrant(null, "");
 }
 
 /**

@@ -1,5 +1,6 @@
 import { STYLES } from "./styles";
 import { loadSession, saveSession, clearSession, startDeviceAuth } from "./auth";
+import { restoreOverrideSigningGrant } from "./override-cookie";
 import {
   clearAllOverrides,
   isEditLabelsModeActive,
@@ -295,6 +296,10 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
     project = null;
     saveCachedProject(null);
   }
+  // Every override reloads the page, which wipes the in-memory signing grant;
+  // rehydrate it from sessionStorage for the restored session so overrides keep
+  // writing the server-trusted `se_ov` cookie instead of only the URL param.
+  if (session) restoreOverrideSigningGrant(session.projectId);
 
   // Single DevtoolsApi instance per session — reused across renders so its
   // in-memory response cache survives tab switches. Reset on signout / when
