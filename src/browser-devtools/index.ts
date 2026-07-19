@@ -112,7 +112,6 @@ export function init(opts: DevtoolsOptions = {}): void {
     adminUrl: opts.adminUrl ?? scriptTagOrigin(),
     clientKey: opts.clientKey ?? "",
     projectId: opts.projectId ?? "",
-    edgeUrl: opts.edgeUrl ?? "https://cdn.shipeasy.ai",
     hideAdminLinks: opts.hideAdminLinks ?? false,
     accentColor: opts.accentColor ?? "",
     seed: opts.seed ?? {},

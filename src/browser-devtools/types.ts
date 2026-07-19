@@ -63,13 +63,6 @@ export interface DevtoolsOptions {
    */
   projectId?: string;
   /**
-   * ShipEasy edge/CDN base URL (where `/sdk/evaluate` lives). Used to pull true
-   * stack-aware gate statuses for display. Defaults to `https://cdn.shipeasy.ai`
-   * (the SDK's own default); override for staging / self-hosted edges via the
-   * script tag's `data-edge-url` attribute.
-   */
-  edgeUrl?: string;
-  /**
    * Force-hide every deep link from the overlay back into the ShipEasy
    * admin dashboard ("Open dashboard ↗", empty-state "Create new …" CTAs,
    * bug/feature row click-throughs). Use for white-labelled embeds where

@@ -1,5 +1,27 @@
 # Changelog
 
+## 7.8.4 (2026-07-19)
+
+### Revert 7.8.3's devtools-side gate evaluation — mirror the host app instead
+
+- **The overlay no longer runs its own `/sdk/evaluate`.** 7.8.3 had the gate
+  panel fetch statuses from the edge using a devtools-fabricated context
+  (`project_id` = the overlay's own session project). That was the wrong model:
+  it made the overlay report a project it invented rather than what the host app
+  actually sees, so on a page whose app identified a _different_ user/project the
+  panel disagreed with reality. The devtools must be a faithful mirror of the
+  host app — the served value is once again whatever the app's own SDK evaluated
+  for the user it called `shipeasy.identify(...)` with (`bridge.getFlag`), and
+  the User panel shows that same identified user. Removed `evaluate.ts`, the
+  `edgeUrl` DevtoolsOption, and the `data-edge-url` attribute.
+- The correct fix for "a whitelist gate shows off" is to have the **host app**
+  identify with the attribute the gate keys on (e.g. `project_id`) — not to have
+  the overlay guess a context. (In shipeasy's own dashboard, `ShipeasyClientInit`
+  now does exactly that.)
+
+_(Overlay-only; ships via the bundled `se-devtools.js`, not the npm entry
+points.)_
+
 ## 7.8.3 (2026-07-19)
 
 ### Fix: DevTools gate panel shows true stack-aware statuses

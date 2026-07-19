@@ -24,7 +24,6 @@ if (typeof window !== "undefined") {
     document.querySelector<HTMLScriptElement>("script[data-client-api-key]");
   const dataClientKey = scriptEl?.getAttribute("data-client-api-key") ?? undefined;
   const dataProjectId = scriptEl?.getAttribute("data-project-id") ?? undefined;
-  const dataEdgeUrl = scriptEl?.getAttribute("data-edge-url") ?? undefined;
 
   // data-project-id is required. data-client-api-key is required in production
   // for authenticated API calls; in development it may be omitted and the overlay
@@ -48,12 +47,7 @@ if (typeof window !== "undefined") {
     const windowCfg = (window as Window & AutoGlobals).__se_devtools_config ?? {};
     // data-* attributes on the <script> tag take precedence over any
     // window.__se_devtools_config values for clientKey / projectId.
-    const cfg = {
-      ...windowCfg,
-      clientKey: dataClientKey,
-      projectId: dataProjectId,
-      ...(dataEdgeUrl ? { edgeUrl: dataEdgeUrl } : {}),
-    };
+    const cfg = { ...windowCfg, clientKey: dataClientKey, projectId: dataProjectId };
 
     // Capture whether ?se=1 is in the URL RIGHT NOW — synchronously, before
     // any framework router (Next.js App Router calls history.replaceState

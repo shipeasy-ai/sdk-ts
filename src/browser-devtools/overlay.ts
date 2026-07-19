@@ -1373,11 +1373,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
         renderUserPanel(body, api, userState, () => render());
         break;
       case "gates":
-        void renderGatesPanel(body, api, view, setOverrideCount, {
-          edgeUrl: opts.edgeUrl,
-          clientKey: opts.clientKey,
-          projectId: session.projectId,
-        });
+        void renderGatesPanel(body, api, view, setOverrideCount);
         break;
       case "experiments":
         void renderExperimentsPanel(body, api, view, setOverrideCount);
