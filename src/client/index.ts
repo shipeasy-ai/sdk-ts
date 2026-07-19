@@ -999,6 +999,22 @@ export interface EngineOptions {
  * each attribute manually. Caller-supplied attrs always win — these are
  * spread first.
  */
+/**
+ * True when `user` claims nothing that differs from the server-adopted identity
+ * `seed` — every field the caller passed equals the seed's (an equal or subset
+ * identity matches; the server having *extra* context is fine). A caller field
+ * that differs, or a NEW field the seed lacks, is genuine information the server
+ * didn't evaluate against → not a match → re-evaluate. Auto-collected attrs are
+ * never in the caller's `user`, so they don't affect this.
+ */
+function identityMatches(user: User, seed: User): boolean {
+  for (const [k, v] of Object.entries(user)) {
+    if (v === undefined) continue;
+    if (JSON.stringify(seed[k]) !== JSON.stringify(v)) return false;
+  }
+  return true;
+}
+
 function collectBrowserAttrs(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
   const attrs: Record<string, unknown> = {};
@@ -1200,6 +1216,13 @@ export class Engine {
   // Last identify() payload (caller fields ⊕ auto-collected attrs) — surfaced
   // to the devtools User panel through the bridges. Never sent anywhere else.
   private lastUser: Record<string, unknown> | null = null;
+  // The identity the SERVER evaluated against (from the bootstrap `data-user`),
+  // adopted at construction. Two jobs: (1) seed `lastUser` so the devtools User
+  // panel shows the server's user from first paint, (2) let a later client
+  // identify() reconcile idempotently — a call that matches this seed is a
+  // no-op (the bootstrap already carries this user's flags), so there is no
+  // redundant /sdk/evaluate and no anon→identified flip.
+  private bootstrapUser: User | null = null;
   // Structured feed for the devtools Events panel (see ../devtools/bridge.ts).
   private readonly devtoolsEventListeners = new Set<(e: DevtoolsStateEvent) => void>();
 
@@ -1241,6 +1264,16 @@ export class Engine {
       engagement: g.engagement ?? this.autoGuardrails,
     };
     this.anonId = getOrCreateAnonId();
+    // Adopt the server's identify() result off the bootstrap tag: show it as the
+    // current user immediately, and remember it so a matching client identify()
+    // short-circuits (see identify()). A `user_id` here means SSR already
+    // bucketed as this user, so we take it as the current identity too.
+    const bootUser = getBootstrap()?.user;
+    if (bootUser && (bootUser.user_id || Object.keys(bootUser).length > 0)) {
+      this.bootstrapUser = bootUser;
+      this.lastUser = { ...bootUser };
+      if (bootUser.user_id !== undefined) this.userId = bootUser.user_id;
+    }
     // Optional pluggable anon-id persistence (React Native / non-DOM runtimes).
     // Kicked off now; identify() awaits it so bucketing uses the persisted id.
     if (opts.anonymousStore && !this.offline) {
@@ -1413,12 +1446,29 @@ export class Engine {
       this.notify();
       return;
     }
+    // Idempotent reconcile against the server's identity (adopted from the
+    // bootstrap). When this call matches what the server already identified +
+    // evaluated, there is nothing new to learn — skip /sdk/evaluate entirely
+    // (the bootstrap already carries this user's flags) so there is no redundant
+    // round-trip and no flip. Consumed once: after the first identify() the seed
+    // is cleared so a genuine later change (new attrs, switched user) evaluates.
+    if (this.bootstrapUser && identityMatches(user, this.bootstrapUser)) {
+      this.bootstrapUser = null;
+      if (user.user_id !== undefined) this.userId = user.user_id;
+      this.lastUser = { ...collectBrowserAttrs(), anonymous_id: this.anonId, ...user };
+      this.notify();
+      return;
+    }
+
     // Settle the persisted anon id (if an anonymousStore was supplied) before we
     // alias/evaluate, so the first bucketing round-trip uses the stable id.
     if (this.anonReady) {
       await this.anonReady;
       this.anonReady = null;
     }
+    // Any genuine identify() supersedes the adopted seed — from here on a call is
+    // a real change and must re-evaluate.
+    this.bootstrapUser = null;
     const seq = ++this.identifySeq;
     const prevUserId = this.userId;
     // Override caller-supplied user fields onto whatever was set by previous
@@ -2237,6 +2287,14 @@ export interface BootstrapPayload {
   apiUrl?: string;
   /** Stable anonymous bucketing id the server evaluated against (cross-SDK contract). */
   anonId?: string;
+  /**
+   * The identified user the SERVER evaluated against (its `identify()` result),
+   * emitted as `data-user`. The browser SDK adopts it so `bridge.user` shows the
+   * server's identity and the bootstrap flags are already this user's — no
+   * anon→identified flip. A later client `identify()` reconciles against it
+   * (no-op when it matches). Absent for anonymous SSR.
+   */
+  user?: User;
 }
 
 // Parsed once from the bootstrap tag and reused. The tag is static SSR markup,
@@ -2261,6 +2319,7 @@ function readBootstrapTag(): BootstrapPayload | null {
       return {};
     }
   };
+  const userAttr = el.getAttribute("data-user");
   const bs = {
     flags: J("data-flags") as Record<string, boolean>,
     configs: J("data-configs"),
@@ -2269,6 +2328,7 @@ function readBootstrapTag(): BootstrapPayload | null {
     i18nProfile: el.getAttribute("data-i18n-profile") || undefined,
     apiUrl: el.getAttribute("data-api-url") || undefined,
     anonId: el.getAttribute("data-anon-id") || undefined,
+    user: userAttr ? (J("data-user") as User) : undefined,
   } as BootstrapPayload & { anonId?: string };
   _bootstrapFromTag = bs;
   return bs;
@@ -2277,7 +2337,16 @@ function readBootstrapTag(): BootstrapPayload | null {
 function getBootstrap(): BootstrapPayload | null {
   if (typeof window === "undefined") return null;
   const g = (window as unknown as { __SE_BOOTSTRAP?: BootstrapPayload }).__SE_BOOTSTRAP;
-  if (g) return g;
+  if (g) {
+    // `data-user` is a newer bootstrap attribute; an older se-bootstrap.js loader
+    // hydrates __SE_BOOTSTRAP without it. The tag attributes are always in the
+    // DOM, so supplement the identity from there — no loader redeploy needed.
+    if (g.user === undefined) {
+      const fromTag = readBootstrapTag()?.user;
+      if (fromTag) g.user = fromTag;
+    }
+    return g;
+  }
   return readBootstrapTag();
 }
 

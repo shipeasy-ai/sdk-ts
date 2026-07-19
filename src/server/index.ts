@@ -2281,6 +2281,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
       return getBootstrapData(bootstrap, i18nData, {
         i18nProfile: profile,
         anonId,
+        identifiedUser: identityUser,
         ...emit,
       });
     },
@@ -2288,6 +2289,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
       return getBootstrapTags(bootstrap, i18nData, {
         i18nProfile: profile,
         anonId,
+        identifiedUser: identityUser,
         ...emit,
       });
     },
@@ -2329,6 +2331,17 @@ export interface BootstrapEmitOptions {
    * a key, and SSR first paint works keyless via `data-strings`.
    */
   clientKey?: string;
+  /**
+   * The identified user the server evaluated against (from the
+   * {@link setServerIdentity} resolver / `shipeasy({ user })`). Emitted as
+   * `data-user` so the browser SDK **adopts the server's identity** on first
+   * paint — `bridge.user` shows it and a later client `identify()` reconciles
+   * idempotently (no-op when it matches), instead of re-evaluating anonymously.
+   * Auto-populated by the `shipeasy()` handle; pass explicitly only for custom
+   * emission. Carries the caller's traits (PII) — omit / use id-only when the
+   * page must not carry identity in markup. `anonymous_id`-only users emit nothing.
+   */
+  identifiedUser?: User;
   /** CDN base for the tag `src`s. Defaults to https://cdn.shipeasy.ai. */
   baseUrl?: string;
 }
@@ -2371,6 +2384,14 @@ export function getBootstrapData(
     "data-api-url": base,
   };
   if (opts.anonId) attrs["data-anon-id"] = opts.anonId;
+  // The server-identified user rides the tag so the browser SDK adopts the SAME
+  // identity SSR evaluated against (no anon→identified flip). Only emit a real
+  // identity — an anonymous_id-only user adds nothing beyond data-anon-id, and
+  // emitting {} would just be noise.
+  if (opts.identifiedUser) {
+    const { anonymous_id: _anon, ...identity } = opts.identifiedUser;
+    if (Object.keys(identity).length > 0) attrs["data-user"] = JSON.stringify(identity);
+  }
   const bootstrapTag: ScriptTagSpec = { src: `${base}/sdk/bootstrap.js`, attrs };
 
   let i18nLoader: ScriptTagSpec | null = null;

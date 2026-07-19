@@ -214,6 +214,14 @@ anonymous — it never breaks the render. Flags are UX, never authorization: the
 client can only be more restrictive than the server, never grant itself a flag
 the server denied.
 
+The identified user rides the bootstrap tag (`data-user`), so the **browser SDK
+adopts it** on first paint — no `identify()` call needed for the flags to be
+this user's from the start. If the browser also calls `flags.identify()`, it
+**reconciles idempotently**: a call matching the server's identity is a no-op (no
+extra `/sdk/evaluate`, no flip); a genuine change (new attributes or a different
+`user_id`) re-evaluates. `data-user` carries the user's traits (PII) — anonymous
+requests emit none.
+
 ## Environment variables (convention)
 
 | Variable | Side | Purpose |

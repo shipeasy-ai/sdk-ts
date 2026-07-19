@@ -18,6 +18,15 @@
   signed `__se_id` cookie › `__se_anon_id`. A resolver that returns `null` or
   throws leaves the request anonymous and never breaks the render. Flags are UX,
   never authorization — the client may only be more restrictive than the server.
+- **The bootstrap tag carries the identified user (`data-user`).** The browser
+  SDK **adopts** the server's identity on first paint (`bridge.user` shows it,
+  flags are already this user's), and a later client `flags.identify()`
+  **reconciles idempotently**: a call that matches the server-adopted identity is
+  a **no-op** — no redundant `/sdk/evaluate`, no flip. A genuine change (new
+  attributes, or a switched `user_id`) re-evaluates as before (last-write-wins,
+  sequence-guarded). When the server provides identity the client usually needn't
+  call `identify()` at all. `data-user` carries PII (the traits) — anonymous
+  requests emit none; omit it where markup must not carry identity.
 - See `experiment-platform/18-identity-bucketing.md` for the full cross-SDK
   identity-coherence contract.
 

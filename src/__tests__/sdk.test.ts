@@ -552,6 +552,71 @@ describe("BrowserEngine", () => {
     expect(mockFetch).not.toHaveBeenCalled();
     sdk._resetShipeasyForTests();
   });
+
+  it("adopts the server bootstrap identity: a matching client identify() is a no-op (no /sdk/evaluate)", async () => {
+    vi.resetModules();
+    // The server already identified this user + evaluated its flags into the tag.
+    (window as unknown as { __SE_BOOTSTRAP?: unknown }).__SE_BOOTSTRAP = {
+      flags: { vip: true },
+      configs: {},
+      experiments: {},
+      user: { user_id: "u1", email: "e@x", project_id: "p1" },
+    };
+    const sdk = await import("../client/index");
+    const evalCalls: unknown[] = [];
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes("/sdk/evaluate")) evalCalls.push(url);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ flags: {}, configs: {}, experiments: {} }),
+      } as Response);
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("setInterval", () => 1);
+    sdk._resetShipeasyForTests();
+    sdk.shipeasy({ clientKey: "k", baseUrl: "http://x", autoIdentify: false });
+    // Same identity the server bootstrapped → nothing new to learn → no round-trip.
+    await sdk.flags.identify({ user_id: "u1", email: "e@x", project_id: "p1" });
+    expect(evalCalls.length).toBe(0);
+    // The bootstrap already carries this user's flags — no flip.
+    expect(sdk.flags.get("vip")).toBe(true);
+    delete (window as unknown as { __SE_BOOTSTRAP?: unknown }).__SE_BOOTSTRAP;
+    sdk._resetShipeasyForTests();
+  });
+
+  it("a client identify() that differs from the bootstrap identity re-evaluates", async () => {
+    vi.resetModules();
+    (window as unknown as { __SE_BOOTSTRAP?: unknown }).__SE_BOOTSTRAP = {
+      flags: { vip: true },
+      configs: {},
+      experiments: {},
+      user: { user_id: "u1", email: "e@x", project_id: "p1" },
+    };
+    const sdk = await import("../client/index");
+    const evalCalls: { user_id?: string }[] = [];
+    const mockFetch = vi.fn().mockImplementation((url: string, init: RequestInit) => {
+      if (String(url).includes("/sdk/evaluate")) {
+        const body = JSON.parse(init.body as string) as { user: { user_id?: string } };
+        evalCalls.push(body.user);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ flags: {}, configs: {}, experiments: {} }),
+      } as Response);
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("setInterval", () => 1);
+    sdk._resetShipeasyForTests();
+    sdk.shipeasy({ clientKey: "k", baseUrl: "http://x", autoIdentify: false });
+    // Different user → genuine change → one /sdk/evaluate.
+    await sdk.flags.identify({ user_id: "u2" });
+    expect(evalCalls.length).toBe(1);
+    expect(evalCalls[0].user_id).toBe("u2");
+    delete (window as unknown as { __SE_BOOTSTRAP?: unknown }).__SE_BOOTSTRAP;
+    sdk._resetShipeasyForTests();
+  });
 });
 
 import {
@@ -847,6 +912,26 @@ describe("server shipeasy() — identity resolver (setServerIdentity / opts.iden
       expect(handle.flags.vip).toBe(true);
       // An identified user mints no anon id — the bootstrap tag carries none.
       expect(handle.getBootstrapData().bootstrap.attrs["data-anon-id"]).toBeUndefined();
+      // The identity itself rides the tag (data-user) so the browser SDK adopts it.
+      const emitted = JSON.parse(handle.getBootstrapData().bootstrap.attrs["data-user"]!);
+      expect(emitted).toEqual({ user_id: "resolver-user", email: "r@x.test" });
+      expect(handle.getBootstrapTags()).toContain("data-user");
+    } finally {
+      setServerIdentity(null);
+    }
+  });
+
+  it("emits NO data-user for an anonymous request", async () => {
+    vi.resetModules();
+    stubFlagsWithVipGate();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { shipeasy, setServerIdentity } = await import("../server");
+    setServerIdentity(() => null);
+    try {
+      const handle = await shipeasy({ serverKey: "srv_key" });
+      // No identity → no data-user (an anon-id-only user adds nothing).
+      expect(handle.getBootstrapData().bootstrap.attrs["data-user"]).toBeUndefined();
+      expect(handle.getBootstrapTags()).not.toContain("data-user");
     } finally {
       setServerIdentity(null);
     }
