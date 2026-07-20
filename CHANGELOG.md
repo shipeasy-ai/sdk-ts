@@ -1,6 +1,6 @@
 # Changelog
 
-## 7.9.0 (unreleased)
+## 7.9.0 (2026-07-19)
 
 ### Server identity resolver — kill the anon→identified flip without app glue
 
