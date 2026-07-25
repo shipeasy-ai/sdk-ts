@@ -1,5 +1,55 @@
 # Changelog
 
+## 8.0.0 (2026-07-25)
+
+### BREAKING — the devtools overlays moved out of `@shipeasy/sdk`
+
+Installing the SDK to read flags no longer drags a UI toolchain into your
+dependency tree. The overlays are separate packages, so `@shipeasy/sdk` went
+from **14 peer dependencies to 3**:
+
+| Before (on `@shipeasy/sdk`) | Now |
+| --- | --- |
+| `next`, `@openfeature/server-sdk`, `@openfeature/web-sdk` | unchanged — still on `@shipeasy/sdk` |
+| `react`, `react-native`, `react-native-svg`, `react-hook-form`, `@hookform/resolvers`, `zod`, `expo-crypto`, `expo-image-picker`, `expo-secure-store`, `expo-sensors`, `expo-web-browser` | moved to `@shipeasy/react-native-devtools` / `@shipeasy/devtools-core` |
+
+This removes a whole class of `ERESOLVE` install failures — most visibly the one
+where an app pinned to `zod@3` could not install the SDK at all, because the
+overlay's `zod >= 4` peer was enforced against every consumer even though only
+the devtools imported it.
+
+**Migration**
+
+| Removed subpath | Replacement |
+| --- | --- |
+| `@shipeasy/sdk/react-native-devtools` | `npm i @shipeasy/react-native-devtools` |
+| `@shipeasy/sdk/devtools` | `npm i @shipeasy/devtools-core` |
+| `@shipeasy/sdk/browser-devtools` | no install — load the hosted `se-devtools.js` script |
+
+Imports are otherwise unchanged; only the specifier moves:
+
+```diff
+-import { ShipeasyDevtools } from "@shipeasy/sdk/react-native-devtools";
++import { ShipeasyDevtools } from "@shipeasy/react-native-devtools";
+-import { readEngineBridge } from "@shipeasy/sdk/devtools";
++import { readEngineBridge } from "@shipeasy/devtools-core";
+```
+
+The browser overlay is unaffected for script-tag users (the vast majority) —
+`se-devtools.js` is byte-for-byte the same bundle, served from the same URL. It
+is no longer published as an importable npm module; the URL-override params it
+reads (`?se_ks_*`, `?se_exp_*`, `?se_config_*`, `?se=1`) are a stable public
+format you can build links against directly.
+
+### New: `@shipeasy/sdk/devtools-contract`
+
+The zero-dependency seam the overlays build on — the `globalThis` bridge the
+client Engine publishes, the capability payload, the override-cookie format, the
+i18n edit-labels markers, and the `see()` event builders. Versioned with the SDK
+and consumed only by the devtools packages, which take `@shipeasy/sdk` as a peer
+so there is exactly one Engine and no bridge-key skew. Not part of the
+documented public API.
+
 ## 7.9.0 (2026-07-19)
 
 ### Server identity resolver — kill the anon→identified flip without app glue

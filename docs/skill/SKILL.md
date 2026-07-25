@@ -167,7 +167,7 @@ Devtools overlay: `Shift+Alt+S` or `?se=1`. Full reference:
 Shake-to-open on-device devtools for RN/Expo apps — mount once at the root:
 
 ```tsx
-import { ShipeasyDevtools } from "@shipeasy/sdk/react-native-devtools";
+import { ShipeasyDevtools } from "@shipeasy/react-native-devtools";
 
 // scheme = YOUR app's registered deep-link scheme; clientKey enables the
 // public "Report a bug" path (project must enable Allow public tickets).
@@ -178,10 +178,11 @@ Shake several times fast to open (expo-sensors; or `ref.open()`). Login runs
 device-auth via the app's own scheme (PKCE — the deep link never carries the
 token) and unlocks User / Gates / Configs / Experiments / Feedback / I18n /
 Events panels, with live value forcing through the SDK's programmatic
-overrides. The bug/feature forms need `react-hook-form` + `@hookform/resolvers`.
+overrides. Install it alongside the SDK — `npm install @shipeasy/react-native-devtools
+react-hook-form @hookform/resolvers` — it is a separate package so an app that
+only reads flags never pulls a UI toolchain in.
 Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/react-native-devtools.md>
 
-The browser overlay ships from the same package — script-tag `se-devtools.js`
-or `import { loadOnTrigger } from "@shipeasy/sdk/browser-devtools"` (URL-param
-overrides, `Shift+Alt+S`). Reference:
+The browser overlay needs no install at all — it is delivered as a hosted
+script (`se-devtools.js`), with URL-param overrides and `Shift+Alt+S`. Reference:
 <https://shipeasy-ai.github.io/sdk-ts/pages/browser-devtools.md>

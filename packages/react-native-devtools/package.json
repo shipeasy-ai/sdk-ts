@@ -1,0 +1,88 @@
+{
+  "name": "@shipeasy/react-native-devtools",
+  "version": "1.0.0",
+  "description": "Shake-to-open Shipeasy devtools overlay for React Native / Expo apps.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://shipeasy.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shipeasy-ai/sdk-ts.git",
+    "directory": "packages/react-native-devtools"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "react-native": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "react-native": "./dist/index.js",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@hookform/resolvers": ">=3",
+    "@shipeasy/devtools-core": ">=1.0.0",
+    "@shipeasy/sdk": ">=8.0.0",
+    "expo-crypto": ">=13",
+    "expo-image-picker": ">=15",
+    "expo-secure-store": ">=13",
+    "expo-sensors": ">=13",
+    "expo-web-browser": ">=13",
+    "react": ">=18",
+    "react-hook-form": ">=7.50",
+    "react-native": ">=0.73",
+    "react-native-svg": ">=12",
+    "zod": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "expo-crypto": {
+      "optional": true
+    },
+    "expo-image-picker": {
+      "optional": true
+    },
+    "expo-secure-store": {
+      "optional": true
+    },
+    "expo-sensors": {
+      "optional": true
+    },
+    "expo-web-browser": {
+      "optional": true
+    },
+    "react-native-svg": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@hookform/resolvers": "^5.4.0",
+    "@shipeasy/devtools-core": "workspace:*",
+    "@shipeasy/sdk": "workspace:*",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^26.0.1",
+    "@types/react": "^19.2.14",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.7",
+    "react-hook-form": "^7.81.0",
+    "react-native": "^0.81.6",
+    "tsup": "^8.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9",
+    "zod": "^4.3.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -10,9 +10,9 @@ opted in.
 
 | Entrypoint | What it is | Peer deps |
 | --- | --- | --- |
-| `@shipeasy/sdk/react-native-devtools` | `<ShipeasyDevtools/>` overlay + hooks | `react`, `react-native`, `react-hook-form`, `@hookform/resolvers`, `zod`, plus optional `expo-*` + `react-native-svg` (below) |
-| `@shipeasy/sdk/devtools` | Headless core (client, auth, public bug intake, form schemas) | `zod` |
-| `@shipeasy/sdk/browser-devtools` | The web overlay (see its page) | — |
+| `@shipeasy/react-native-devtools` | `<ShipeasyDevtools/>` overlay + hooks | `react`, `react-native`, `react-hook-form`, `@hookform/resolvers`, `zod`, plus optional `expo-*` + `react-native-svg` (below) |
+| `@shipeasy/devtools-core` | Headless core (client, auth, public bug intake, form schemas) | `zod` |
+| `@shipeasy/browser-devtools` | The web overlay (see its page) | — |
 
 ## Quick start
 
@@ -22,7 +22,7 @@ needed) plus the public client key:
 
 ```tsx
 import { useRef } from "react";
-import { ShipeasyDevtools, type DevtoolsHandle } from "@shipeasy/sdk/react-native-devtools";
+import { ShipeasyDevtools, type DevtoolsHandle } from "@shipeasy/react-native-devtools";
 
 export function App() {
   const devtools = useRef<DevtoolsHandle>(null);
@@ -46,13 +46,19 @@ The logged-out home screen shows the Shipeasy mark, the public **Report a bug**
 and **Request a feature** actions (when the project opted in), and a
 **Connect to Shipeasy** button for team members to log in.
 
-Install the form peers (required when mounting the overlay) and the Expo peers
-you want (each degrades gracefully when absent):
+Install the overlay (it ships separately from `@shipeasy/sdk`, so an app that
+only reads flags never pulls a UI toolchain in), the form peers it requires, and
+the Expo peers you want (each degrades gracefully when absent):
 
 ```bash
-npm install react-hook-form @hookform/resolvers
+npm install @shipeasy/react-native-devtools react-hook-form @hookform/resolvers
 npx expo install expo-web-browser expo-crypto expo-secure-store expo-sensors expo-image-picker react-native-view-shot react-native-svg
 ```
+
+`@shipeasy/react-native-devtools` pulls `@shipeasy/devtools-core` with it and
+takes `@shipeasy/sdk` as a peer — it reads the app's live SDK state over the
+globalThis bridge rather than importing the client, so there is exactly one
+Engine. Keep it out of production builds the same way you would any dev tool.
 
 - `react-hook-form` + `@hookform/resolvers` — the bug / feature forms
   (validated against the generated zod schemas).
@@ -186,7 +192,7 @@ import {
   useGates,
   useBugForm,
   useShakeToOpen,
-} from "@shipeasy/sdk/react-native-devtools";
+} from "@shipeasy/react-native-devtools";
 
 const auth = useDevtoolsAuth({ scheme: "myapp://se-auth" });
 const gates = useGates(auth.client);          // { data, loading, error, refresh }
@@ -202,7 +208,7 @@ plus the submit-path glue — drive custom fields with
 `useUniverses`, `useFeatureRequests`, `useBugDetail`, `useFeatureDetail`,
 `useProfiles`, `useI18nKeys`.
 
-The framework-agnostic core (`@shipeasy/sdk/devtools`) exposes the pieces
+The framework-agnostic core (`@shipeasy/devtools-core`) exposes the pieces
 underneath — `DevtoolsClient`, `startDeviceAuth`, `submitPublicBug`,
 `submitPublicFeature`, the zod form schemas, and the engine-bridge readers — for
 non-React hosts.

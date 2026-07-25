@@ -323,7 +323,7 @@ What else differs from a browser (all graceful — the SDK degrades, never throw
 - **Auto web-vitals and loader-driven i18n are skipped** — they are DOM-only.
   Flags, configs, experiments, `track()`, and `see()` error reporting are
   unaffected. The devtools overlay has a native counterpart — mount
-  `@shipeasy/sdk/react-native-devtools` (see its page) instead of the browser
+  `@shipeasy/react-native-devtools` (see its page) instead of the browser
   bundle.
 
 ---

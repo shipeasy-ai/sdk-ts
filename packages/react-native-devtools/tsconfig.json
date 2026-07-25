@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "paths": {
+      "@shipeasy/sdk/devtools-contract": [
+        "../../src/devtools-contract/index.ts"
+      ],
+      "@shipeasy/devtools-core": [
+        "../devtools-core/src/index.ts"
+      ],
+      "@shipeasy/devtools-core/*": [
+        "../devtools-core/src/*.ts"
+      ]
+    },
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

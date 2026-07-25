@@ -40,60 +40,17 @@ export default defineConfig([
     dts: true,
     external: ["@openfeature/server-sdk", "@openfeature/web-sdk"],
   },
-  // Headless devtools core (admin API client, PKCE device auth, public bug
-  // intake, form schemas). `zod` is an optional peer of this subpath — external
-  // so it resolves from the consumer's install.
+  // The zero-dependency seam the devtools packages build on: the globalThis
+  // bridge the client Engine publishes, the capability payload shape, the
+  // override-cookie format, the i18n edit-labels markers, and the see() event
+  // builders. The overlays themselves live in packages/* (@shipeasy/devtools-core,
+  // @shipeasy/browser-devtools, @shipeasy/react-native-devtools) so their react /
+  // react-native / expo-* / zod peers never land on this package's peer list.
   {
-    entry: { index: "src/devtools/index.ts" },
-    outDir: "dist/devtools",
+    entry: { index: "src/devtools-contract/index.ts" },
+    outDir: "dist/devtools-contract",
     format: ["cjs", "esm"],
     dts: true,
-    external: ["zod"],
-  },
-  // React Native devtools overlay. React / react-native / the expo-* modules
-  // are optional peers — external, resolved (or not) in the consumer app. The
-  // overlay never imports the client module (that would inline a second Engine
-  // singleton); project capabilities arrive via the globalThis bridge the
-  // client Engine publishes (src/devtools/capabilities.ts).
-  {
-    entry: { index: "src/react-native-devtools/index.ts" },
-    outDir: "dist/react-native-devtools",
-    format: ["cjs", "esm"],
-    dts: true,
-    external: [
-      "react",
-      "react/jsx-runtime",
-      "react-native",
-      "react-native-svg",
-      /^expo-/,
-      "zod",
-      "react-hook-form",
-      /^@hookform\//,
-    ],
-  },
-  // Browser devtools overlay (importable entry). `zod` stays an external peer;
-  // @cfworker/json-schema (the config schema-form validator) is bundled so the
-  // SDK keeps zero runtime dependencies.
-  {
-    entry: { index: "src/browser-devtools/index.ts" },
-    outDir: "dist/browser-devtools",
-    format: ["cjs", "esm"],
-    dts: true,
-    external: ["zod"],
-    noExternal: ["@cfworker/json-schema"],
-    target: "es2020",
-  },
-  // Self-executing browser bundle for <script src="…/se-devtools.js"> usage —
-  // the artifact the shipeasy monorepo copies to apps/ui/public/se-devtools.js.
-  // Runs loadOnTrigger() automatically; everything (zod included) is bundled.
-  {
-    // tsup names iife outputs `<entry>.global.js` → dist/browser-devtools.global.js
-    entry: { "browser-devtools": "src/browser-devtools/auto.ts" },
-    outDir: "dist",
-    format: ["iife"],
-    target: "es2020",
-    minify: true,
-    dts: false,
   },
   // `shipeasy-skill` CLI — the opt-in installer that copies the bundled agent
   // skill (docs/skill/SKILL.md) into a consumer's project. A Node bin (CJS +

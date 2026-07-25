@@ -38,9 +38,9 @@ jobs:
         run: npm install -g npm@11.5.2
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run type-check
-      - run: pnpm run test
-      - run: pnpm run build
+      - run: pnpm -r --include-workspace-root run type-check
+      - run: pnpm -r --include-workspace-root run test
+      - run: pnpm -r --include-workspace-root run build
 
       # ----- npm -----
       # Trusted Publishing via OIDC — no token required. Requires a matching
@@ -60,3 +60,24 @@ jobs:
           else
             npm publish --access public --provenance
           fi
+
+      # The devtools overlays are their own packages so their react / react-native
+      # / expo / zod peers stay off @shipeasy/sdk's peer list. Published AFTER the
+      # SDK — react-native-devtools peers on both. Each needs its own Trusted
+      # Publisher rule (repo shipeasy-ai/sdk-ts, workflow publish.yml) on
+      # npmjs.com/package/<name>/access.
+      #
+      # @shipeasy/browser-devtools is deliberately NOT here: it is private and
+      # ships as the hosted se-devtools.js script, built by the shipeasy monorepo.
+      - name: Publish the devtools packages to npm
+        run: |
+          for pkg in devtools-core react-native-devtools; do
+            dir="packages/$pkg"
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version 2>/dev/null | grep -q "$version"; then
+              echo "Already published: $name@$version"
+            else
+              (cd "$dir" && npm publish --access public --provenance)
+            fi
+          done

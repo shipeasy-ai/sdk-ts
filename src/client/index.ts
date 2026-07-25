@@ -2,14 +2,14 @@
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
 import { isProductionEnv, i18nRenderKeysOnly, setI18nRenderKeysOnly } from "../env";
-import { CAPABILITIES_BRIDGE_KEY, type CapabilitiesBridge } from "../devtools/capabilities";
+import { CAPABILITIES_BRIDGE_KEY, type CapabilitiesBridge } from "../devtools-contract/capabilities";
 import {
   ENGINE_BRIDGE_KEY,
   type DevtoolsEngineBridge,
   type DevtoolsOverridesSnapshot,
   type DevtoolsStateEvent,
-} from "../devtools/bridge";
-import type { DevtoolsCapabilities } from "../devtools/types";
+} from "../devtools-contract/bridge";
+import type { DevtoolsCapabilities } from "../devtools-contract/capabilities";
 import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
@@ -159,7 +159,7 @@ interface EvalResponse {
   devtools?: { allow_public_tickets?: boolean };
 }
 
-export type { DevtoolsCapabilities } from "../devtools/types";
+export type { DevtoolsCapabilities } from "../devtools-contract/capabilities";
 
 /**
  * The result of `universe(name).assign()` — the visitor's standing in a universe.

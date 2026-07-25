@@ -11,6 +11,39 @@ error reporting, and SSR/i18n helpers. Dual build (tsup): the **server** entry
 (`@shipeasy/sdk/client`, public client key) — never interchange the keys. Source
 under `src/`, tests under `src/__tests__/` (run with `vitest`).
 
+## Repo layout — this is a pnpm workspace
+
+The repo root is `@shipeasy/sdk` itself; the devtools overlays are separate
+packages under `packages/`:
+
+| Path | Package | Ships as |
+| --- | --- | --- |
+| `.` (root) | `@shipeasy/sdk` | npm — peers: `next`, `@openfeature/*`, nothing else |
+| `packages/devtools-core` | `@shipeasy/devtools-core` | npm — headless core (peer: `zod`) |
+| `packages/react-native-devtools` | `@shipeasy/react-native-devtools` | npm — RN/Expo overlay (react/expo peers) |
+| `packages/browser-devtools` | `@shipeasy/browser-devtools` | **private** — bundled to the hosted `se-devtools.js` |
+
+**The point of the split is `@shipeasy/sdk`'s peer list. Do not add a react /
+react-native / expo / zod / react-hook-form peer to the root package** — an app
+installing the SDK to read a flag must never resolve a UI toolchain (that is what
+caused the `zod@3` `ERESOLVE` wall pre-8.0.0). New overlay dependencies belong on
+the overlay package that uses them.
+
+The overlays reach the SDK only through `@shipeasy/sdk/devtools-contract`
+(`src/devtools-contract/`) — a zero-dependency seam holding the `globalThis`
+bridge, the capability payload, the override-cookie format, the i18n markers and
+the `see()` builders. **Nothing in that directory may import a third-party module
+or the client Engine**: overlays take `@shipeasy/sdk` as a *peer* so there is one
+Engine and one bridge key, and a runtime import of `../client` there would inline
+a second Engine into every overlay bundle.
+
+Run scripts across every package with `pnpm -r --include-workspace-root run
+<script>` (plain `pnpm -r` silently skips the root — i.e. the SDK itself). The
+browser overlay's served artifact is built by the shipeasy monorepo's
+`packages/devtools` harness, which bundles `packages/browser-devtools/src/auto.ts`
+from source and aliases the `@shipeasy/*` specifiers — keep those aliases in sync
+when you add a deep import.
+
 ## The documented public surface (this is a contract)
 
 Users are taught exactly **two** things, and the docs must never drift from them:

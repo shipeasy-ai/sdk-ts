@@ -32,11 +32,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run type-check
+      # `-r` covers the SDK itself plus the devtools workspace packages
+      # (devtools-core, browser-devtools, react-native-devtools), in
+      # topological order.
+      - run: pnpm -r --include-workspace-root run type-check
 
-      - run: pnpm run build
+      - run: pnpm -r --include-workspace-root run build
 
-      - run: pnpm run test
+      - run: pnpm -r --include-workspace-root run test
 
   readme:
     runs-on: ubuntu-latest

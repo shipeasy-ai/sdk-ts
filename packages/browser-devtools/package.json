@@ -1,0 +1,25 @@
+{
+  "name": "@shipeasy/browser-devtools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build harness for the Shipeasy in-browser overlay \u2014 bundles to the self-executing se-devtools.js artifact served by the admin app.",
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "build": "tsup",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "^4.1.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@shipeasy/devtools-core": "workspace:*",
+    "@shipeasy/sdk": "workspace:*",
+    "@types/node": "^26.0.1",
+    "jsdom": "^29.1.1",
+    "tsup": "^8.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

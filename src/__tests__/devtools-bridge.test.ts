@@ -4,8 +4,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Engine } from "../client";
-import { ENGINE_BRIDGE_KEY, readEngineBridge, watchEngineBridge } from "../devtools/bridge";
-import type { DevtoolsStateEvent } from "../devtools/bridge";
+import { ENGINE_BRIDGE_KEY, readEngineBridge, watchEngineBridge } from "../devtools-contract/bridge";
+import type { DevtoolsStateEvent } from "../devtools-contract/bridge";
 
 function freshBridge() {
   const engine = Engine.forTesting();

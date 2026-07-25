@@ -1,0 +1,58 @@
+{
+  "name": "@shipeasy/devtools-core",
+  "version": "1.0.0",
+  "description": "Headless core for the Shipeasy devtools overlays \u2014 admin API client, PKCE device auth, public bug intake, form schemas.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://shipeasy.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shipeasy-ai/sdk-ts.git",
+    "directory": "packages/devtools-core"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.mjs",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "gen:devtools": "openapi-ts",
+    "refresh:spec": "node scripts/refresh-devtools-spec.mjs"
+  },
+  "peerDependencies": {
+    "@shipeasy/sdk": ">=8.0.0",
+    "zod": ">=4"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.99.0",
+    "@shipeasy/sdk": "workspace:*",
+    "@types/node": "^26.0.1",
+    "tsup": "^8.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9",
+    "zod": "^4.3.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

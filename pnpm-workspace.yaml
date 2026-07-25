@@ -1,0 +1,7 @@
+# The devtools overlays are separate packages so their optional peers (react,
+# react-native, expo-*, zod, react-hook-form) stay off `@shipeasy/sdk`'s peer
+# list — installing the SDK for flags must never drag a UI toolchain in.
+# They consume the SDK through the zero-dependency `@shipeasy/sdk/devtools-contract`
+# subpath and declare `@shipeasy/sdk` as a peer (one Engine, no bridge skew).
+packages:
+  - "packages/*"

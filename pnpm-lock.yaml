@@ -8,55 +8,22 @@ importers:
 
   .:
     dependencies:
-      expo-crypto:
-        specifier: '>=13'
-        version: 57.0.0(expo@57.0.4)
-      expo-image-picker:
-        specifier: '>=15'
-        version: 57.0.2(expo@57.0.4)
-      expo-secure-store:
-        specifier: '>=13'
-        version: 57.0.0(expo@57.0.4)
-      expo-sensors:
-        specifier: '>=13'
-        version: 57.0.1(expo@57.0.4)(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))
-      expo-web-browser:
-        specifier: '>=13'
-        version: 57.0.0(expo@57.0.4)(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))
       murmurhash-js:
         specifier: ^1.0.0
         version: 1.0.0
-      react-native-svg:
-        specifier: '>=12'
-        version: 15.15.5(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
     devDependencies:
-      '@cfworker/json-schema':
-        specifier: ^4.1.1
-        version: 4.1.1
-      '@hey-api/openapi-ts':
-        specifier: ^0.99.0
-        version: 0.99.0(typescript@6.0.3)
-      '@hookform/resolvers':
-        specifier: ^5.4.0
-        version: 5.4.0(react-hook-form@7.81.0(react@19.2.7))
       '@openfeature/server-sdk':
         specifier: ^1.22.0
         version: 1.22.0(@openfeature/core@1.11.0)
       '@openfeature/web-sdk':
         specifier: ^1.9.0
         version: 1.9.0(@openfeature/core@1.11.0)
-      '@testing-library/react':
-        specifier: ^16.3.2
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@types/murmurhash-js':
         specifier: ^1.0.6
         version: 1.0.7
       '@types/node':
         specifier: ^26.0.1
         version: 26.0.1
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.17
       axios:
         specifier: ^1.18.1
         version: 1.18.1
@@ -65,19 +32,7 @@ importers:
         version: 29.1.1
       next:
         specifier: ^16.2.3
-        version: 16.2.9(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      react:
-        specifier: ^19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.2.7
-        version: 19.2.7(react@19.2.7)
-      react-hook-form:
-        specifier: ^7.81.0
-        version: 7.81.0(react@19.2.7)
-      react-native:
-        specifier: ^0.81.6
-        version: 0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7)
+        version: 16.2.9(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tsup:
         specifier: ^8.3.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@6.0.3)(yaml@2.9.0)
@@ -93,6 +48,122 @@ importers:
       wrangler:
         specifier: ^4.83.0
         version: 4.105.0
+
+  packages/browser-devtools:
+    dependencies:
+      '@cfworker/json-schema':
+        specifier: ^4.1.1
+        version: 4.1.1
+      zod:
+        specifier: ^4.3.6
+        version: 4.4.3
+    devDependencies:
+      '@shipeasy/devtools-core':
+        specifier: workspace:*
+        version: link:../devtools-core
+      '@shipeasy/sdk':
+        specifier: workspace:*
+        version: link:../..
+      '@types/node':
+        specifier: ^26.0.1
+        version: 26.0.1
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@26.0.1)(jsdom@29.1.1)(vite@6.4.3(@types/node@26.0.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(yaml@2.9.0))
+
+  packages/devtools-core:
+    devDependencies:
+      '@hey-api/openapi-ts':
+        specifier: ^0.99.0
+        version: 0.99.0(typescript@6.0.3)
+      '@shipeasy/sdk':
+        specifier: workspace:*
+        version: link:../..
+      '@types/node':
+        specifier: ^26.0.1
+        version: 26.0.1
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@26.0.1)(jsdom@29.1.1)(vite@6.4.3(@types/node@26.0.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(yaml@2.9.0))
+      zod:
+        specifier: ^4.3.6
+        version: 4.4.3
+
+  packages/react-native-devtools:
+    dependencies:
+      expo-crypto:
+        specifier: '>=13'
+        version: 57.0.0(expo@57.0.4)
+      expo-image-picker:
+        specifier: '>=15'
+        version: 57.0.2(expo@57.0.4)
+      expo-secure-store:
+        specifier: '>=13'
+        version: 57.0.0(expo@57.0.4)
+      expo-sensors:
+        specifier: '>=13'
+        version: 57.0.1(expo@57.0.4)(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))
+      expo-web-browser:
+        specifier: '>=13'
+        version: 57.0.0(expo@57.0.4)(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))
+      react-native-svg:
+        specifier: '>=12'
+        version: 15.15.5(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
+    devDependencies:
+      '@hookform/resolvers':
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.81.0(react@19.2.7))
+      '@shipeasy/devtools-core':
+        specifier: workspace:*
+        version: link:../devtools-core
+      '@shipeasy/sdk':
+        specifier: workspace:*
+        version: link:../..
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@types/node':
+        specifier: ^26.0.1
+        version: 26.0.1
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.17
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      react-hook-form:
+        specifier: ^7.81.0
+        version: 7.81.0(react@19.2.7)
+      react-native:
+        specifier: ^0.81.6
+        version: 0.81.6(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7)
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@26.0.1)(jsdom@29.1.1)(vite@6.4.3(@types/node@26.0.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(yaml@2.9.0))
       zod:
         specifier: ^4.3.6
         version: 4.4.3
@@ -6044,7 +6115,7 @@ snapshots:
       metro: 0.83.7
       metro-config: 0.83.7
       metro-core: 0.83.7
-      semver: 7.7.4
+      semver: 7.8.4
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -8196,7 +8267,7 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  next@16.2.9(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  next@16.2.9(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
       '@next/env': 16.2.9
       '@swc/helpers': 0.5.15
@@ -8205,7 +8276,7 @@ snapshots:
       postcss: 8.4.31
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
-      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.7)
+      styled-jsx: 5.1.6(react@19.2.7)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.2.9
       '@next/swc-darwin-x64': 16.2.9
@@ -8486,7 +8557,7 @@ snapshots:
       react-refresh: 0.14.2
       regenerator-runtime: 0.13.11
       scheduler: 0.26.0
-      semver: 7.7.4
+      semver: 7.8.4
       stacktrace-parser: 0.1.11
       whatwg-fetch: 3.6.20
       ws: 6.2.4
@@ -8777,12 +8848,10 @@ snapshots:
 
   structured-headers@0.4.1: {}
 
-  styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.2.7):
+  styled-jsx@5.1.6(react@19.2.7):
     dependencies:
       client-only: 0.0.1
       react: 19.2.7
-    optionalDependencies:
-      '@babel/core': 7.29.7
 
   sucrase@3.35.1:
     dependencies:
