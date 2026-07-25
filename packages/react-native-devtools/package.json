@@ -33,7 +33,6 @@
   },
   "peerDependencies": {
     "@hookform/resolvers": ">=3",
-    "@shipeasy/devtools-core": ">=1.0.0",
     "@shipeasy/sdk": ">=8.0.0",
     "expo-crypto": ">=13",
     "expo-image-picker": ">=15",
@@ -68,7 +67,6 @@
   },
   "devDependencies": {
     "@hookform/resolvers": "^5.4.0",
-    "@shipeasy/devtools-core": "workspace:*",
     "@shipeasy/sdk": "workspace:*",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.0.1",
@@ -84,5 +82,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@shipeasy/devtools-core": "1.0.0"
   }
 }

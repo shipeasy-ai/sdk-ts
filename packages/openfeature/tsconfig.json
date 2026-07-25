@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@shipeasy/sdk/server": ["../../src/server/index.ts"],
+      "@shipeasy/sdk/client": ["../../src/client/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

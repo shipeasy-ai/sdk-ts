@@ -12,12 +12,6 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
     devDependencies:
-      '@openfeature/server-sdk':
-        specifier: ^1.22.0
-        version: 1.22.0(@openfeature/core@1.11.0)
-      '@openfeature/web-sdk':
-        specifier: ^1.9.0
-        version: 1.9.0(@openfeature/core@1.11.0)
       '@types/murmurhash-js':
         specifier: ^1.0.6
         version: 1.0.7
@@ -30,9 +24,6 @@ importers:
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
-      next:
-        specifier: ^16.2.3
-        version: 16.2.9(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tsup:
         specifier: ^8.3.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@6.0.3)(yaml@2.9.0)
@@ -104,8 +95,53 @@ importers:
         specifier: ^4.3.6
         version: 4.4.3
 
+  packages/next:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.0.1
+        version: 26.0.1
+      next:
+        specifier: ^16.2.3
+        version: 16.2.9(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@26.0.1)(jsdom@29.1.1)(vite@6.4.3(@types/node@26.0.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(yaml@2.9.0))
+
+  packages/openfeature:
+    devDependencies:
+      '@openfeature/server-sdk':
+        specifier: ^1.22.0
+        version: 1.22.0(@openfeature/core@1.11.0)
+      '@openfeature/web-sdk':
+        specifier: ^1.9.0
+        version: 1.9.0(@openfeature/core@1.11.0)
+      '@shipeasy/sdk':
+        specifier: workspace:*
+        version: link:../..
+      '@types/node':
+        specifier: ^26.0.1
+        version: 26.0.1
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@26.0.1)(jsdom@29.1.1)(vite@6.4.3(@types/node@26.0.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(yaml@2.9.0))
+
   packages/react-native-devtools:
     dependencies:
+      '@shipeasy/devtools-core':
+        specifier: 1.0.0
+        version: link:../devtools-core
       expo-crypto:
         specifier: '>=13'
         version: 57.0.0(expo@57.0.4)
@@ -128,9 +164,6 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.81.0(react@19.2.7))
-      '@shipeasy/devtools-core':
-        specifier: workspace:*
-        version: link:../devtools-core
       '@shipeasy/sdk':
         specifier: workspace:*
         version: link:../..

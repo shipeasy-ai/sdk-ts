@@ -61,17 +61,20 @@ jobs:
             npm publish --access public --provenance
           fi
 
-      # The devtools overlays are their own packages so their react / react-native
-      # / expo / zod peers stay off @shipeasy/sdk's peer list. Published AFTER the
-      # SDK — react-native-devtools peers on both. Each needs its own Trusted
+      # Every integration that needs a peer dependency ships as its own package,
+      # which is what keeps @shipeasy/sdk itself at ZERO peers. Published AFTER
+      # the SDK — all of them declare it as a peer. Each needs its own Trusted
       # Publisher rule (repo shipeasy-ai/sdk-ts, workflow publish.yml) on
       # npmjs.com/package/<name>/access.
       #
+      # Order matters: devtools-core before react-native-devtools, which depends
+      # on it by exact version.
+      #
       # @shipeasy/browser-devtools is deliberately NOT here: it is private and
       # ships as the hosted se-devtools.js script, built by the shipeasy monorepo.
-      - name: Publish the devtools packages to npm
+      - name: Publish the satellite packages to npm
         run: |
-          for pkg in devtools-core react-native-devtools; do
+          for pkg in devtools-core react-native-devtools next openfeature; do
             dir="packages/$pkg"
             name=$(node -p "require('./$dir/package.json').name")
             version=$(node -p "require('./$dir/package.json').version")

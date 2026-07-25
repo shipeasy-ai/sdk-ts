@@ -2037,6 +2037,24 @@ function cookieReader(src: ServerCookieSource | undefined): ((n: string) => stri
   return null;
 }
 
+/** Warn once per process when `shipeasy()` had to mint an anonymous id with no
+ *  way to read cookies at all. That is a misconfiguration, not a new visitor:
+ *  every request re-mints, so logged-out visitors get re-bucketed on each render
+ *  and their rollout / experiment assignment is never stable. Silenced in local
+ *  dev + test (expected noise there, same as the missing-key warning) so it only
+ *  surfaces on real deploys, where it corrupts experiment data silently. */
+let warnedNoCookieSource = false;
+function warnNoCookieSource(): void {
+  if (warnedNoCookieSource || isDevOrTestEnv()) return;
+  warnedNoCookieSource = true;
+  logger.warn(
+    "[shipeasy] shipeasy() minted a fresh anonymous id because it could not read " +
+      "any cookies. Anonymous bucketing will NOT be stable across requests — pass " +
+      "the request's cookies, e.g. shipeasy({ cookies: req.headers.cookie }). " +
+      "(Next.js reads them automatically; every other server must pass them.)",
+  );
+}
+
 /** Minimal `Cookie:` header parser — first occurrence of a name wins, values
  *  are percent-decoded when decodable (a malformed escape is passed through). */
 function parseCookieHeader(header: string): Record<string, string> {
@@ -2333,6 +2351,9 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
       // mints a fresh id and re-buckets anonymous visitors.
       const supplied = readCookie?.(ANON_ID_COOKIE);
       if (supplied && ANON_ID_RX.test(supplied)) anonId = supplied; // untrusted — validated
+      // Did we have ANY way to read cookies this request? Distinguishes "the
+      // visitor is genuinely new" from "this server can never see the cookie".
+      let sawCookieSource = readCookie !== null;
       if (!anonId) {
         try {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -2343,11 +2364,15 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
               | { get: (n: string) => { value: string } | undefined };
           };
           const c = await Promise.resolve(cookies());
+          sawCookieSource = true;
           const raw = c.get?.(ANON_ID_COOKIE)?.value;
           if (raw && ANON_ID_RX.test(raw)) anonId = raw; // untrusted cookie — validated
         } catch {}
       }
-      if (!anonId) anonId = mintAnonId(); // no/invalid cookie → fresh id
+      if (!anonId) {
+        anonId = mintAnonId(); // no/invalid cookie → fresh id
+        if (!sawCookieSource) warnNoCookieSource();
+      }
     }
   }
   const effectiveUser: User = anonId

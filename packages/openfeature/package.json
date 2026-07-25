@@ -1,0 +1,50 @@
+{
+  "name": "@shipeasy/openfeature",
+  "version": "1.0.0",
+  "description": "OpenFeature providers for Shipeasy — server (Node) and web (browser).",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://shipeasy.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shipeasy-ai/sdk-ts.git",
+    "directory": "packages/openfeature"
+  },
+  "exports": {
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "default": "./dist/server.js"
+    },
+    "./web": {
+      "types": "./dist/web.d.ts",
+      "import": "./dist/web.mjs",
+      "default": "./dist/web.js"
+    }
+  },
+  "files": ["dist/", "LICENSE", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@openfeature/server-sdk": ">=1.13.0",
+    "@openfeature/web-sdk": ">=1.2.0",
+    "@shipeasy/sdk": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@openfeature/server-sdk": { "optional": true },
+    "@openfeature/web-sdk": { "optional": true }
+  },
+  "devDependencies": {
+    "@openfeature/server-sdk": "^1.22.0",
+    "@openfeature/web-sdk": "^1.9.0",
+    "@shipeasy/sdk": "workspace:*",
+    "@types/node": "^26.0.1",
+    "tsup": "^8.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20" }
+}

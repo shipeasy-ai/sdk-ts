@@ -144,7 +144,7 @@ Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/testing.md>
 
 ```ts
 import { OpenFeature } from "@openfeature/server-sdk";
-import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-server"; // or /openfeature-web
+import { ShipeasyProvider } from "@shipeasy/openfeature/server"; // or /web
 
 // Assumes configure({ apiKey }) ran at startup — the no-arg provider resolves it.
 await OpenFeature.setProviderAndWait(new ShipeasyProvider());

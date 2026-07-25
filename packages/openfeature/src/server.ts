@@ -28,14 +28,14 @@ import type {
 } from "@openfeature/server-sdk";
 import { ErrorCode } from "@openfeature/server-sdk";
 
-import { Engine, getShipeasyServerClient } from "../server/index";
+import { Engine, getShipeasyServerClient } from "@shipeasy/sdk/server";
 import {
   mapFlagReason,
   resolveConfigValue,
   toUser,
   type ProviderErrorCode,
   type ShipeasyFlagReason,
-} from "../openfeature/shared";
+} from "./shared";
 
 const ERROR_CODE: Record<ProviderErrorCode, ErrorCode> = {
   FLAG_NOT_FOUND: ErrorCode.FLAG_NOT_FOUND,

@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { OpenFeature as ServerOF } from "@openfeature/server-sdk";
 import { OpenFeature as WebOF } from "@openfeature/web-sdk";
 
-import { Engine } from "../server/index";
-import { Engine as BrowserEngine } from "../client/index";
-import { ShipeasyProvider as ServerProvider } from "../openfeature-server/index";
-import { ShipeasyProvider as WebProvider } from "../openfeature-web/index";
-import { mapFlagReason, resolveConfigValue, toUser } from "../openfeature/shared";
+import { Engine } from "@shipeasy/sdk/server";
+import { Engine as BrowserEngine } from "@shipeasy/sdk/client";
+import { ShipeasyProvider as ServerProvider } from "../server";
+import { ShipeasyProvider as WebProvider } from "../web";
+import { mapFlagReason, resolveConfigValue, toUser } from "../shared";
 
 // A snapshot with a 100% gate (RULE_MATCH), a disabled gate (OFF), a 0% gate
 // (DEFAULT), and typed configs — exercises the full reason map without network.

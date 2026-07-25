@@ -863,6 +863,35 @@ describe("server shipeasy() — single server key, no client key", () => {
       expect(await anonIdFor("__se_anon_id=not a valid id")).not.toBe("not a valid id");
     });
 
+    it("warns once on a real deploy when it mints with no cookie source at all", async () => {
+      vi.resetModules();
+      stubFetchOk();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { shipeasy } = await import("../server");
+      // setup.ts pins SHIPEASY_ENV=production, so this is the deploy path.
+      await shipeasy({ serverKey: "srv_key" });
+      await shipeasy({ serverKey: "srv_key" });
+      const hits = warn.mock.calls.filter((c) => String(c[0]).toLowerCase().includes("anonymous bucketing"));
+      // Once per process — this fires per request, so it must not spam.
+      expect(hits).toHaveLength(1);
+      expect(String(hits[0][0])).toContain("cookies: req.headers.cookie");
+      warn.mockRestore();
+    });
+
+    it("does NOT warn when a cookie source was supplied but held no anon id", async () => {
+      vi.resetModules();
+      stubFetchOk();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { shipeasy } = await import("../server");
+      // A first-time visitor: cookies readable, just no __se_anon_id yet. That
+      // is normal, not a misconfiguration.
+      await shipeasy({ serverKey: "srv_key", cookies: "theme=dark" } as never);
+      expect(warn.mock.calls.filter((c) => String(c[0]).toLowerCase().includes("anonymous bucketing"))).toHaveLength(0);
+      warn.mockRestore();
+    });
+
     it("an explicit user_id still short-circuits anon resolution", async () => {
       vi.resetModules();
       stubFetchOk();

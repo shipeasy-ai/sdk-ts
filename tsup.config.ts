@@ -14,32 +14,13 @@ export default defineConfig([
     format: ["cjs", "esm"],
     dts: true,
   },
-  // Optional Next.js adapter: a drop-in middleware (+ primitives) that mints the
-  // shared `__se_anon_id` bucketing cookie at the edge. `next` is external (an
-  // optional peer) — only resolved in consumers that import this subpath.
-  {
-    entry: { index: "src/next/index.ts" },
-    outDir: "dist/next",
-    format: ["cjs", "esm"],
-    dts: true,
-    external: ["next", "next/server"],
-  },
-  // OpenFeature providers. The `@openfeature/*` packages are optional peers —
-  // external so they resolve from the consumer's install, not bundled here.
-  {
-    entry: { index: "src/openfeature-server/index.ts" },
-    outDir: "dist/openfeature-server",
-    format: ["cjs", "esm"],
-    dts: true,
-    external: ["@openfeature/server-sdk", "@openfeature/web-sdk"],
-  },
-  {
-    entry: { index: "src/openfeature-web/index.ts" },
-    outDir: "dist/openfeature-web",
-    format: ["cjs", "esm"],
-    dts: true,
-    external: ["@openfeature/server-sdk", "@openfeature/web-sdk"],
-  },
+  // NOTE: this package declares NO peer dependencies at all. Every integration
+  // that would need one lives in its own package under packages/* —
+  // @shipeasy/next (peer: next), @shipeasy/openfeature (peers: @openfeature/*),
+  // and the three devtools packages (react / react-native / expo-* / zod).
+  // Installing @shipeasy/sdk to read a flag must never make npm resolve, or
+  // version-check, a framework you aren't using.
+  //
   // The zero-dependency seam the devtools packages build on: the globalThis
   // bridge the client Engine publishes, the capability payload shape, the
   // override-cookie format, the i18n edit-labels markers, and the see() event

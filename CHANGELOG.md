@@ -2,6 +2,39 @@
 
 ## 8.0.0 (2026-07-25)
 
+### BREAKING — `@shipeasy/sdk` now has ZERO peer dependencies
+
+Installing the SDK to read a flag no longer makes your package manager resolve,
+or version-check, a framework you aren't using. Every integration that needs a
+peer is its own package, matching how LaunchDarkly and Statsig ship their JS
+SDKs (`launchdarkly-js-client-sdk` and `@statsig/js-client` both declare no
+peers; React/RN bindings and the OpenFeature provider are separate packages):
+
+| Removed subpath | Replacement | Peers it carries |
+| --- | --- | --- |
+| `@shipeasy/sdk/next` | `@shipeasy/next` | `next` |
+| `@shipeasy/sdk/openfeature-server` | `@shipeasy/openfeature/server` | `@openfeature/server-sdk`, `@shipeasy/sdk` |
+| `@shipeasy/sdk/openfeature-web` | `@shipeasy/openfeature/web` | `@openfeature/web-sdk`, `@shipeasy/sdk` |
+
+```diff
+-import { middleware, config } from "@shipeasy/sdk/next";
++import { middleware, config } from "@shipeasy/next";
+-import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-server";
++import { ShipeasyProvider } from "@shipeasy/openfeature/server";
+```
+
+`@shipeasy/sdk` is a **peer** of both new packages, not a dependency — they wrap
+the engine your `configure()` call already built, so they must resolve to the
+same installed copy. Next.js users who never import the middleware need install
+nothing new: `shipeasy()` still reads `next/headers` ambiently when it is there.
+
+### Warn when anonymous bucketing cannot be stable
+
+`shipeasy()` now warns once per process (on real deploys; silenced in dev/test)
+when it mints an anonymous id and had **no way to read cookies at all** — the
+signal that `cookies` is missing on a non-Next server and every request is
+re-bucketing. A first-time visitor with readable cookies does not warn.
+
 ### Fixed: anonymous bucketing was unstable on every non-Next server
 
 `shipeasy()` resolved the `__se_anon_id` cookie exclusively through a dynamic

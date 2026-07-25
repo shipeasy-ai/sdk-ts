@@ -7,7 +7,7 @@ import {
   withShipeasy,
   middleware,
   config,
-} from "../next/index";
+} from "../index";
 
 const URL_ = "https://example.com/";
 const req = (cookie?: string) =>

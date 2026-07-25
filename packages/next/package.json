@@ -1,0 +1,40 @@
+{
+  "name": "@shipeasy/next",
+  "version": "1.0.0",
+  "description": "Next.js middleware adapter for Shipeasy — mints the shared __se_anon_id bucketing cookie at the edge.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://shipeasy.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shipeasy-ai/sdk-ts.git",
+    "directory": "packages/next"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist/", "LICENSE", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "next": ">=13"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "next": "^16.2.3",
+    "tsup": "^8.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20" }
+}

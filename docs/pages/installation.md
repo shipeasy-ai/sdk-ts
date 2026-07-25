@@ -16,8 +16,16 @@ pnpm add @shipeasy/sdk
 yarn add @shipeasy/sdk
 ```
 
-The only runtime dependency is `murmurhash-js`. `zod` is an **optional** peer
-dependency (only needed if you decode configs/experiments with a Zod schema).
+One runtime dependency (`murmurhash-js`) and **no peer dependencies at all** —
+installing this package never makes your package manager resolve, or
+version-check, a framework you aren't using. Everything that needs a peer is its
+own package:
+
+| Package | Peers | For |
+| --- | --- | --- |
+| `@shipeasy/next` | `next` | edge middleware that mints the `__se_anon_id` bucketing cookie |
+| `@shipeasy/openfeature` | `@openfeature/server-sdk` / `-web` | OpenFeature providers (`/server`, `/web`) |
+| `@shipeasy/react-native-devtools` | `react`, `react-native`, `expo-*`, … | the on-device devtools overlay |
 
 ### Runtime requirements
 
@@ -38,8 +46,8 @@ import { configure, Client, see, i18n } from "@shipeasy/sdk/client";
 import { shipeasy } from "@shipeasy/sdk/server";
 
 // OpenFeature providers (optional peer deps)
-import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-server";
-import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-web";
+import { ShipeasyProvider } from "@shipeasy/openfeature/server";
+import { ShipeasyProvider } from "@shipeasy/openfeature/web";
 ```
 
 > **One key per entrypoint.** The server entry takes the **server** key
@@ -85,7 +93,12 @@ state, later calls are no-ops. The test/offline siblings
 ## Next.js (App Router)
 
 Next.js spans both sides: the **server** evaluates in Server Components / Route
-Handlers, and the **browser** SDK reads on the client. Two wiring pieces:
+Handlers, and the **browser** SDK reads on the client. Two wiring pieces — plus
+an optional third, the edge middleware in `@shipeasy/next`:
+
+```bash
+npm install @shipeasy/next   # optional — see "3. Middleware" below
+```
 
 ### 1. Root layout — SSR bootstrap (server key)
 
@@ -165,6 +178,31 @@ if (flags.getFlag("new_checkout")) { /* ... */ }
 > For React projects, [`@shipeasy/sdk-react`](https://github.com/shipeasy-ai/sdk-react)
 > wraps this package with a `<ShipeasyProvider>` and hooks (thin layer over the
 > same vanilla API).
+
+### 3. Middleware — mint the bucketing cookie at the edge (optional)
+
+`@shipeasy/next` mints the shared `__se_anon_id` cookie **before** render, so the
+very first request already has a stable bucketing unit — SSR and the browser
+then evaluate against the identical value at any rollout percentage. Without it
+the first render mints one and the bootstrap script persists it, which is one
+paint later:
+
+```ts
+// middleware.ts
+export { middleware, config } from "@shipeasy/next";
+```
+
+To keep your own middleware, compose instead:
+
+```ts
+import { withShipeasy } from "@shipeasy/next";
+
+export const middleware = withShipeasy(async (req) => {
+  // …your logic; return a NextResponse or nothing to continue
+});
+```
+
+`next` is a peer of this package only — it is not a peer of `@shipeasy/sdk`.
 
 ---
 

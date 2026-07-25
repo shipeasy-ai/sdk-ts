@@ -1,13 +1,23 @@
 # OpenFeature
 
-This SDK ships an OpenFeature provider (CNCF OpenFeature parity) so apps
+Shipeasy ships OpenFeature providers (CNCF OpenFeature parity) so apps
 standardized on the OpenFeature API can plug Shipeasy in as the backing
 provider. The provider is a pure adapter over the SDK's local evaluation — no
 change to how flags resolve.
 
-| Entrypoint | Pair with | Peer dep (optional) |
+They live in their own package, so `@shipeasy/sdk` itself stays peer-free:
+
+```bash
+npm install @shipeasy/openfeature
+```
+
+| Entrypoint | Pair with | Peers |
 | --- | --- | --- |
-| `@shipeasy/sdk/openfeature-server` | `@openfeature/server-sdk` | `@openfeature/server-sdk` |
+| `@shipeasy/openfeature/server` | `@openfeature/server-sdk` | `@openfeature/server-sdk`, `@shipeasy/sdk` |
+| `@shipeasy/openfeature/web` | `@openfeature/web-sdk` | `@openfeature/web-sdk`, `@shipeasy/sdk` |
+
+`@shipeasy/sdk` is a peer, not a dependency: the provider wraps the engine your
+`configure()` call already built, so it must resolve to the same installed copy.
 
 The provider class is named `ShipeasyProvider`.
 
@@ -20,7 +30,7 @@ resolves the engine that `configure({ apiKey })` already built. Always
 ```ts
 import { OpenFeature } from "@openfeature/server-sdk";
 import { configure } from "@shipeasy/sdk/server";
-import { ShipeasyProvider } from "@shipeasy/sdk/openfeature-server";
+import { ShipeasyProvider } from "@shipeasy/openfeature/server";
 
 // 1. Configure the SDK once at app boot (server key).
 configure({ apiKey: process.env.SHIPEASY_SERVER_KEY! });

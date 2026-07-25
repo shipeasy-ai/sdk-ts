@@ -6,6 +6,11 @@
     "ignoreDeprecations": "6.0",
     "target": "es2024",
     "lib": ["dom", "dom.iterable", "esnext"],
+    // Declared explicitly rather than relying on @types auto-discovery: the
+    // workspace packages each set their own `types`, and auto-discovery walks
+    // node_modules/@types from the *extending* config's directory, so the root
+    // suite lost its Node globals once packages/* appeared.
+    "types": ["node"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,
