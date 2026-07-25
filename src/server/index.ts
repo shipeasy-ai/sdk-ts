@@ -1999,6 +1999,63 @@ export function _resetShipeasyServerForTests(): void {
 
 // ---- Unified top-level configure API ----
 
+/**
+ * Where `shipeasy()` reads this request's cookies from. Next.js supplies them
+ * ambiently via `next/headers`; every other server has to hand them over, so
+ * this accepts whatever your framework already has:
+ *
+ *   • a raw `Cookie:` header string — `req.headers.cookie` (Express/Nest/Fastify),
+ *     `c.req.header("cookie")` (Hono), `event.node.req.headers.cookie` (Nitro)
+ *   • a WHATWG `Request` — cookies AND the query string are read from it, so
+ *     `?se_ks_*` / `?se_exp_*` URL overrides work without middleware
+ *   • a Next-style accessor — `{ get(name): { value } | undefined }`
+ */
+export type ServerCookieSource =
+  | string
+  | Request
+  | { get(name: string): { value: string } | undefined };
+
+/** Normalise any {@link ServerCookieSource} to a plain name → value reader.
+ *  Returns null when there is nothing usable to read from. */
+function cookieReader(src: ServerCookieSource | undefined): ((n: string) => string | undefined) | null {
+  if (!src) return null;
+  if (typeof src === "string") return (n) => parseCookieHeader(src)[n];
+  if (typeof (src as { get?: unknown }).get === "function" && !(src instanceof Request)) {
+    const accessor = src as { get(name: string): { value: string } | undefined };
+    return (n) => {
+      try {
+        return accessor.get(n)?.value;
+      } catch {
+        return undefined;
+      }
+    };
+  }
+  if (src instanceof Request) {
+    const header = src.headers.get("cookie") ?? "";
+    return (n) => parseCookieHeader(header)[n];
+  }
+  return null;
+}
+
+/** Minimal `Cookie:` header parser — first occurrence of a name wins, values
+ *  are percent-decoded when decodable (a malformed escape is passed through). */
+function parseCookieHeader(header: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 1) continue;
+    const name = part.slice(0, eq).trim();
+    if (!name || name in out) continue;
+    const raw = part.slice(eq + 1).trim();
+    try {
+      out[name] = decodeURIComponent(raw);
+    } catch {
+      out[name] = raw;
+    }
+  }
+  return out;
+}
+
 export interface ShipeasyServerConfig {
   /**
    * Server key — the ONLY key the server entrypoint accepts. Authenticates
@@ -2012,6 +2069,19 @@ export interface ShipeasyServerConfig {
   serverKey?: string;
   /** Raw URL or query string for applying ?se_ks_* / ?se_cf_* / ?se_exp_* overrides. */
   urlOverrides?: string;
+  /**
+   * This request's cookies. **Required on non-Next servers** for anonymous
+   * bucketing to be stable: the `__se_anon_id` cookie is how a logged-out
+   * visitor keeps the same rollout / experiment assignment across requests, and
+   * without a source to read it from every render mints a fresh id and
+   * re-buckets. Next.js reads it ambiently from `next/headers`; Express, Nest,
+   * Fastify, Hono, Nitro and friends pass it here — see
+   * {@link ServerCookieSource} for the accepted shapes.
+   *
+   * Also unlocks the signed `se_ov` override cookie and (when you pass a
+   * `Request`) `?se_*` URL overrides on servers with no middleware.
+   */
+  cookies?: ServerCookieSource;
   /**
    * Signed DevTools override cookie (`se_ov`) for server-trusted overrides of all
    * kinds (flags/kill switches/configs/experiments). Pass the bare cookie value
@@ -2158,7 +2228,22 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   // browser the first time it sees `?se_edit_labels=1`. The cookie is what
   // makes SSR aware of edit-mode in deployments without middleware (apps
   // running on opennext-cloudflare don't yet have a Node-runtime proxy).
+  // A caller-supplied cookie source (any non-Next server) is consulted first —
+  // `next/headers` below is the Next-only ambient fallback.
+  const readCookie = cookieReader(opts.cookies);
+
   let resolvedUrlOverrides = opts.urlOverrides;
+  if (!resolvedUrlOverrides && readCookie) {
+    // A full Request carries the query string, so `?se_ks_*` overrides work
+    // without any middleware injecting x-se-search.
+    if (opts.cookies instanceof Request) {
+      const q = opts.cookies.url.split("?")[1];
+      if (q && /(^|&)se_/.test(q)) resolvedUrlOverrides = q;
+    }
+    if (!resolvedUrlOverrides && readCookie("se_edit_labels") === "1") {
+      resolvedUrlOverrides = "se_edit_labels=1";
+    }
+  }
   if (!resolvedUrlOverrides) {
     try {
       // Dynamic import keeps Next.js out of the SDK's hard dependency graph.
@@ -2186,7 +2271,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   // Resolve the signed override cookie (`se_ov`): explicit opts.overrideCookie
   // wins; otherwise soft-read it from Next's cookies() (falls back silently in
   // non-Next runtimes, where the app passes opts.overrideCookie explicitly).
-  let resolvedOverrideCookie = opts.overrideCookie;
+  let resolvedOverrideCookie = opts.overrideCookie ?? readCookie?.("se_ov");
   if (!resolvedOverrideCookie) {
     try {
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -2243,18 +2328,25 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
       // Explicit caller value — trusted, used verbatim.
       anonId = identityUser.anonymous_id as string;
     } else {
-      try {
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore — next/headers is an optional peer; absent in non-Next.js runtimes
-        const { cookies } = (await import("next/headers")) as {
-          cookies: () =>
-            | Promise<{ get: (n: string) => { value: string } | undefined }>
-            | { get: (n: string) => { value: string } | undefined };
-        };
-        const c = await Promise.resolve(cookies());
-        const raw = c.get?.(ANON_ID_COOKIE)?.value;
-        if (raw && ANON_ID_RX.test(raw)) anonId = raw; // untrusted cookie — validated
-      } catch {}
+      // A caller-supplied cookie source first — this is the ONLY path that can
+      // reach the cookie on a non-Next server, and without it every request
+      // mints a fresh id and re-buckets anonymous visitors.
+      const supplied = readCookie?.(ANON_ID_COOKIE);
+      if (supplied && ANON_ID_RX.test(supplied)) anonId = supplied; // untrusted — validated
+      if (!anonId) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore — next/headers is an optional peer; absent in non-Next.js runtimes
+          const { cookies } = (await import("next/headers")) as {
+            cookies: () =>
+              | Promise<{ get: (n: string) => { value: string } | undefined }>
+              | { get: (n: string) => { value: string } | undefined };
+          };
+          const c = await Promise.resolve(cookies());
+          const raw = c.get?.(ANON_ID_COOKIE)?.value;
+          if (raw && ANON_ID_RX.test(raw)) anonId = raw; // untrusted cookie — validated
+        } catch {}
+      }
       if (!anonId) anonId = mintAnonId(); // no/invalid cookie → fresh id
     }
   }

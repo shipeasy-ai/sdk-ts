@@ -197,6 +197,35 @@ app.get("/checkout", (req, res) => {
 For non-React SSR (Express + a template engine) you can still emit the bootstrap
 tags: `se.getBootstrapTags()` returns the same two tags as an HTML string.
 
+### Pass `cookies` so logged-out bucketing stays stable
+
+`shipeasy()` buckets anonymous visitors on the `__se_anon_id` cookie. Next.js
+hands it over ambiently (`next/headers`); **every other server has to pass it**,
+or each render mints a fresh id and re-buckets — a logged-out visitor can see a
+different rollout or experiment variant on every page load:
+
+```ts
+app.get("/", async (req, res) => {
+  const se = await shipeasy({
+    serverKey: process.env.SHIPEASY_SERVER_KEY!,
+    cookies: req.headers.cookie, // ← the whole fix
+  });
+  res.send(render({ tags: se.getBootstrapTags() }));
+});
+```
+
+`cookies` takes whatever your framework already has:
+
+| Shape | Where it comes from |
+| --- | --- |
+| `Cookie:` header string | `req.headers.cookie` (Express/Nest/Fastify), `c.req.header("cookie")` (Hono), `event.node.req.headers.cookie` (Nitro) |
+| a WHATWG `Request` | Workers, Hono, Remix — also enables `?se_ks_*` URL overrides with no middleware |
+| `{ get(name) }` accessor | Next's own `cookies()`, or any wrapper shaped like it |
+
+It also unlocks the signed `se_ov` devtools override cookie on these servers.
+Requests that resolve a real `user_id` are unaffected — an explicit identity
+short-circuits anonymous bucketing entirely.
+
 ---
 
 ## Cloudflare Workers

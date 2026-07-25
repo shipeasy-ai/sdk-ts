@@ -815,6 +815,68 @@ describe("server shipeasy() — single server key, no client key", () => {
     expect(data.bootstrap.attrs).toHaveProperty("data-se-bootstrap");
   });
 
+  // Non-Next servers (Express/Nest/Fastify/Hono/…) have no ambient
+  // `next/headers`, so `opts.cookies` is the ONLY way `shipeasy()` can reach the
+  // __se_anon_id cookie. Without it every render mints a fresh id and re-buckets
+  // anonymous visitors — rollouts and experiment assignment stop being sticky.
+  describe("anonymous bucketing on non-Next servers (opts.cookies)", () => {
+    const ANON = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+
+    const anonIdFor = async (cookies: unknown) => {
+      vi.resetModules();
+      stubFetchOk();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const { shipeasy } = await import("../server");
+      const handle = await shipeasy({ serverKey: "srv_key", cookies } as never);
+      return handle.getBootstrapData().bootstrap.attrs["data-anon-id"];
+    };
+
+    it("reads the cookie from a raw `Cookie:` header string (req.headers.cookie)", async () => {
+      expect(await anonIdFor(`theme=dark; __se_anon_id=${ANON}; other=1`)).toBe(ANON);
+    });
+
+    it("reads the cookie from a WHATWG Request", async () => {
+      const req = new Request("https://app.test/pricing", {
+        headers: { cookie: `__se_anon_id=${ANON}` },
+      });
+      expect(await anonIdFor(req)).toBe(ANON);
+    });
+
+    it("reads the cookie from a Next-style accessor", async () => {
+      const accessor = { get: (n: string) => (n === "__se_anon_id" ? { value: ANON } : undefined) };
+      expect(await anonIdFor(accessor)).toBe(ANON);
+    });
+
+    it("is STABLE across requests — the same cookie buckets to the same id", async () => {
+      const header = `__se_anon_id=${ANON}`;
+      expect(await anonIdFor(header)).toBe(await anonIdFor(header));
+    });
+
+    it("re-buckets every request when no cookie source is given (the pre-fix behaviour)", async () => {
+      const first = await anonIdFor(undefined);
+      const second = await anonIdFor(undefined);
+      expect(first).toBeTruthy();
+      expect(first).not.toBe(second);
+    });
+
+    it("ignores a malformed cookie value and mints instead", async () => {
+      expect(await anonIdFor("__se_anon_id=not a valid id")).not.toBe("not a valid id");
+    });
+
+    it("an explicit user_id still short-circuits anon resolution", async () => {
+      vi.resetModules();
+      stubFetchOk();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const { shipeasy } = await import("../server");
+      const handle = await shipeasy({
+        serverKey: "srv_key",
+        cookies: `__se_anon_id=${ANON}`,
+        user: { user_id: "u-1" },
+      } as never);
+      expect(handle.getBootstrapData().bootstrap.attrs["data-anon-id"]).toBeUndefined();
+    });
+  });
+
   it("mints + emits a __se_anon_id on the bootstrap tag when no user/cookie is present", async () => {
     vi.resetModules();
     stubFetchOk();

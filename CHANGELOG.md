@@ -2,6 +2,30 @@
 
 ## 8.0.0 (2026-07-25)
 
+### Fixed: anonymous bucketing was unstable on every non-Next server
+
+`shipeasy()` resolved the `__se_anon_id` cookie exclusively through a dynamic
+`import("next/headers")` wrapped in a `try/catch`. On Express, Nest, Fastify,
+Hono, Nitro, Workers — anything that is not Next.js — that import throws, the
+catch swallows it, and resolution fell through to minting a **fresh id on every
+request**. The documented precedence step "the `__se_anon_id` cookie" was
+unreachable, so logged-out visitors were re-bucketed on each render and could
+see a different rollout or experiment variant on every page load. Requests with
+an explicit `user_id` were never affected, which is why it stayed hidden.
+
+**New `cookies` option on `shipeasy()`** — hand over the request's cookies from
+any framework:
+
+```ts
+const se = await shipeasy({ serverKey, cookies: req.headers.cookie });
+```
+
+It accepts a raw `Cookie:` header string, a WHATWG `Request`, or a Next-style
+`{ get(name) }` accessor (see `ServerCookieSource`). Passing a `Request` also
+enables `?se_ks_*` / `?se_exp_*` URL overrides on servers with no middleware,
+and the option unlocks the signed `se_ov` override cookie everywhere. Next.js
+behaviour is unchanged — the ambient `next/headers` read remains the fallback.
+
 ### BREAKING — the devtools overlays moved out of `@shipeasy/sdk`
 
 Installing the SDK to read flags no longer drags a UI toolchain into your
