@@ -1,0 +1,40 @@
+Shipeasy Source-Available License (Shipeasy-SAL) 1.0
+
+Copyright (c) 2026 Shipeasy, Inc. All rights reserved.
+
+1. License Grant.
+   Subject to the terms of this License, Shipeasy, Inc. ("Shipeasy") grants
+   you a non-exclusive, non-transferable, revocable, worldwide license to:
+
+   (a) Use, copy, and modify the Software solely as a client integration for
+       interacting with Shipeasy's hosted services (the "Service");
+   (b) Distribute the Software as part of an application that calls the
+       Service, in object form, provided the recipient also agrees to this
+       License.
+
+2. Restrictions.
+   You may not:
+
+   (a) Use the Software, in whole or in part, to build, host, or operate any
+       service that competes with the Service or that provides feature-flag,
+       experimentation, configuration, internationalization, or related
+       functionality to third parties on a commercial basis;
+   (b) Sublicense, sell, rent, or lease the Software;
+   (c) Remove or alter copyright notices, license terms, or attribution.
+
+3. Contributions.
+   Any pull request you submit is licensed back to Shipeasy under this
+   License plus a perpetual, irrevocable right for Shipeasy to relicense.
+
+4. Trademarks.
+   This License does not grant rights in the names "Shipeasy", related
+   marks, or logos.
+
+5. No Warranty / Limitation of Liability.
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. IN NO
+   EVENT SHALL SHIPEASY BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY ARISING FROM USE OF THE SOFTWARE.
+
+6. Termination.
+   This License terminates automatically if you breach it. Sections 2-5
+   survive termination.

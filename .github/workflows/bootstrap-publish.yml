@@ -1,0 +1,98 @@
+name: Bootstrap publish (one-time, token auth)
+
+# ONE-TIME setup for a NEW package name, then never again.
+#
+# Why this exists: npm will not let you attach a Trusted Publisher (OIDC) rule to
+# a package that does not exist yet, and OIDC cannot perform a package's FIRST
+# publish. So every new name needs exactly one token-authenticated publish to
+# bring it into existence; after that you add its Trusted Publisher rule and the
+# regular release-gated publish.yml (OIDC, no token) takes over forever.
+#
+# This runs in CI rather than from a laptop on purpose — publishing from a local
+# checkout is forbidden (see CLAUDE.md).
+#
+# HOW TO USE
+#   1. Create a granular npm access token with read+write on the @shipeasy scope
+#      (npmjs.com -> Access Tokens -> Generate -> Granular). Give it a 7-day
+#      expiry; it is needed once.
+#   2. Add it as the repo secret NPM_BOOTSTRAP_TOKEN.
+#   3. Actions -> "Bootstrap publish" -> Run workflow -> type the package
+#      directory (e.g. `next`), or `all` for every unpublished one.
+#   4. On npmjs.com/package/<name>/access add the Trusted Publisher:
+#         repository  shipeasy-ai/sdk-ts
+#         workflow    publish.yml
+#   5. DELETE the NPM_BOOTSTRAP_TOKEN secret and revoke the token.
+#
+# Already-published names are skipped, so a re-run is safe.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package dir under packages/ to bootstrap, or 'all'"
+        required: true
+        default: "all"
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --include-workspace-root run type-check
+      - run: pnpm -r --include-workspace-root run test
+      - run: pnpm -r --include-workspace-root run build
+
+      - name: Publish unpublished packages with token auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          TARGET: ${{ inputs.package }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_BOOTSTRAP_TOKEN is not set — see the header of this workflow."
+            exit 1
+          fi
+          # devtools-core first: react-native-devtools depends on it by exact version.
+          ALL="devtools-core react-native-devtools next openfeature"
+          [ "$TARGET" = "all" ] && LIST="$ALL" || LIST="$TARGET"
+          for pkg in $LIST; do
+            dir="packages/$pkg"
+            if [ ! -f "$dir/package.json" ]; then
+              echo "::error::No such package dir: $dir"; exit 1
+            fi
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            private=$(node -p "require('./$dir/package.json').private === true")
+            if [ "$private" = "true" ]; then
+              echo "Skipping $name — private, ships as the hosted se-devtools.js"
+              continue
+            fi
+            if npm view "$name" version >/dev/null 2>&1; then
+              echo "Skipping $name — already exists; use publish.yml (OIDC) from here on"
+              continue
+            fi
+            echo "Bootstrapping $name@$version"
+            # No --provenance: that is an OIDC feature. Later OIDC releases get it.
+            (cd "$dir" && npm publish --access public)
+          done
+
+      - name: Next steps
+        run: |
+          echo "Add a Trusted Publisher (repo shipeasy-ai/sdk-ts, workflow publish.yml)"
+          echo "on npmjs.com for each package published above, then DELETE the"
+          echo "NPM_BOOTSTRAP_TOKEN secret and revoke the token."

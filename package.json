@@ -48,8 +48,7 @@
       "types": "./dist/devtools-contract/index.d.ts",
       "import": "./dist/devtools-contract/index.mjs",
       "default": "./dist/devtools-contract/index.js"
-    },
-    "./templates/*": "./templates/*.js"
+    }
   },
   "bin": {
     "shipeasy-skill": "./dist/skill-cli.js"
@@ -60,7 +59,6 @@
     "dist/devtools-contract/",
     "dist/skill-cli.js",
     "docs/skill/SKILL.md",
-    "templates/",
     "LICENSE",
     "README.md"
   ],
