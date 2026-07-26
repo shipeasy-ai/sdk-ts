@@ -65,6 +65,11 @@ const flags = new Client(currentUser); // construct once per callsite
 const exp = flags.universe("hero_cta").assign();
 render(exp.get("primary_label", "Sign up")); // variant ?? universe default ?? fallback
 
+// Pass the universe's param shape to type get() — field names autocomplete and
+// a typo is a compile error. Optional; without it the value stays `unknown`.
+const typed = flags.universe<{ primary_label: string }>("hero_cta").assign();
+render(typed.get("primary_label", "Sign up")); // string | undefined
+
 if (exp.enrolled) {
   // exp.group is the variant, exp.name is the experiment
 }

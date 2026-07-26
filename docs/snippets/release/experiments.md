@@ -12,6 +12,8 @@ const flags = new Client(currentUser);
 //   .group    — the assigned variant, or null when not enrolled
 //   .enrolled — === (group !== null)
 //   .get(field, fallback, opts?) — variant override ?? universe default ?? fallback
+// universe<P>(name) — optional: P declares the universe's param shape, which
+//   types .get() (autocompleted field names, typed value instead of unknown).
 // Server: assign() takes no arg (user bound at construction); the exposure fires
 //   on the first get() read. Peek without logging: get(field, fallback, { exposure: false }).
 // Browser: assign(opts?) — opts.logExposure to force/suppress the exposure beacon at assign.

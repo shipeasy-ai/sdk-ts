@@ -168,15 +168,23 @@ export type { DevtoolsCapabilities } from "../devtools-contract/capabilities";
  * universe defaults (or your fallback). `assign()` auto-logs one exposure when
  * enrolled (subject to `disableAutoExposure`).
  */
-export interface Assignment {
+export interface Assignment<P = Record<string, unknown>> {
   /** The experiment the visitor landed in, or `null` when not enrolled. */
   readonly name: string | null;
   /** The assigned variant/group name, or `null` when not enrolled. */
   readonly group: string | null;
   /** True iff the visitor is enrolled in an experiment in this universe. */
   readonly enrolled: boolean;
-  /** Read a resolved param: variant override ?? universe default ?? `fallback`. */
-  get<T = unknown>(field: string, fallback?: T): T | undefined;
+  /**
+   * Read a resolved param: variant override ?? universe default ?? `fallback`.
+   *
+   * Supply the universe's param shape at the `universe()` call to get typed
+   * fields and autocompleted names — `universe<{ button_color: string }>("checkout")`
+   * makes `.get("button_color")` a `string | undefined` and rejects a typo.
+   * Without a shape the field is any `string` and the value is `unknown`,
+   * exactly as before.
+   */
+  get<K extends keyof P & string>(field: K, fallback?: P[K]): P[K] | undefined;
 }
 
 class AssignmentImpl implements Assignment {
@@ -1706,9 +1714,14 @@ export class Engine {
    * `assign({ logExposure: false })`). An un-enrolled visitor still resolves
    * `get()` to the universe defaults. This is the sole experiment read path —
    * there is no `getExperiment` (ask a universe, not an experiment).
+   *
+   * Pass the universe's param shape to type `.get()`:
+   * `universe<{ button_color: string }>("checkout").assign().get("button_color")`.
    */
-  universe(name: string): { assign(opts?: { logExposure?: boolean }): Assignment } {
-    return { assign: (opts) => this.assignUniverse(name, opts) };
+  universe<P = Record<string, unknown>>(
+    name: string,
+  ): { assign(opts?: { logExposure?: boolean }): Assignment<P> } {
+    return { assign: (opts) => this.assignUniverse(name, opts) as Assignment<P> };
   }
 
   private assignUniverse(name: string, opts?: { logExposure?: boolean }): Assignment {
@@ -2474,12 +2487,22 @@ export const flags = {
    * and auto-logs one exposure when enrolled. Before configure() (or on error)
    * returns a safe not-enrolled handle. Replaces the removed `getExperiment` —
    * read experiments by universe, never by name.
+   *
+   * Pass the universe's param shape to type `.get()`:
+   * `flags.universe<{ button_color: string }>("checkout")`.
    */
-  universe(name: string): { assign(opts?: { logExposure?: boolean }): Assignment } {
+  universe<P = Record<string, unknown>>(
+    name: string,
+  ): { assign(opts?: { logExposure?: boolean }): Assignment<P> } {
     return {
-      assign: (opts): Assignment =>
-        safeRun<Assignment>("flags.universe.assign", new AssignmentImpl(null, null, {}), () =>
-          _client ? _client.universe(name).assign(opts) : new AssignmentImpl(null, null, {}),
+      assign: (opts): Assignment<P> =>
+        safeRun<Assignment<P>>(
+          "flags.universe.assign",
+          new AssignmentImpl(null, null, {}) as Assignment<P>,
+          () =>
+            (_client
+              ? _client.universe(name).assign(opts)
+              : new AssignmentImpl(null, null, {})) as Assignment<P>,
         ),
     };
   },
@@ -2680,12 +2703,19 @@ export class Client<U = unknown> {
    * A universe is a mutual-exclusion pool, so the visitor lands in ≤1 experiment;
    * returns an {@link Assignment} (`.group` / `.get(field, fallback)`) and
    * auto-logs one exposure when enrolled. Replaces the removed `getExperiment`.
+   *
+   * Pass the universe's param shape to type `.get()`:
+   * `client.universe<{ button_color: string }>("checkout")`.
    */
-  universe(name: string): { assign(opts?: { logExposure?: boolean }): Assignment } {
+  universe<P = Record<string, unknown>>(
+    name: string,
+  ): { assign(opts?: { logExposure?: boolean }): Assignment<P> } {
     return {
-      assign: (opts): Assignment =>
-        safeRun<Assignment>("Client.universe.assign", new AssignmentImpl(null, null, {}), () =>
-          this.engine.universe(name).assign(opts),
+      assign: (opts): Assignment<P> =>
+        safeRun<Assignment<P>>(
+          "Client.universe.assign",
+          new AssignmentImpl(null, null, {}) as Assignment<P>,
+          () => this.engine.universe<P>(name).assign(opts),
         ),
     };
   }

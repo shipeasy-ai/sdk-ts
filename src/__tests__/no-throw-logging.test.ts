@@ -12,6 +12,7 @@ import {
   configureForTesting,
   _resetShipeasyServerForTests,
   _resetConfigureForTests,
+  type Assignment,
 } from "../server/index";
 import { logger, setLogLevel, getLogLevel, LOG_LEVELS } from "../logger";
 
@@ -47,7 +48,10 @@ describe("runtime methods never throw", () => {
     configureForTesting({});
     const c = new Client({ user_id: "u_1" });
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    let r: ReturnType<ReturnType<Client["universe"]>["assign"]> | undefined;
+    // Spelled out rather than via ReturnType<Client["universe"]>: universe() is
+    // generic over the param shape now, and ReturnType instantiates an
+    // unconstrained P as `unknown`, collapsing `keyof P` to never.
+    let r: Assignment | undefined;
     expect(() => {
       r = c.universe("missing_universe").assign();
     }).not.toThrow();

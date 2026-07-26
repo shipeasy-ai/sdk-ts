@@ -31,13 +31,19 @@ assign time (suppress with `assign({ logExposure: false })`).
 ## `Assignment`
 
 ```ts
-interface Assignment {
+interface Assignment<P = Record<string, unknown>> {
   name: string | null;   // the experiment the unit landed in, or null when not enrolled
   group: string | null;  // the assigned variant, or null when not enrolled
   enrolled: boolean;     // === (group !== null) — reading it does NOT log an exposure
   // variant ?? universe default ?? fallback. On the server, the first read of an
   // enrolled assignment logs the single exposure; pass { exposure: false } to peek.
-  get<T>(field: string, fallback?: T, opts?: { exposure?: boolean }): T | undefined;
+  // P is the universe's param shape — see "Typed params" below. Without it,
+  // the field is any string and the value is unknown.
+  get<K extends keyof P & string>(
+    field: K,
+    fallback?: P[K],
+    opts?: { exposure?: boolean },
+  ): P[K] | undefined;
 }
 ```
 
@@ -53,6 +59,31 @@ if (cta.enrolled) {
 }
 const label = cta.get("primary_label", "Sign up"); // never throws
 ```
+
+### Typed params
+
+Pass the universe's param shape to `universe()` and `get()` becomes typed —
+field names autocomplete, a typo is a compile error, and the return type follows
+the field instead of `unknown`:
+
+```ts
+interface HeroCta {
+  primary_label: string;
+  discount_pct: number;
+}
+
+const cta = flags.universe<HeroCta>("hero_cta").assign();
+cta.get("primary_label", "Sign up"); // string | undefined
+cta.get("discount_pct", 0); // number | undefined
+cta.get("primary_labl"); // ✗ compile error — not a field of HeroCta
+```
+
+The shape is a **local declaration of what you expect**, not something the SDK
+enforces at runtime: params still resolve variant override ?? universe default ??
+`fallback`, and an absent field returns your fallback as before. Omit the shape
+and `get()` behaves exactly as it always has — any `string` field, `unknown`
+value. Works the same on `flags.universe`, `client.universe`, `engine.universe`
+and the script loader's `window.shipeasy.universe`.
 
 ## Track conversions
 

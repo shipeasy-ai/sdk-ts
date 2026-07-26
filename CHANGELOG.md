@@ -1,5 +1,57 @@
 # Changelog
 
+## 9.0.0 (unreleased)
+
+### `universe<P>()` types the params you read
+
+Declare a universe's param shape once and `.get()` follows it — field names
+autocomplete, a typo is a compile error, and the value is typed instead of
+`unknown`. Available on `flags.universe`, `client.universe`, `engine.universe`
+and the script loader's `window.shipeasy.universe`, on both the server and
+browser entries:
+
+```ts
+interface HeroCta {
+  primary_label: string;
+  discount_pct: number;
+}
+
+const cta = flags.universe<HeroCta>("hero_cta").assign();
+cta.get("primary_label", "Sign up"); // string | undefined
+cta.get("primary_labl"); // ✗ compile error
+```
+
+The shape is a local declaration of what you expect — nothing is enforced at
+runtime, and resolution is unchanged (variant override ?? universe default ??
+`fallback`). Omit it and `get()` behaves exactly as before.
+
+### BREAKING (types only) — `Assignment.get`'s type parameter is now the field key
+
+`get<T>(field, …)` became `get<K extends keyof P & string>(field: K, …)`. Runtime
+behaviour is identical; only these compile-time forms change:
+
+```diff
+-assignment.get<string>("primary_label")   // explicit value type
++assignment.get("primary_label")           // unknown, as before
++flags.universe<{ primary_label: string }>("hero_cta").assign().get("primary_label")
+```
+
+`ReturnType<ReturnType<Client["universe"]>["assign"]>` also stops resolving
+(an unconstrained `P` instantiates as `unknown`) — name `Assignment` directly.
+
+### The script loader gained `getKillswitch()` and `see()`
+
+`window.shipeasy` was missing two reads the npm surface has. Both are now on it,
+along with the typed `universe<P>()` above.
+
+Under the hood the loader configures through the same `shipeasy({ clientKey })`
+entry npm consumers use instead of constructing an `Engine` directly. That fixes
+`see()`, which reports through the module singleton only that entry sets — a
+directly-constructed engine left it null, so a loader page's error reports were
+warned about and dropped. Two side effects of the shared path, both new for
+loader pages: the runtime i18n loader is injected, and the devtools overlay
+attaches when requested.
+
 ## 8.0.0 (2026-07-25)
 
 ### BREAKING — `@shipeasy/sdk` now has ZERO peer dependencies

@@ -342,6 +342,22 @@ no `configure()` call (the tag attributes ARE the configuration):
 </script>
 ```
 
+`window.shipeasy` carries the same reads as the npm surface:
+
+```js
+window.shipeasy.getFlag("new_checkout");
+window.shipeasy.getConfig("checkout_copy");
+window.shipeasy.getKillswitch("payments");           // or ("payments", "apple_pay")
+window.shipeasy.universe("hero_cta").assign().get("primary_label", "Sign up");
+window.shipeasy.identify({ user_id: "u-1", plan: "pro" });
+window.shipeasy.track("checkout_started", { value: 49 });
+window.shipeasy.see(err).causes_the("checkout").to("fall back to cached prices");
+```
+
+The tag configures the SDK exactly as `configure()` does, so `see()` reports,
+the i18n loader and the devtools overlay all work on a loader page — there is no
+second setup step.
+
 ---
 
 ## React Native / Expo
