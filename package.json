@@ -67,8 +67,7 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen:readme": "node scripts/gen-readme.mjs",
-    "publish-loader": "wrangler r2 object put shipeasy-sdk/loader-v$npm_package_version.js --file=dist/loader/loader.global.js --content-type 'application/javascript; charset=utf-8' --cache-control 'public, max-age=31536000, immutable' --remote && wrangler r2 object put shipeasy-sdk/loader.js --file=dist/loader/loader.global.js --content-type 'application/javascript; charset=utf-8' --cache-control 'public, max-age=300' --remote"
+    "gen:readme": "node scripts/gen-readme.mjs"
   },
   "dependencies": {
     "murmurhash-js": "^1.0.0"

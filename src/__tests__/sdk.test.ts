@@ -811,7 +811,7 @@ describe("server shipeasy() — single server key, no client key", () => {
     expect(data.bootstrap.attrs["data-key"]).toBeUndefined();
     expect(JSON.stringify(data.bootstrap.attrs)).not.toContain("srv_key_secret");
     // It points at the static, cross-platform loader.
-    expect(data.bootstrap.src).toContain("/sdk/bootstrap.js");
+    expect(data.bootstrap.src).toContain("/sdk/runtime.js");
     expect(data.bootstrap.attrs).toHaveProperty("data-se-bootstrap");
   });
 
@@ -831,7 +831,7 @@ describe("server shipeasy() — single server key, no client key", () => {
     });
 
     const boot = handle.getBootstrapData();
-    expect(boot.bootstrap.src).toBe("https://cdn.example.test/sdk/bootstrap.js");
+    expect(boot.bootstrap.src).toBe("https://cdn.example.test/sdk/runtime.js");
     expect(boot.bootstrap.attrs["data-i18n-profile"]).toBe("fr:prod");
     // The i18n loader tag exists because a client key is configured, and it
     // carries that PUBLIC key — never the server key.

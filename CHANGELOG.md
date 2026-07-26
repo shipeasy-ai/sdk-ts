@@ -2,6 +2,29 @@
 
 ## 9.0.0 (unreleased)
 
+### Removed: the `/sdk/loader.js` script loader
+
+`src/loader.ts` and the `loader.global.js` CDN artifact are gone, and so is the
+`/sdk/loader.js` URL. Its whole surface — `getFlag`, `getConfig`,
+`getKillswitch`, `universe`, `identify`, `track` — is covered by `/sdk/boot.js`,
+which is a quarter the size, evaluated at the edge, and **synchronous**: no
+`await window.shipeasy.ready`. See Installation for the replacement snippet.
+
+The one thing that does not carry over is `see()`. Structured error reporting
+needs the full client, so a page that used `window.shipeasy.see(...)` has to
+`import { see } from "@shipeasy/sdk"` on a bundled page instead.
+
+### The SSR bootstrap tag loads `/sdk/runtime.js`
+
+`getBootstrapData()` now points the bootstrap tag at `/sdk/runtime.js` instead
+of the retired `/sdk/bootstrap.js`, and emits `data-se-boot` alongside
+`data-se-bootstrap`. The `data-*` payload is unchanged. The runtime took over
+the two jobs `bootstrap.js` did on its own — minting `__se_anon_id` and
+publishing `window.__SE_BOOTSTRAP` — and additionally installs a working
+`window.shipeasy` from the SSR payload, one request fewer than before.
+
+**`/sdk/bootstrap.js` no longer exists**, so upgrade before your next deploy.
+
 ### The SSR tags read the config, and a devtools tag joins them
 
 `shipeasy()` now accepts `clientKey`, `projectId` and `cdnBaseUrl`, and every tag

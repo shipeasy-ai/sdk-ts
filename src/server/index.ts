@@ -2215,8 +2215,9 @@ export interface ShipeasyServerHandle {
   experiments: Record<string, ExperimentResult<Record<string, unknown>>>;
   /**
    * Structured `<script>` tag specs to drop into the document head: the
-   * cross-platform `se-bootstrap.js` tag (hydrates window.__SE_BOOTSTRAP +
-   * writes the anon cookie) and, when there are SSR strings or a client key,
+   * cross-platform SSR bootstrap tag (loads /sdk/runtime.js, which installs
+   * window.shipeasy, republishes window.__SE_BOOTSTRAP and writes the anon
+   * cookie) and, when there are SSR strings or a client key,
    * the i18n loader tag. Use this in React: scripts inserted via
    * `dangerouslySetInnerHTML` do NOT execute, so render real `<script>`
    * elements from these specs (see apps/ui root layout).
@@ -2474,9 +2475,12 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
 //
 // The SSR payload now rides DECLARATIVE <script> tags carrying data-* attrs,
 // not a server-generated inline JS blob. Two tags:
-//   1. <script src=".../sdk/bootstrap.js" data-se-bootstrap data-flags=… …>
-//      — the loader reads its own attrs, hydrates window.__SE_BOOTSTRAP (NO
-//      key) and writes the __se_anon_id cookie pre-paint.
+//   1. <script src=".../sdk/runtime.js" data-se-bootstrap data-se-boot
+//      data-flags=… …> — the runtime reads its own attrs, installs
+//      window.shipeasy, republishes window.__SE_BOOTSTRAP (NO key) and writes
+//      the __se_anon_id cookie pre-paint. Both marker attributes ride the tag:
+//      this SDK's browser entry finds it by data-se-bootstrap, the runtime
+//      finds itself by data-se-boot.
 //   2. <script src=".../sdk/i18n/loader.js" data-profile data-strings …>
 //      — installs SSR strings for first paint (no flash, no fetch); with a
 //      client key it also revalidates at runtime.
@@ -2492,7 +2496,7 @@ export interface BootstrapEmitOptions {
   i18nProfile?: string;
   /**
    * Stable anonymous bucketing id the server evaluated against. Emitted as
-   * `data-anon-id`; se-bootstrap.js exposes it on window.__SE_BOOTSTRAP and
+   * `data-anon-id`; the runtime exposes it on window.__SE_BOOTSTRAP and
    * persists it (pre-paint) to the first-party `__se_anon_id` cookie, so the
    * browser SDK buckets identically to SSR. Normally minted by edge
    * middleware; this is the fallback for routes it doesn't cover. See
@@ -2548,7 +2552,7 @@ export interface ScriptTagSpec {
 }
 
 export interface BootstrapData {
-  /** se-bootstrap.js tag — always present. */
+  /** SSR bootstrap tag (loads /sdk/runtime.js) — always present. */
   bootstrap: ScriptTagSpec;
   /** i18n loader tag — null when there are no SSR strings and no client key. */
   i18nLoader: ScriptTagSpec | null;
@@ -2571,6 +2575,7 @@ export function getBootstrapData(
 
   const attrs: Record<string, string> = {
     "data-se-bootstrap": "",
+    "data-se-boot": "",
     "data-flags": JSON.stringify(bootstrap?.flags ?? {}),
     "data-configs": JSON.stringify(bootstrap?.configs ?? {}),
     "data-experiments": JSON.stringify(bootstrap?.experiments ?? {}),
@@ -2587,7 +2592,7 @@ export function getBootstrapData(
     const { anonymous_id: _anon, ...identity } = opts.identifiedUser;
     if (Object.keys(identity).length > 0) attrs["data-user"] = JSON.stringify(identity);
   }
-  const bootstrapTag: ScriptTagSpec = { src: `${base}/sdk/bootstrap.js`, attrs };
+  const bootstrapTag: ScriptTagSpec = { src: `${base}/sdk/runtime.js`, attrs };
 
   let i18nLoader: ScriptTagSpec | null = null;
   const hasStrings = !!(i18nData?.strings && Object.keys(i18nData.strings).length > 0);

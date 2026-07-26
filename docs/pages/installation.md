@@ -328,24 +328,40 @@ The browser is single-user: `new Client(user)` runs the transform and
 `identify()`s the result, merging browser context (`locale`, `timezone`,
 `path`, `referrer`, `screen_*`, `user_agent`) and a persisted `anonymous_id`.
 
-### No-bundler script loader
+### No-bundler script tag
 
-For sites without a build step, drop the script loader in — no `npm install`,
-no `configure()` call (the tag attributes ARE the configuration):
+For sites without a build step, drop in `/sdk/boot.js` — no `npm install`, no
+`configure()` call. The edge evaluates your flags for the visitor and ships the
+answers *with* the runtime, so one blocking request installs a fully-populated
+`window.shipeasy` before first paint. Nothing to await, and no flash of default
+values:
 
 ```html
-<script
-  src="https://cdn.shipeasy.ai/sdk/loader.js"
-  data-sdk-key="sdk_client_..."
-  data-user-id="user-123"
-  data-attrs='{"plan":"pro","country":"US"}'
-  defer
-></script>
 <script>
-  await window.shipeasy.ready;
+  (function () {
+    var m = document.cookie.match(/(?:^|; )__se_anon_id=([^;]*)/),
+      a = m ? m[1] : crypto.randomUUID();
+    if (!m)
+      document.cookie =
+        "__se_anon_id=" + a + ";path=/;max-age=31536000;samesite=lax" +
+        (location.protocol === "https:" ? ";secure" : "");
+    document.write(
+      '<script src="https://cdn.shipeasy.ai/sdk/boot.js' +
+        '?p=<project-id>&k=sdk_client_...&a=' + encodeURIComponent(a) +
+        '"><\/script>'
+    );
+  })();
+</script>
+<script>
   if (window.shipeasy.getFlag("new_checkout")) { /* … */ }
 </script>
 ```
+
+The preamble mints the anonymous bucketing id first. It has to: the cookie is
+first-party to *your* domain and never reaches our CDN, so `boot.js` can only
+learn the id from the URL — and without a stable one, a visitor re-buckets on
+every navigation. Add `&u=<user_id>` and `&attrs=<json>` for identity and
+targeting.
 
 `window.shipeasy` carries the same reads as the npm surface:
 
@@ -356,12 +372,12 @@ window.shipeasy.getKillswitch("payments");           // or ("payments", "apple_p
 window.shipeasy.universe("hero_cta").assign().get("primary_label", "Sign up");
 window.shipeasy.identify({ user_id: "u-1", plan: "pro" });
 window.shipeasy.track("checkout_started", { value: 49 });
-window.shipeasy.see(err).causes_the("checkout").to("fall back to cached prices");
 ```
 
-The tag configures the SDK exactly as `configure()` does, so `see()` reports,
-the i18n loader and the devtools overlay all work on a loader page — there is no
-second setup step.
+`see()` is the one thing the script tag does not carry — structured error
+reporting needs the full client, so `import { see } from "@shipeasy/sdk"` on a
+bundled page. Everything else, including the i18n loader and the devtools
+overlay, works on a script-tag page with no second setup step.
 
 ---
 
