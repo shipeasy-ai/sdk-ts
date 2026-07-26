@@ -279,7 +279,6 @@ describe("DevtoolsClient", () => {
     await client.upsertKeys("prof_1", [{ key: "a", value: "1" }]);
     expect(calls[0].body).toEqual({
       profile_id: "prof_1",
-      chunk: "default",
       keys: [{ key: "a", value: "1" }],
     });
   });

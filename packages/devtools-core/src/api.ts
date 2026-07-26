@@ -470,12 +470,11 @@ export class DevtoolsClient {
   async upsertKeys(
     profileId: string,
     keys: Array<{ key: string; value: string }>,
-    chunk = "default",
   ): Promise<void> {
     // SPEC GAP: `PUT /api/admin/i18n/keys` (bulk OVERWRITE) isn't in the
     // contract — the spec'd POST (`pushI18nKeys`) is insert-only and would
     // silently skip the labels being edited here.
-    await this.rawSend("PUT", `/api/admin/i18n/keys`, { profile_id: profileId, chunk, keys });
+    await this.rawSend("PUT", `/api/admin/i18n/keys`, { profile_id: profileId, keys });
     this.invalidateKeysCache();
   }
 
