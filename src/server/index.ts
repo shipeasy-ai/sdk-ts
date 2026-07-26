@@ -1865,7 +1865,10 @@ export const i18n = {
    *
    * @param key     SDK client key (NEXT_PUBLIC_SHIPEASY_CLIENT_KEY)
    * @param profile i18n profile identifier, e.g. "en:prod"
-   * @param cdnBaseUrl Optional override for the i18n CDN (default: cdn.i18n.shipeasy.ai)
+   * @param cdnBaseUrl Optional override for the i18n CDN origin (default:
+   *                   https://cdn.shipeasy.ai — see DEFAULT_I18N_CDN. The
+   *                   historical cdn.i18n.shipeasy.ai host was never wired up
+   *                   and does not resolve; don't point anything at it.)
    */
   async init(key: string, profile: string, cdnBaseUrl?: string): Promise<void> {
     // Skip if THIS request's ALS already has loaded strings.
@@ -1913,14 +1916,12 @@ export const i18n = {
 export interface LabelFile {
   v: number;
   profile: string;
-  chunk: string;
   strings: Record<string, string>;
 }
 
 export interface FetchLabelsOptions {
   key: string;
   profile: string;
-  chunk?: string;
   cdnBaseUrl?: string;
   timeoutMs?: number;
 }
@@ -1964,7 +1965,6 @@ export async function fetchLabelsForSSR(opts: FetchLabelsOptions): Promise<Label
     return {
       v: 1,
       profile: opts.profile,
-      chunk: opts.chunk ?? "default",
       strings: body.strings ?? {},
     };
   } catch {
