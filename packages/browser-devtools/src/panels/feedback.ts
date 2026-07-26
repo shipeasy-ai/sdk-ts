@@ -51,7 +51,6 @@ const BUG_STATUS_CLS: Record<BugRecord["status"], string> = {
   // Public intake (/cli/report) force-files as pending_approval — style like
   // `open` so the queue reads naturally until a human approves/triages it.
   pending_approval: "badge-run",
-  triaged: "badge-run",
   in_progress: "badge-run",
   ready_for_qa: "badge-run",
   resolved: "badge-on",

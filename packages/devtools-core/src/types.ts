@@ -193,7 +193,6 @@ export interface FeedbackConnectorData {
 export type BugStatus =
   | "open"
   | "pending_approval"
-  | "triaged"
   | "in_progress"
   | "ready_for_qa"
   | "resolved"

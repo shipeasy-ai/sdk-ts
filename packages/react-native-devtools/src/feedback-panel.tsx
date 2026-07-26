@@ -52,7 +52,6 @@ type OpsItem = BugRecord | FeatureRequestRecord;
 const STATUSES: BugStatus[] = [
   "open",
   "pending_approval",
-  "triaged",
   "in_progress",
   "ready_for_qa",
   "resolved",
@@ -63,14 +62,7 @@ const PRIORITIES: BugPriority[] = ["nice_to_have", "medium", "high", "critical"]
 
 // Workflow order the status sections render in; any status not listed is
 // appended after these (keyed by its raw value).
-const STATUS_ORDER = [
-  "pending_approval",
-  "triage",
-  "triaged",
-  "open",
-  "in_progress",
-  "ready_for_qa",
-];
+const STATUS_ORDER = ["pending_approval", "open", "in_progress", "ready_for_qa"];
 
 // The queue sub-tabs — bugs/features are user-fileable, errors/alerts are the
 // auto-filed system tickets.
