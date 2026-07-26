@@ -5,14 +5,18 @@ Wire the i18n loader via the SSR bootstrap (it rides the server `shipeasy()` han
 import { shipeasy } from "@shipeasy/sdk/server";
 
 // construct once per request (the SSR bootstrap handle; binds this request)
-const se = await shipeasy({ serverKey: process.env.SHIPEASY_SERVER_KEY ?? "" });
-
-// getBootstrapData(emit?)
-//   emit.clientKey — public client key embedded in the i18n loader tag (NOT
-//                    the flags bootstrap tag); selects the {{PROFILE}} profile
-const boot = se.getBootstrapData({
-  clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY, // profile: {{PROFILE}}
+//   clientKey          — PUBLIC client key the i18n loader tag carries (NOT the
+//                        flags bootstrap tag, which embeds no key at all)
+//   i18nDefaultProfile — the profile to load; defaults to "en:prod"
+const se = await shipeasy({
+  serverKey: process.env.SHIPEASY_SERVER_KEY ?? "",
+  clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY,
+  i18nDefaultProfile: "{{PROFILE}}",
 });
+
+// getBootstrapData(emit?) — every value comes from the config above; pass an
+// emit option only to override one tag.
+const boot = se.getBootstrapData();
 
 // Render REAL <script> elements (dangerouslySetInnerHTML scripts do NOT run):
 <script src={boot.bootstrap.src} {...boot.bootstrap.attrs} />;

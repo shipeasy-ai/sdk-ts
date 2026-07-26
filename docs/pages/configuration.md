@@ -158,10 +158,13 @@ is embedded** in the bootstrap tag.
 import { shipeasy } from "@shipeasy/sdk/server";
 
 export default async function RootLayout({ children }) {
-  const se = await shipeasy({ serverKey: process.env.SHIPEASY_SERVER_KEY ?? "" });
-  const boot = se.getBootstrapData({
-    clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY, // public client key
+  // Every tag value is configured once, here — the emit calls take no arguments.
+  const se = await shipeasy({
+    serverKey: process.env.SHIPEASY_SERVER_KEY ?? "",
+    clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY, // PUBLIC key, for the tags
+    projectId: process.env.NEXT_PUBLIC_SHIPEASY_PROJECT_ID, // for the devtools tag
   });
+  const boot = se.getBootstrapData();
   return (
     <html>
       <body>
@@ -177,6 +180,34 @@ export default async function RootLayout({ children }) {
 
 For non-React SSR (Express, raw templates), `se.getBootstrapTags()` returns the
 same two tags as an HTML string. See [i18n](./i18n.md) for the loader details.
+
+### Every emitted tag reads the config
+
+`clientKey`, `projectId`, `cdnBaseUrl` and `i18nDefaultProfile` on `shipeasy()`
+are the defaults every tag carries, so the emit calls take no arguments. Pass an
+`emit` option only to override one tag:
+
+| Handle method | Defaults from `shipeasy()` |
+| --- | --- |
+| `se.getBootstrapData()` / `se.getBootstrapTags()` | `clientKey`, `i18nDefaultProfile`, `cdnBaseUrl` (plus this request's anon id + identity) |
+| `se.getDevtoolsData()` / `se.getDevtoolsTag()` | `projectId`, `clientKey`, `cdnBaseUrl` |
+
+### Devtools overlay tag
+
+`se.getDevtoolsTag()` emits the hosted devtools overlay bundle
+(`se-devtools.js`) — nothing to install, no overlay code in your bundle. It reads
+the project id and public client key off the tag and opens with **Shift+Alt+S**
+or on any page loaded with `?se=1`. It is `defer`red unless you pass
+`{ defer: false }`: a developer tool never belongs on the critical rendering
+path. Render it for your own team only.
+
+```tsx
+const dev = se.getDevtoolsData();
+{isStaff && <script src={dev.src} {...dev.attrs} />}
+```
+
+The standalone `getDevtoolsTag(opts)` / `getDevtoolsData(opts)` exports build the
+same tag without a request handle. See [Browser devtools](./browser-devtools.md).
 
 ## Server identity (no anon→identified flip)
 

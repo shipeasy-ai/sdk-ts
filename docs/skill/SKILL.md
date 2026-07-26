@@ -189,5 +189,8 @@ only reads flags never pulls a UI toolchain in.
 Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/react-native-devtools.md>
 
 The browser overlay needs no install at all — it is delivered as a hosted
-script (`se-devtools.js`), with URL-param overrides and `Shift+Alt+S`. Reference:
+script (`se-devtools.js`), with URL-param overrides and `Shift+Alt+S`. Emit it
+from SSR with `se.getDevtoolsTag()` / `se.getDevtoolsData()` — the project id and
+public client key come from `shipeasy({ projectId, clientKey })`, so every tag
+call (bootstrap, i18n loader, devtools) takes no arguments. Reference:
 <https://shipeasy-ai.github.io/sdk-ts/pages/browser-devtools.md>

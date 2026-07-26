@@ -2,6 +2,31 @@
 
 ## 9.0.0 (unreleased)
 
+### The SSR tags read the config, and a devtools tag joins them
+
+`shipeasy()` now accepts `clientKey`, `projectId` and `cdnBaseUrl`, and every tag
+it emits defaults to them — so a root layout calls `se.getBootstrapData()` with
+no arguments instead of threading the public client key through each emit:
+
+```tsx
+const se = await shipeasy({
+  serverKey: process.env.SHIPEASY_SERVER_KEY ?? "",
+  clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY,
+  projectId: process.env.NEXT_PUBLIC_SHIPEASY_PROJECT_ID,
+});
+const boot = se.getBootstrapData();
+```
+
+New **`se.getDevtoolsData()` / `se.getDevtoolsTag()`** (plus standalone
+`getDevtoolsData` / `getDevtoolsTag` exports) emit the hosted devtools overlay
+bundle — `se-devtools.js` with `data-project-id` + `data-client-api-key`,
+`defer` by default (`{ defer: false }` drops it). The overlay opens with
+Shift+Alt+S or on any page loaded with `?se=1`; render it for your own team only.
+
+An explicit `emit` option still wins per call, so existing call sites are
+unchanged. Mirrors the Ruby SDK 3.7.0, Python 0.21.0, PHP 0.20.0, Go 0.19.0,
+Kotlin 0.20.0 and Java 0.19.0.
+
 ### `universe<P>()` types the params you read
 
 Declare a universe's param shape once and `.get()` follows it — field names

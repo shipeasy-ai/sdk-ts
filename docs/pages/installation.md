@@ -111,10 +111,13 @@ first paint**. No SDK key is embedded in the bootstrap tag.
 import { shipeasy } from "@shipeasy/sdk/server";
 
 export default async function RootLayout({ children }) {
-  const se = await shipeasy({ serverKey: process.env.SHIPEASY_SERVER_KEY ?? "" });
-  const boot = se.getBootstrapData({
-    clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY, // public client key
+  // Every tag value is configured once, here — the emit calls take no arguments.
+  const se = await shipeasy({
+    serverKey: process.env.SHIPEASY_SERVER_KEY ?? "",
+    clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY, // PUBLIC key, for the tags
+    projectId: process.env.NEXT_PUBLIC_SHIPEASY_PROJECT_ID, // for the devtools tag
   });
+  const boot = se.getBootstrapData();
   return (
     <html>
       <body>
@@ -233,7 +236,9 @@ app.get("/checkout", (req, res) => {
 ```
 
 For non-React SSR (Express + a template engine) you can still emit the bootstrap
-tags: `se.getBootstrapTags()` returns the same two tags as an HTML string.
+tags: `se.getBootstrapTags()` returns the same two tags as an HTML string, and
+`se.getDevtoolsTag()` the devtools overlay tag. Both take their values from the
+`shipeasy()` config, so neither needs an argument.
 
 ### Pass `cookies` so logged-out bucketing stays stable
 

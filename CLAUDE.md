@@ -56,7 +56,8 @@ Users are taught exactly **two** things, and the docs must never drift from them
 
 Plus the package-level helpers that let users avoid the heavyweight object:
 `overrideFlag` / `overrideConfig` / `overrideExperiment` / `clearOverrides`,
-`onChange`, the SSR helpers (`shipeasy()` / `getBootstrapData` / `getBootstrapTags`),
+`onChange`, the SSR helpers (`shipeasy()` / `getBootstrapData` / `getBootstrapTags` /
+`getDevtoolsData` / `getDevtoolsTag`),
 the global-form `ShipeasyProvider` (OpenFeature), and the `see()` family.
 
 **The `Engine` class is an internal detail. Do NOT document it.** It stays public

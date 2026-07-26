@@ -815,6 +815,52 @@ describe("server shipeasy() — single server key, no client key", () => {
     expect(data.bootstrap.attrs).toHaveProperty("data-se-bootstrap");
   });
 
+  // Every emitted tag takes its values from the shipeasy() config, so a layout
+  // renders them with no arguments at all.
+  it("tags default their key, project and CDN base from the shipeasy() config", async () => {
+    vi.resetModules();
+    stubFetchOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { shipeasy } = await import("../server");
+    const handle = await shipeasy({
+      serverKey: "srv_key",
+      clientKey: "sdk_client_cfg",
+      projectId: "proj_cfg",
+      cdnBaseUrl: "https://cdn.example.test",
+      i18nDefaultProfile: "fr:prod",
+    });
+
+    const boot = handle.getBootstrapData();
+    expect(boot.bootstrap.src).toBe("https://cdn.example.test/sdk/bootstrap.js");
+    expect(boot.bootstrap.attrs["data-i18n-profile"]).toBe("fr:prod");
+    // The i18n loader tag exists because a client key is configured, and it
+    // carries that PUBLIC key — never the server key.
+    expect(boot.i18nLoader?.src).toBe("https://cdn.example.test/sdk/i18n/loader.js");
+    expect(boot.i18nLoader?.attrs["data-key"]).toBe("sdk_client_cfg");
+    expect(JSON.stringify(boot)).not.toContain("srv_key");
+
+    const dev = handle.getDevtoolsData();
+    expect(dev.src).toBe("https://cdn.example.test/se-devtools.js");
+    expect(dev.attrs["data-project-id"]).toBe("proj_cfg");
+    expect(dev.attrs["data-client-api-key"]).toBe("sdk_client_cfg");
+    expect(dev.attrs).toHaveProperty("defer");
+    expect(handle.getDevtoolsTag()).toContain("se-devtools.js");
+
+    // An explicit emit option still wins for that one tag.
+    expect(handle.getDevtoolsData({ projectId: "proj_other", defer: false }).attrs)
+      .toMatchObject({ "data-project-id": "proj_other" });
+    expect(handle.getDevtoolsData({ defer: false }).attrs).not.toHaveProperty("defer");
+  });
+
+  it("getDevtoolsTag renders a standalone overlay tag", async () => {
+    const { getDevtoolsTag } = await import("../server");
+    const tag = getDevtoolsTag({ projectId: "proj_1", clientKey: "sdk_client_1" });
+    expect(tag).toContain('src="https://cdn.shipeasy.ai/se-devtools.js"');
+    expect(tag).toContain('data-project-id="proj_1"');
+    expect(tag).toContain('data-client-api-key="sdk_client_1"');
+    expect(tag).toContain("defer");
+  });
+
   // Non-Next servers (Express/Nest/Fastify/Hono/…) have no ambient
   // `next/headers`, so `opts.cookies` is the ONLY way `shipeasy()` can reach the
   // __se_anon_id cookie. Without it every render mints a fresh id and re-buckets

@@ -11,6 +11,7 @@ paste the URL anywhere and the overrides travel with it.
 | Surface | How it loads |
 | --- | --- |
 | `<script src="https://cdn.shipeasy.ai/se-devtools.js">` | Self-executing bundle; reads `data-project-id` / `data-client-api-key` off the tag |
+| `se.getDevtoolsTag()` / `getDevtoolsData()` | The same tag, emitted from SSR with the ids already filled in |
 
 ## Script tag (zero-code)
 
@@ -24,6 +25,28 @@ paste the URL anywhere and the overrides travel with it.
 ```
 
 The overlay opens with **Shift+Alt+S**, or by loading any page with `?se=1`.
+
+## Emitting it from SSR
+
+The server handle builds the same tag from the ids you already configured, so
+nothing is repeated in the layout — and you can gate it on your own staff check:
+
+```tsx
+import { shipeasy } from "@shipeasy/sdk/server";
+
+const se = await shipeasy({
+  serverKey: process.env.SHIPEASY_SERVER_KEY ?? "",
+  clientKey: process.env.NEXT_PUBLIC_SHIPEASY_CLIENT_KEY, // PUBLIC key
+  projectId: process.env.NEXT_PUBLIC_SHIPEASY_PROJECT_ID,
+});
+
+const dev = se.getDevtoolsData();          // pass { defer: false } to drop `defer`
+{isStaff && <script src={dev.src} {...dev.attrs} />}
+```
+
+`se.getDevtoolsTag()` returns it as an HTML string for non-React SSR, and the
+standalone `getDevtoolsTag(opts)` / `getDevtoolsData(opts)` exports build the tag
+without a request handle.
 
 ## Configuring it
 

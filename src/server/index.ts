@@ -2192,6 +2192,21 @@ export interface ShipeasyServerConfig {
    * payload. See {@link EngineOptions.privateAttributes}.
    */
   privateAttributes?: string[];
+  /**
+   * The PUBLIC client key (`sdk_client_…`) the emitted tags carry: the i18n
+   * loader uses it to revalidate strings at runtime, and the devtools overlay
+   * authenticates with it. NEVER the server key — this value ships to the
+   * browser. Set it here once and `getBootstrapTags()` / `getDevtoolsTag()`
+   * need no arguments.
+   */
+  clientKey?: string;
+  /**
+   * Your Shipeasy project id (`proj_…`), read by {@link ShipeasyServerHandle.getDevtoolsTag}.
+   * The devtools overlay needs it to know which project it is wired to.
+   */
+  projectId?: string;
+  /** CDN origin the emitted tags are built against. Defaults to https://cdn.shipeasy.ai. */
+  cdnBaseUrl?: string;
 }
 
 export interface ShipeasyServerHandle {
@@ -2214,6 +2229,16 @@ export interface ShipeasyServerHandle {
    * every server SDK mirrors.
    */
   getBootstrapTags(emit?: BootstrapEmitOptions): string;
+  /**
+   * The devtools overlay tag spec — the hosted `se-devtools.js` bundle, which
+   * reads the project id and public client key off the tag and opens with
+   * Shift+Alt+S or on any page loaded with `?se=1`. Every value defaults to the
+   * `projectId` / `clientKey` / `cdnBaseUrl` passed to {@link shipeasy}, so this
+   * takes no arguments. Render it for your own team only.
+   */
+  getDevtoolsData(emit?: DevtoolsEmitOptions): ScriptTagSpec;
+  /** The devtools overlay tag rendered as an HTML string. See {@link getDevtoolsData}. */
+  getDevtoolsTag(emit?: DevtoolsEmitOptions): string;
 }
 
 /**
@@ -2403,25 +2428,44 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   const bootstrap = flags.evaluate(effectiveUser, resolvedUrlOverrides, verifiedOverrides);
   const i18nData = i18n.getForRequest();
 
+  // Everything the emitted tags need, resolved once from this request + the
+  // config, so `getBootstrapTags()` / `getDevtoolsTag()` take no arguments. An
+  // explicit `emit` field still wins per call.
+  const tagDefaults: BootstrapEmitOptions = {
+    i18nProfile: profile,
+    anonId,
+    identifiedUser: identityUser,
+    clientKey: opts.clientKey,
+    baseUrl: opts.cdnBaseUrl,
+  };
+
   return {
     flags: bootstrap.flags,
     configs: bootstrap.configs,
     experiments: bootstrap.experiments,
     getBootstrapData(emit?: BootstrapEmitOptions) {
-      return getBootstrapData(bootstrap, i18nData, {
-        i18nProfile: profile,
-        anonId,
-        identifiedUser: identityUser,
+      return getBootstrapData(bootstrap, i18nData, { ...tagDefaults, ...emit });
+    },
+    getBootstrapTags(emit?: BootstrapEmitOptions) {
+      return getBootstrapTags(bootstrap, i18nData, { ...tagDefaults, ...emit });
+    },
+    getDevtoolsData(emit?: DevtoolsEmitOptions) {
+      return getDevtoolsData({
+        projectId: opts.projectId,
+        clientKey: opts.clientKey,
+        baseUrl: opts.cdnBaseUrl,
         ...emit,
       });
     },
-    getBootstrapTags(emit?: BootstrapEmitOptions) {
-      return getBootstrapTags(bootstrap, i18nData, {
-        i18nProfile: profile,
-        anonId,
-        identifiedUser: identityUser,
-        ...emit,
-      });
+    getDevtoolsTag(emit?: DevtoolsEmitOptions) {
+      return renderScriptTag(
+        getDevtoolsData({
+          projectId: opts.projectId,
+          clientKey: opts.clientKey,
+          baseUrl: opts.cdnBaseUrl,
+          ...emit,
+        }),
+      );
     },
   };
 }
@@ -2474,6 +2518,27 @@ export interface BootstrapEmitOptions {
   identifiedUser?: User;
   /** CDN base for the tag `src`s. Defaults to https://cdn.shipeasy.ai. */
   baseUrl?: string;
+}
+
+export interface DevtoolsEmitOptions {
+  /**
+   * Your Shipeasy project id (`proj_…`). Defaults to the `projectId` passed to
+   * {@link shipeasy}. The overlay needs it to know which project it is wired to.
+   */
+  projectId?: string;
+  /**
+   * The PUBLIC client key the overlay authenticates with. Defaults to the
+   * `clientKey` passed to {@link shipeasy}. NEVER the server key.
+   */
+  clientKey?: string;
+  /** CDN base for the tag `src`. Defaults to https://cdn.shipeasy.ai. */
+  baseUrl?: string;
+  /**
+   * Keep the `defer` attribute (default `true`). The overlay is a developer
+   * tool — it is never needed for first paint, so it stays off the critical
+   * rendering path unless you opt out.
+   */
+  defer?: boolean;
 }
 
 export interface ScriptTagSpec {
@@ -2537,6 +2602,36 @@ export function getBootstrapData(
   }
 
   return { bootstrap: bootstrapTag, i18nLoader };
+}
+
+/**
+ * Build the devtools overlay `<script>` tag spec. `se-devtools.js` is a hosted,
+ * self-executing bundle — nothing to install, no overlay code in your bundle —
+ * that reads the project and the PUBLIC client key off the tag. The overlay
+ * opens with Shift+Alt+S or on any page loaded with `?se=1`.
+ *
+ * Every option is optional; the `shipeasy()` handle's `getDevtoolsData` /
+ * `getDevtoolsTag` fill them in from the config. A tag with no project id still
+ * renders — the overlay reports what it needs — so a missing value can never
+ * break a render.
+ */
+export function getDevtoolsData(opts: DevtoolsEmitOptions = {}): ScriptTagSpec {
+  const base = (opts.baseUrl ?? DEFAULT_CDN).replace(/\/$/, "");
+  const attrs: Record<string, string> = {
+    "data-project-id": opts.projectId ?? "",
+    "data-client-api-key": opts.clientKey ?? "",
+  };
+  if (opts.defer !== false) attrs["defer"] = "";
+  return { src: `${base}/se-devtools.js`, attrs };
+}
+
+/**
+ * The devtools overlay tag as an HTML string, for non-React SSR. React callers
+ * should render a real `<script>` element from {@link getDevtoolsData} instead
+ * (scripts set via innerHTML do not execute).
+ */
+export function getDevtoolsTag(opts: DevtoolsEmitOptions = {}): string {
+  return renderScriptTag(getDevtoolsData(opts));
 }
 
 /** Escape a value for safe inclusion in a double-quoted HTML attribute. */
