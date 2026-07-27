@@ -22,15 +22,34 @@ The chain dispatches on the **next microtask** — no `.send()`. It ships
 immediately (`sendBeacon` in the browser, fire-and-forget `fetch` on the
 server), spam-guarded by a 30s dedup window and a per-session cap.
 
-`.causes_the` sets the subject; `.to(outcome)` is the terminal. You can attach
-context with `.extras(obj)` or fold it into the terminal inline as
-`.to(outcome, obj)` — both are equivalent, so there is no ordering to remember:
+`.causes_the` sets the subject; `.to(outcome)` is the terminal.
+
+### Where extras go in the chain
+
+`.causes_the(subject)` and `.to(outcome)` are two halves of one sentence and
+must stay adjacent. Because the chain dispatches on the next microtask,
+TypeScript can take extras **after** the terminal — that is the preferred form
+here:
 
 ```ts
-// these two are the same report:
-see(e).causes_the("checkout").extras({ order_id: order.id }).to("use cached prices");
+// PREFERRED — the consequence reads as one sentence, extras hang off the end:
+see(e).causes_the("checkout").to("use cached prices").extras({ order_id: order.id });
+
+// Also fine — extras folded into the terminal inline:
 see(e).causes_the("checkout").to("use cached prices", { order_id: order.id });
 ```
+
+Both produce the same report. Never split the sentence with extras:
+
+```ts
+// WRONG — extras wedged between the subject and the outcome. You read
+// "checkout … order_id … use cached prices" and lose the consequence.
+see(e).causes_the("checkout").extras({ order_id: order.id }).to("use cached prices");
+```
+
+Trailing extras are a TypeScript affordance. In the other Shipeasy SDKs `.to`
+is a hard terminal, so use the inline `.to(outcome, extras)` form (or
+`addExtras` below) there.
 
 ### Attach context from anywhere — `addExtras()`
 

@@ -553,11 +553,13 @@ export interface SeeOutcomeStep {
   /**
    * The user-visible impact: `.causes_the("checkout").to("use cached prices")`.
    *
-   * Extras may be folded into the terminal inline as `.to(outcome, extras)` —
-   * equivalent to a final `.extras(...)` (merged over any earlier `.extras`,
-   * later wins), so there is no ordering to remember. A stray `.extras` chained
-   * AFTER `.to` is still harmless: it merges too but only if the microtask
-   * hasn't flushed yet (same as before).
+   * Extras go AFTER the terminal — `.to(outcome).extras({...})` — so the
+   * consequence sentence stays whole; the chain dispatches on the next
+   * microtask, so the trailing extras still make the report. They may also be
+   * folded inline as `.to(outcome, extras)`, equivalent to a final
+   * `.extras(...)` (merged over any earlier `.extras`, later wins). Never wedge
+   * `.extras()` between `.causes_the` and `.to`: it splits the sentence in half
+   * and is hard to read.
    */
   to(outcome: string, extras?: SeeExtras): SeeExtrasTail;
 }
@@ -617,8 +619,9 @@ export function startSeeChain(getProblem: () => unknown, dispatch: SeeDispatch):
     to(o: string, x?: SeeExtras): SeeExtrasTail {
       outcome = String(o);
       // Inline extras fold in exactly like a final `.extras(...)` — merged over
-      // any earlier `.extras` (later wins). No ordering trap: `.to(outcome, x)`
-      // and `.extras(x).to(outcome)` are equivalent.
+      // any earlier `.extras` (later wins). `.to(outcome, x)` and
+      // `.to(outcome).extras(x)` are equivalent; both keep the consequence
+      // sentence whole, which `.extras(x).to(outcome)` does not.
       if (x && typeof x === "object") collected = { ...collected, ...x };
       return tail;
     },

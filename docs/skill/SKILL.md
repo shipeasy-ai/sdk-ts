@@ -102,8 +102,10 @@ Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/i18n.md> · snippets
 import { see, addExtras, runWithExtras } from "@shipeasy/sdk/server"; // or /client
 
 try { await submitOrder(order); }
-catch (e) { see(e).causes_the("checkout").to("use cached prices", { order_id: order.id }); }
-// extras inline on .to (no ordering to remember), or chained: .extras({...}).to(...)
+catch (e) { see(e).causes_the("checkout").to("use cached prices").extras({ order_id: order.id }); }
+// Extras go AFTER the terminal (TS defers dispatch a microtask) or inline on it
+// as .to(outcome, obj). NEVER .causes_the(x).extras({...}).to(y) — it splits the
+// consequence sentence in half.
 
 see.Violation("large query").causes_the("results").to("be trimmed").extras({ rows });
 see.ControlFlowException(e).because("because it wasn't an encoded Foo"); // expected — reports nothing

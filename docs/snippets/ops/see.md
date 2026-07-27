@@ -24,12 +24,19 @@ try {
 try {
   await charge(order);
 } catch (e) {
-  // .extras(obj)           structured fields attached to the report; call it
-  //                        before .to, or pass extras inline as .to(outcome, obj).
-  see(e).causes_the("checkout").extras({ order_id: order.id }).to("use cached prices");
+  // .extras(obj)           structured fields attached to the report. PREFERRED:
+  //                        chain it AFTER the terminal, so the consequence
+  //                        sentence stays whole and extras hang off the end.
+  //                        (The chain dispatches on the next microtask, so a
+  //                        post-.to .extras is still folded into the report.)
+  see(e).causes_the("checkout").to("use cached prices").extras({ order_id: order.id });
 
-  // equivalent — extras folded into the terminal, no ordering to remember:
+  // Also fine — extras folded into the terminal inline:
   see(e).causes_the("checkout").to("use cached prices", { order_id: order.id });
+
+  // NEVER: extras wedged between the subject and the outcome — it splits the
+  // consequence sentence in half and is hard to read.
+  // see(e).causes_the("checkout").extras({ order_id: order.id }).to("use cached prices");
 }
 ```
 
