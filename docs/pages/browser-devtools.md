@@ -29,7 +29,7 @@ The overlay opens with **Shift+Alt+S**, or by loading any page with `?se=1`.
 ## Emitting it from SSR
 
 The server handle builds the same tag from the ids you already configured, so
-nothing is repeated in the layout — and you can gate it on your own staff check:
+nothing is repeated in the layout:
 
 ```tsx
 import { shipeasy } from "@shipeasy/sdk/server";
@@ -41,6 +41,16 @@ const se = await shipeasy({
 });
 
 const dev = se.getDevtoolsData();          // pass { defer: false } to drop `defer`
+<script src={dev.src} {...dev.attrs} />
+```
+
+Adding it unconditionally is fine: the overlay only opens for someone with a
+signed-in Shipeasy session, so on a page where nobody has authenticated it
+renders nothing and says nothing. Gating it on your own staff or environment
+check is **optional** — worth it only if you'd rather the bundle not load for
+end users at all:
+
+```tsx
 {isStaff && <script src={dev.src} {...dev.attrs} />}
 ```
 

@@ -199,10 +199,20 @@ are the defaults every tag carries, so the emit calls take no arguments. Pass an
 the project id and public client key off the tag and opens with **Shift+Alt+S**
 or on any page loaded with `?se=1`. It is `defer`red unless you pass
 `{ defer: false }`: a developer tool never belongs on the critical rendering
-path. Render it for your own team only.
+path.
 
 ```tsx
 const dev = se.getDevtoolsData();
+<script src={dev.src} {...dev.attrs} />
+```
+
+Adding it unconditionally is fine: the overlay only opens for someone with a
+signed-in Shipeasy session, so on a page where nobody has authenticated it
+renders nothing and says nothing. Gating it on your own staff or environment
+check is **optional** — worth it only if you'd rather the bundle not load for
+end users at all:
+
+```tsx
 {isStaff && <script src={dev.src} {...dev.attrs} />}
 ```
 
