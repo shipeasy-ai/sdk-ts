@@ -1,6 +1,6 @@
 # Changelog
 
-## 9.0.0 (unreleased)
+## 9.0.0 (2026-07-27)
 
 ### Removed: the `/sdk/loader.js` script loader
 
