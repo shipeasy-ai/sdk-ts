@@ -1,5 +1,21 @@
 # Changelog
 
+## 9.0.1 (2026-07-27)
+
+### Docs: where `see()` extras go in the chain
+
+`causes_the(subject)` and `.to(outcome)` are two halves of one sentence, so the
+docs no longer teach `causes_the(x).extras({...}).to(y)` — wedging the debug
+payload between the subject and the outcome splits the consequence in half and
+is hard to read. That shape is now a documented hard ban.
+
+The preferred form in TypeScript is **trailing extras**,
+`.to(outcome).extras({...})`: the chain dispatches on the next microtask, so
+extras chained after the terminal still make the report. Inline
+`.to(outcome, extras)` remains equivalent, and `addExtras()` still buffers
+context from any layer. Docs, snippet, skill and the `to()` JSDoc updated to
+match; no behaviour change.
+
 ## 9.0.0 (2026-07-27)
 
 ### Removed: the `/sdk/loader.js` script loader
