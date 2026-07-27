@@ -76,10 +76,10 @@
     "@types/murmurhash-js": "^1.0.6",
     "@types/node": "^26.0.1",
     "axios": "^1.18.1",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.0",
     "tsup": "^8.3.0",
-    "typescript": "^6.0.3",
-    "vite": "^6.4.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
     "vitest": "^4.1.9",
     "wrangler": "^4.83.0"
   },
