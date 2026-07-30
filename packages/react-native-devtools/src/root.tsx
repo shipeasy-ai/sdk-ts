@@ -281,8 +281,7 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
                     backgroundColor: theme.bg,
                     borderColor: theme.border,
                     // Peek is content-sized between the two bounds; at full both
-                    // collapse onto the window height, so even a short form fills
-                    // the screen.
+                    // collapse onto 100%, so even a short form fills the screen.
                     minHeight: grow.interpolate({
                       inputRange: [0, 1],
                       outputRange: [PEEK_MIN, FULL],
@@ -313,9 +312,13 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
                 ]}
               >
                 <View
+                  accessible
                   accessibilityRole="button"
                   accessibilityLabel={atFull ? "Collapse the inspector" : "Expand the inspector"}
                   accessibilityHint="Drag up to fill the screen, down to dismiss"
+                  // A screen reader's activation never reaches the PanResponder,
+                  // so it gets the same toggle the tap gesture performs.
+                  onAccessibilityTap={() => settle(atFull ? 0 : 1)}
                   style={styles.handleRow}
                   {...drag.panHandlers}
                 >
