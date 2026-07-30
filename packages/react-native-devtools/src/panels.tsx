@@ -58,7 +58,7 @@ export function PanelList<T>(props: {
       {props.header}
       {items.length === 0 ? (
         <View style={styles.empty}>
-          <Muted>{needle ? "No matches." : props.emptyLabel}</Muted>
+          <Muted>{needle ? "No matches" : props.emptyLabel}</Muted>
         </View>
       ) : (
         <FlatList
@@ -92,7 +92,7 @@ export function NameCell(props: { name: string; sub?: string }): ReactNode {
 function NoBridgeHint(): ReactNode {
   return (
     <Muted style={styles.noBridge}>
-      Live values and forcing need the app to configure the Shipeasy client SDK.
+      Live values and forcing need the app to configure the Shipeasy client SDK
     </Muted>
   );
 }
@@ -228,7 +228,7 @@ export function GatesPanel(props: { client: DevtoolsClient }): ReactNode {
     <PanelList<GateRecord>
       query={query}
       keyFor={(g) => g.id}
-      emptyLabel="No feature gates yet."
+      emptyLabel="No feature gates yet"
       matches={(g, n) => g.name.toLowerCase().includes(n)}
       render={(g) => <GateRow gate={g} bridge={bridge} />}
     />
@@ -285,7 +285,7 @@ export function ConfigsPanel(props: {
     <PanelList<ConfigRecord>
       query={query}
       keyFor={(c) => c.id}
-      emptyLabel="No dynamic configs yet."
+      emptyLabel="No dynamic configs yet"
       matches={(c, n) => c.name.toLowerCase().includes(n)}
       render={(c) => <ConfigRow config={c} bridge={bridge} onOpen={props.onOpen} />}
     />
@@ -373,7 +373,7 @@ function ExperimentSection(props: {
       {open ? (
         items.length === 0 ? (
           <Muted style={styles.sectionEmpty}>
-            {loading ? "Loading…" : `No ${props.label.toLowerCase()} experiments.`}
+            {loading ? "Loading…" : `No ${props.label.toLowerCase()} experiments`}
           </Muted>
         ) : (
           items.map((e) => (

@@ -10,7 +10,7 @@ import { useFeatureForm, useIdentityEmail } from "./hooks";
 import type { DevtoolsConfig } from "./hooks";
 import { ControlledField, ScreenshotAttach } from "./bug-form";
 import { CreateSuccess } from "./create-success";
-import { Button, Muted, Title, useTheme } from "./ui";
+import { Button, Muted, useTheme } from "./ui";
 
 export function FeatureForm(props: {
   config: DevtoolsConfig;
@@ -46,8 +46,8 @@ export function FeatureForm(props: {
       contentContainerStyle={styles.form}
       showsVerticalScrollIndicator={false}
     >
-      <Title style={styles.heading}>Request a feature</Title>
-      <Muted style={styles.blurb}>What's missing, and the workflow it would unblock.</Muted>
+      {/* No heading — the sheet header already names this screen. */}
+      <Muted style={styles.blurb}>What's missing, and the workflow it would unblock</Muted>
       <ControlledField
         control={form.control}
         name="title"
@@ -89,7 +89,7 @@ export function FeatureForm(props: {
           label="Your email"
           labelHint="optional"
           placeholder="you@example.com"
-          hint="Only used to follow up on this request."
+          hint="Only used to follow up on this request"
           autoCapitalize="none"
           keyboardType="email-address"
         />
@@ -116,10 +116,9 @@ export function FeatureForm(props: {
 }
 
 const styles = StyleSheet.create({
-  blurb: { marginBottom: 18 },
+  blurb: { marginBottom: 18, marginTop: 2 },
   cancel: { marginTop: 6 },
   form: { paddingBottom: 32, paddingTop: 6 },
-  heading: { marginBottom: 4 },
   identityDot: { borderRadius: 999, height: 8, width: 8 },
   identityRow: {
     alignItems: "center",

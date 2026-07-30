@@ -10,7 +10,7 @@ opted in.
 
 | Entrypoint | What it is | Peer deps |
 | --- | --- | --- |
-| `@shipeasy/react-native-devtools` | `<ShipeasyDevtools/>` overlay + hooks | `react`, `react-native`, `react-hook-form`, `@hookform/resolvers`, `zod`, plus optional `expo-*` + `react-native-svg` (below) |
+| `@shipeasy/react-native-devtools` | `<ShipeasyDevtools/>` overlay + hooks | `react`, `react-native`, `react-hook-form`, `@hookform/resolvers`, `zod`, plus optional `expo-*`, `react-native-svg` + `react-native-safe-area-context` (below) |
 | `@shipeasy/devtools-core` | Headless core (client, auth, public bug intake, form schemas) | `zod` |
 | `@shipeasy/browser-devtools` | The web overlay (see its page) | — |
 
@@ -52,7 +52,7 @@ the Expo peers you want (each degrades gracefully when absent):
 
 ```bash
 npm install @shipeasy/react-native-devtools react-hook-form @hookform/resolvers
-npx expo install expo-web-browser expo-crypto expo-secure-store expo-sensors expo-image-picker react-native-view-shot react-native-svg
+npx expo install expo-web-browser expo-crypto expo-secure-store expo-sensors expo-image-picker react-native-view-shot react-native-svg react-native-safe-area-context
 ```
 
 `@shipeasy/react-native-devtools` pulls `@shipeasy/devtools-core` with it and
@@ -72,6 +72,25 @@ Engine. Keep it out of production builds the same way you would any dev tool.
 - `react-native-view-shot` — **capture the current screen** as a report
   attachment (the overlay hides itself for the shot). Without it the capture
   button is hidden.
+- `react-native-safe-area-context` — real window insets, so the sheet's
+  bottom-most action clears the home indicator / gesture bar. Already present in
+  any Expo Router app. Absent → a conservative constant inset is used.
+
+## Sizing the sheet
+
+The overlay is a bottom sheet with two snap points, driven by the grab handle at
+its top edge:
+
+- **Peek** (how it opens) — content-sized between 55% and 88% of the window, so a
+  two-field form stays a two-field form.
+- **Full** — the sheet covers the whole app, status-bar strip included. Useful for
+  the long screens (evaluation flows, the ops queue, a nested config tree).
+
+**Drag the handle up** to grow the sheet, or just **tap** it to toggle peek ↔
+full. Dragging down collapses it, and dragging down again from peek dismisses it
+— as does tapping the dimmed area above the sheet, or the header **✕** (which is
+always there, logged in or out). The last snap point is remembered for the next
+open.
 
 ## Logging in
 
@@ -131,6 +150,9 @@ overlay); tapping a row opens that panel with a **‹ Back** affordance:
   (all types) and, for bugs/features, attachment previews + screenshot upload
   (expo-image-picker). The detail's Back is the sheet header's ‹ Back (no
   per-panel button) — panels drive it through the `SheetNav` context.
+- **Translations** — the project's i18n profiles and their keys: pick a profile,
+  search, and edit a key's value straight onto that profile. (The web overlay's
+  click-to-edit-in-page mode is DOM-only and has no RN equivalent.)
 - **Events** — the live SDK event stream (identify evaluations, override
   mutations), captured even while the overlay is closed.
 
@@ -138,6 +160,9 @@ The header shows a **⚡ N overrides** pill and an accent underline whenever any
 override is active; tapping the pill opens **Active overrides** — every forced
 flag / config / experiment variant this session, each clearable individually or
 all at once (`OverridesPanel`, also exported).
+
+The menu also carries the public **Report a bug** / **Request a feature** rows,
+and **Log out** at its foot.
 
 ## Live values and forcing
 

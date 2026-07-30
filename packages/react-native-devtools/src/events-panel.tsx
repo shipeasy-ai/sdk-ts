@@ -25,8 +25,8 @@ export function EventsPanel(): ReactNode {
       <CenterState>
         <Muted style={styles.centerText}>
           {bridge
-            ? "SDK evaluations and overrides will stream here as the app interacts with Shipeasy."
-            : "Configure the Shipeasy client SDK in this app to capture its event stream."}
+            ? "SDK evaluations and overrides will stream here as the app interacts with Shipeasy"
+            : "Configure the Shipeasy client SDK in this app to capture its event stream"}
         </Muted>
       </CenterState>
     );

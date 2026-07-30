@@ -9,16 +9,21 @@
 //                Report a bug
 //
 // Hosts without expo-sensors (or wanting a menu entry) call `ref.open()`.
+//
+// The sheet itself is draggable: it opens content-sized (a short form stays
+// short) and the grab handle pulls it up to cover the whole app — see
+// ./sheet-snap for the snap math.
 
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,12 +36,14 @@ import { ConfigViewerScreen } from "./config-viewer";
 import { ExperimentDetailScreen } from "./experiment-detail";
 import { GatesPanel, ConfigsPanel, ExperimentsPanel } from "./panels";
 import { FeedbackPanel } from "./feedback-panel";
+import { I18nPanel } from "./i18n-panel";
 import { UserPanel } from "./user-panel";
 import { EventsPanel } from "./events-panel";
 import { OverridesPanel } from "./overrides-panel";
 import { resolveTheme } from "./theme";
 import type { DevtoolsTheme } from "./theme";
-import { canCaptureScreen, captureScreenShot } from "./expo-adapters";
+import { canCaptureScreen, captureScreenShot, getSafeAreaInsets } from "./expo-adapters";
+import { growFromDrag, isHandleTap, shouldDismiss, snapTarget } from "./sheet-snap";
 import { Icon } from "./icons";
 import type { DevtoolsIconName } from "./icons";
 import {
@@ -78,6 +85,20 @@ export interface ShipeasyDevtoolsProps {
   bugContext?: Record<string, unknown>;
 }
 
+// The two snap points, as fractions of the sheet's PARENT (the keyboard-avoiding
+// backdrop) rather than of the window: with the keyboard up that parent is
+// already shorter, so a full-screen sheet still ends above the keyboard instead
+// of overflowing behind it. Peek keeps the pre-drag behaviour — content-sized
+// between the two bounds.
+const PEEK_MIN = "55%";
+const PEEK_MAX = "88%";
+const FULL = "100%";
+
+// Used when react-native-safe-area-context isn't installed: enough bottom room
+// to clear an iPhone home indicator, a hair on Android (where the gesture bar
+// only overlaps in edge-to-edge mode).
+const FALLBACK_INSETS = Platform.OS === "ios" ? { top: 20, bottom: 24 } : { top: 0, bottom: 12 };
+
 type Screen =
   | "home"
   | "bug"
@@ -106,6 +127,7 @@ const SECTIONS: Array<{
   { key: "configs", label: "Configs", icon: "configs", module: "configs" },
   { key: "experiments", label: "Experiments", icon: "experiments", module: "experiments" },
   { key: "feedback", label: "Feedback", icon: "feedback", module: "feedback" },
+  { key: "i18n", label: "Translations", icon: "i18n", module: "translations" },
   { key: "events", label: "Events", icon: "events", module: "events" },
 ];
 
@@ -118,13 +140,87 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
     // Start the events ring at mount so activity before the first open shows.
     ensureEventCapture();
 
+    // ── sheet size ───────────────────────────────────────────────────────────
+    // `grow` drives every size-ish style: 0 = peek (content-sized, 55…88% of the
+    // available height), 1 = full. It's a plain JS-driven Animated.Value —
+    // layout props (min/maxHeight, radius, padding) can't run on the native
+    // driver. `slide` is the drag-down-to-dismiss offset.
+    const insets = useMemo(() => getSafeAreaInsets() ?? FALLBACK_INSETS, []);
+    const grow = useRef(new Animated.Value(0)).current;
+    const slide = useRef(new Animated.Value(0)).current;
+    // Mirror of `grow`'s settled value — a gesture needs it synchronously, and
+    // Animated.Value has no public getter.
+    const growAt = useRef(0);
+
+    // Mirrors the settled snap point for the handle's accessibility label only
+    // (the visuals all ride the Animated value).
+    const [atFull, setAtFull] = useState(false);
+
+    const settle = useCallback(
+      (to: 0 | 1) => {
+        growAt.current = to;
+        setAtFull(to === 1);
+        Animated.spring(grow, {
+          toValue: to,
+          bounciness: 0,
+          speed: 14,
+          useNativeDriver: false,
+        }).start();
+      },
+      [grow],
+    );
+
     const open = useCallback(() => {
       setScreen("home");
+      slide.setValue(0);
       setVisible(true);
-    }, []);
+    }, [slide]);
+    // Deliberately does NOT reset `slide` — the Modal's own slide-out plays from
+    // wherever the drag left the sheet; `open` resets it for the next mount.
     const close = useCallback(() => setVisible(false), []);
     useImperativeHandle(ref, () => ({ open, close }), [open, close]);
     useShakeToOpen(open, props.shake);
+
+    // Drag the grab handle: up expands towards full screen, down collapses and
+    // then dismisses. A tap (no travel) toggles peek ↔ full, so expanding never
+    // requires a drag.
+    const drag = useMemo(
+      () =>
+        PanResponder.create({
+          onStartShouldSetPanResponder: () => true,
+          onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 3,
+          onPanResponderMove: (_e, g) => {
+            const from = growAt.current;
+            grow.setValue(growFromDrag(from, g.dy));
+            // Dragging down from peek (only) previews the dismiss — from an
+            // expanded sheet the same drag is just a collapse.
+            slide.setValue(from === 0 && g.dy > 0 ? g.dy : 0);
+          },
+          onPanResponderRelease: (_e, g) => {
+            if (isHandleTap(g.dx, g.dy)) {
+              settle(growAt.current === 1 ? 0 : 1);
+              return;
+            }
+            const from = growAt.current;
+            const next = growFromDrag(from, g.dy);
+            if (shouldDismiss(from, g.dy, g.vy)) {
+              close();
+              return;
+            }
+            Animated.timing(slide, {
+              toValue: 0,
+              duration: 120,
+              useNativeDriver: false,
+            }).start();
+            settle(snapTarget(next, g.vy));
+          },
+          onPanResponderTerminate: () => {
+            slide.setValue(0);
+            settle(growAt.current === 1 ? 1 : 0);
+          },
+        }),
+      [close, grow, settle, slide],
+    );
 
     const config: DevtoolsConfig = useMemo(
       () => ({
@@ -171,10 +267,58 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
               behavior={Platform.OS === "ios" ? "padding" : "height"}
               style={[styles.backdrop, capturing && styles.captureHidden]}
             >
-              <SafeAreaView
-                style={[styles.sheet, { backgroundColor: theme.bg, borderColor: theme.border }]}
+              {/* The dimmed area above the sheet dismisses it (it shrinks to
+                  nothing once the sheet is pulled full-screen). */}
+              <Pressable
+                accessibilityLabel="Close the inspector"
+                onPress={close}
+                style={styles.backdropTap}
+              />
+              <Animated.View
+                style={[
+                  styles.sheet,
+                  {
+                    backgroundColor: theme.bg,
+                    borderColor: theme.border,
+                    // Peek is content-sized between the two bounds; at full both
+                    // collapse onto the window height, so even a short form fills
+                    // the screen.
+                    minHeight: grow.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [PEEK_MIN, FULL],
+                    }),
+                    maxHeight: grow.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [PEEK_MAX, FULL],
+                    }),
+                    borderTopLeftRadius: grow.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [16, 0],
+                    }),
+                    borderTopRightRadius: grow.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [16, 0],
+                    }),
+                    // Full screen means the sheet owns the status-bar strip too.
+                    paddingTop: grow.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, insets.top],
+                    }),
+                    // Keeps the bottom-most action (Connect / Submit / Cancel)
+                    // clear of the home indicator — react-native's SafeAreaView
+                    // measures zero inside a Modal, which is what clipped it.
+                    paddingBottom: Math.max(insets.bottom, 8),
+                    transform: [{ translateY: slide }],
+                  },
+                ]}
               >
-                <View style={styles.handleRow}>
+                <View
+                  accessibilityRole="button"
+                  accessibilityLabel={atFull ? "Collapse the inspector" : "Expand the inspector"}
+                  accessibilityHint="Drag up to fill the screen, down to dismiss"
+                  style={styles.handleRow}
+                  {...drag.panHandlers}
+                >
                   <View style={[styles.handle, { backgroundColor: theme.border }]} />
                 </View>
                 <Sheet
@@ -184,7 +328,7 @@ export const ShipeasyDevtools = forwardRef<DevtoolsHandle, ShipeasyDevtoolsProps
                   close={close}
                   bugContext={props.bugContext}
                 />
-              </SafeAreaView>
+              </Animated.View>
             </KeyboardAvoidingView>
           </Modal>
         </ScreenCaptureContext.Provider>
@@ -324,19 +468,17 @@ function Sheet(props: {
               </Text>
             </Pressable>
           ) : null}
-          {auth.session ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Log out"
-              onPress={() => void auth.logout()}
-            >
-              <Text style={[styles.logout, { color: t.accent }]}>Log out</Text>
-            </Pressable>
-          ) : (
-            <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={props.close}>
-              <Text style={[styles.closeGlyph, { color: t.fgMuted }]}>✕</Text>
-            </Pressable>
-          )}
+          {/* Close is ALWAYS here — a logged-in session used to replace it with
+              "Log out", leaving no way to dismiss the sheet on iOS (no hardware
+              back). Log out now lives at the foot of the section menu. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            hitSlop={8}
+            onPress={props.close}
+          >
+            <Text style={[styles.closeGlyph, { color: t.fgMuted }]}>✕</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -391,6 +533,8 @@ function Sheet(props: {
                   config={props.config}
                   bugContext={props.bugContext}
                 />
+              ) : activeSection.key === "i18n" ? (
+                <I18nPanel client={auth.client} />
               ) : activeSection.key === "events" ? (
                 <EventsPanel />
               ) : (
@@ -414,6 +558,19 @@ function Sheet(props: {
               tone="accent"
               onPress={() => setScreen("bug")}
             />
+            <SectionRow
+              icon="feature"
+              label="Request a feature"
+              onPress={() => setScreen("feature")}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Log out"
+              onPress={() => void auth.logout()}
+              style={({ pressed }) => [styles.menuLogout, { opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Text style={[styles.menuLogoutText, { color: t.fgMuted }]}>Log out</Text>
+            </Pressable>
           </ScrollView>
         )
       ) : (
@@ -555,7 +712,7 @@ export function HomeScreen(props: {
         <BrandMark />
         <Title style={styles.homeWordmark}>Shipeasy</Title>
         <Muted style={styles.homeTagline}>
-          The toolbox behind this app — flags, experiments and feedback.
+          The toolbox behind this app — flags, experiments and feedback
         </Muted>
       </View>
 
@@ -564,13 +721,13 @@ export function HomeScreen(props: {
           <ActionCard
             glyph="!"
             title="Report a bug"
-            sub="Something broken? Send it straight to the team."
+            sub="Something broken? Send it straight to the team"
             onPress={props.onReportBug}
           />
           <ActionCard
             glyph="+"
             title="Request a feature"
-            sub="Tell the team what this app is missing."
+            sub="Tell the team what this app is missing"
             onPress={props.onRequestFeature}
           />
         </View>
@@ -587,7 +744,7 @@ export function HomeScreen(props: {
         loading={props.connecting === true}
       />
       <Muted style={styles.homeConnectHint}>
-        Team members: log in to inspect gates, configs, experiments and live events.
+        Team members: log in to inspect gates, configs, experiments and live events
       </Muted>
     </View>
   );
@@ -616,14 +773,15 @@ const styles = StyleSheet.create({
   actionTitle: { fontSize: 15, fontWeight: "600" },
   backChevron: { fontSize: 24, fontWeight: "500", marginTop: -2 },
   backdrop: { backgroundColor: "rgba(0,0,0,0.55)", flex: 1, justifyContent: "flex-end" },
+  backdropTap: { flex: 1 },
   brandMark: { alignItems: "center", justifyContent: "center" },
   // Invisible but mounted — captureScreen must shoot the app, and toggling the
   // Modal instead would unmount the form state.
   captureHidden: { opacity: 0 },
   closeGlyph: { fontSize: 18, padding: 4 },
-  handle: { borderRadius: 999, height: 4, width: 36 },
-  handleRow: { alignItems: "center", paddingBottom: 2, paddingTop: 8 },
-  footerButton: { marginHorizontal: 16, marginVertical: 10 },
+  // Generous vertical padding: this row is the drag target, not just decoration.
+  handle: { borderRadius: 999, height: 4, width: 40 },
+  handleRow: { alignItems: "center", paddingBottom: 6, paddingTop: 10 },
   header: {
     alignItems: "center",
     borderBottomWidth: 1,
@@ -647,16 +805,13 @@ const styles = StyleSheet.create({
   homeTagline: { paddingHorizontal: 24, textAlign: "center" },
   homeWordmark: { fontSize: 20, letterSpacing: -0.4 },
   loginError: { fontSize: 13, textAlign: "center" },
-  logout: { fontSize: 13, fontWeight: "600" },
   menu: { gap: 10, padding: 16, paddingBottom: 24 },
+  menuLogout: { alignItems: "center", paddingTop: 6 },
+  menuLogoutText: { fontSize: 13, fontWeight: "600" },
   panel: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
-  sheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderWidth: 1,
-    maxHeight: "88%",
-    minHeight: "55%",
-  },
+  // Height, top radius and top padding are animated inline (see the drag
+  // handling above) — only the chrome that never changes lives here.
+  sheet: { borderWidth: 1, overflow: "hidden" },
   sheetInner: { flex: 1 },
   sectionChevron: { fontSize: 24, fontWeight: "400", marginTop: -2 },
   sectionGlyphWrap: {

@@ -42,7 +42,7 @@ export function OverridesPanel(props: { bridge: DevtoolsEngineBridge | null }): 
     return (
       <View style={styles.empty}>
         <Muted style={styles.emptyText}>
-          Overrides need the app to configure the Shipeasy client SDK.
+          Overrides need the app to configure the Shipeasy client SDK
         </Muted>
       </View>
     );
@@ -60,7 +60,7 @@ export function OverridesPanel(props: { bridge: DevtoolsEngineBridge | null }): 
         <Text style={[styles.emptyGlyph, { color: t.fgMuted }]}>⚡</Text>
         <Muted style={styles.emptyText}>
           No active overrides. Force a flag or experiment variant and it shows up here — and applies
-          live in the running app.
+          live in the running app
         </Muted>
       </View>
     );

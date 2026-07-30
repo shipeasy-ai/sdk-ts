@@ -15,6 +15,8 @@
 //   • react-native-view-shot — capture the CURRENT app screen for a report
 //     (the overlay hides itself for the shot). Without it the capture button
 //     is hidden.
+//   • react-native-safe-area-context — real window insets for the bottom-
+//     anchored sheet. Without it we fall back to a conservative constant.
 
 import type { AuthSessionResult, DeviceAuthAdapters } from "@shipeasy/devtools-core/auth";
 
@@ -55,6 +57,13 @@ export interface ImagePickerModule {
 }
 export interface ViewShotModule {
   captureScreen(options: { format: string; quality: number; result: string }): Promise<string>;
+}
+export interface EdgeInsets {
+  top: number;
+  bottom: number;
+}
+interface SafeAreaModule {
+  initialWindowMetrics?: { insets?: Partial<EdgeInsets> } | null;
 }
 /** A captured screen, ready to preview (`uri` renders in an <Image>) and to
  *  upload (`fetch(uri)` → Blob — RN's fetch resolves local file:// URIs). */
@@ -106,7 +115,29 @@ try {
 } catch {
   /* optional — the capture-screen button hides */
 }
+let safeArea: SafeAreaModule | null = null;
+try {
+  safeArea = require("react-native-safe-area-context") as SafeAreaModule;
+} catch {
+  /* optional — falls back to a constant inset */
+}
 /* eslint-enable @typescript-eslint/no-require-imports */
+
+/** Window safe-area insets for the bottom-anchored sheet, or null when
+ *  react-native-safe-area-context isn't installed (the caller falls back).
+ *
+ *  Read from `initialWindowMetrics` — the module-level snapshot taken from the
+ *  native constants — NOT from `useSafeAreaInsets()`: the overlay renders inside
+ *  a `<Modal>`, which is its own native host view, so the app's SafeAreaProvider
+ *  context doesn't reach it (and react-native's own `<SafeAreaView>` measures
+ *  zero there — that's what let the sheet's bottom button sit under the home
+ *  indicator). Static by design: rotation is not worth re-plumbing here. */
+export function getSafeAreaInsets(): EdgeInsets | null {
+  const insets = safeArea?.initialWindowMetrics?.insets;
+  if (!insets) return null;
+  if (typeof insets.top !== "number" || typeof insets.bottom !== "number") return null;
+  return { top: insets.top, bottom: insets.bottom };
+}
 
 export function getAccelerometer(): AccelerometerModule | null {
   return expoSensors?.Accelerometer ?? null;

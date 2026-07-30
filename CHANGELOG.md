@@ -1,5 +1,47 @@
 # Changelog
 
+## react-native-devtools 1.1.0 (2026-07-30)
+
+Overlay-only release (`@shipeasy/react-native-devtools`); `@shipeasy/sdk` itself
+is unchanged.
+
+### The sheet resizes — drag it up to cover the app
+
+The overlay was capped at 88% of the window and sized to its content, so the long
+screens (a gate's evaluation flow, the ops queue, a nested config tree) read
+through a letterbox. It now has two snap points driven by the grab handle: **peek**
+(content-sized, 55…88% — how it opens) and **full** (the whole window, status-bar
+strip included). Drag the handle up to grow it, tap it to toggle, drag down to
+collapse and again to dismiss. Tapping the dimmed backdrop dismisses it too, and
+the sheet remembers the last snap point.
+
+### Fixed: the bottom-most action was clipped under the home indicator
+
+The sheet used react-native's `<SafeAreaView>`, which measures **zero insets
+inside a `<Modal>`** — so on iOS the last control on a screen (Connect to
+Shipeasy, Submit, Cancel) sat under the home indicator. The sheet now pads itself
+with the real window insets, read from `react-native-safe-area-context`'s
+`initialWindowMetrics` (a new OPTIONAL peer — absent, a conservative constant is
+used).
+
+### ✕ is always in the header
+
+A logged-in session replaced the header's close button with "Log out", leaving no
+way to dismiss the sheet on iOS. Close is now permanent; **Log out** moved to the
+foot of the section menu.
+
+### Translations panel is reachable
+
+`I18nPanel` shipped but no menu row ever opened it. It is now a module-gated
+section (`translations`), and **Request a feature** joins **Report a bug** in the
+logged-in menu.
+
+### UI pass
+
+Trailing full stops dropped from overlay copy (house style), the duplicate form
+heading removed (the sheet header already names the screen), and the grab handle
+is a real drag target.
+
 ## 9.0.1 (2026-07-27)
 
 ### Docs: where `see()` extras go in the chain

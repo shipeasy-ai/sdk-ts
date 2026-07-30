@@ -30,10 +30,10 @@ export function CreateSuccess(props: {
       : { color: "#f59e0b", label: "Pending review" };
 
   const note = props.deduped
-    ? "This matches an item already in the queue — we bumped it instead of filing a duplicate."
+    ? "This matches an item already in the queue — we bumped it instead of filing a duplicate"
     : props.authed
-      ? `It's in the project's triage queue and will be reviewed shortly.`
-      : "Public reports are approved by the team before they enter the queue — we'll take it from here.";
+      ? "It's in the project's triage queue and will be reviewed shortly"
+      : "Public reports are approved by the team before they enter the queue — we'll take it from here";
 
   return (
     <ScrollView contentContainerStyle={styles.wrap} showsVerticalScrollIndicator={false}>
@@ -45,7 +45,7 @@ export function CreateSuccess(props: {
 
       <Title style={styles.title}>{props.kind === "bug" ? "Bug reported" : "Feature requested"}</Title>
       <Muted style={styles.sub}>
-        {props.kind === "bug" ? "Thanks for the report." : "Thanks for the idea."}
+        {props.kind === "bug" ? "Thanks for the report" : "Thanks for the idea"}
       </Muted>
 
       <View style={[styles.card, { backgroundColor: t.surface, borderColor: t.border, borderRadius: t.radius }]}>
@@ -80,8 +80,8 @@ export function CreateSuccess(props: {
 
       <Muted style={styles.footHint}>
         {props.authed
-          ? `Filed as ${noun.toLowerCase()} · you can track it in the Feedback panel.`
-          : "You can close the inspector — no account needed."}
+          ? `Filed as ${noun.toLowerCase()} · you can track it in the Feedback panel`
+          : "You can close the inspector — no account needed"}
       </Muted>
     </ScrollView>
   );

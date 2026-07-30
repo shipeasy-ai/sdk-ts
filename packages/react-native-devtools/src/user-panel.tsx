@@ -45,7 +45,7 @@ export function UserPanel(): ReactNode {
     return (
       <CenterState>
         <Muted style={styles.centerText}>
-          The app hasn't configured the Shipeasy client SDK — no user to show.
+          The app hasn't configured the Shipeasy client SDK — no user to show
         </Muted>
       </CenterState>
     );
@@ -56,7 +56,7 @@ export function UserPanel(): ReactNode {
     return (
       <CenterState>
         <Muted style={styles.centerText}>
-          No identified user yet. Once the app calls identify(), the user's properties show here.
+          No identified user yet. Once the app calls identify(), the user's properties show here
         </Muted>
       </CenterState>
     );
@@ -93,14 +93,14 @@ export function UserPanel(): ReactNode {
 
       <SectionLabel hint="from identify()">User properties</SectionLabel>
       {callerFields.length === 0 ? (
-        <Muted>The app called identify() with no properties.</Muted>
+        <Muted>The app called identify() with no properties</Muted>
       ) : (
         callerFields.map(([k, v]) => <KV key={k} k={`user.${k}`} v={render(v)} />)
       )}
 
       <SectionLabel hint="auto-collected">Attributes</SectionLabel>
       {autoFields.length === 0 ? (
-        <Muted>No auto-collected attributes.</Muted>
+        <Muted>No auto-collected attributes</Muted>
       ) : (
         autoFields.map(([k, v]) => <KV key={k} k={k} v={render(v)} accent />)
       )}

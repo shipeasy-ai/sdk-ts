@@ -185,7 +185,8 @@ Shake several times fast to open (expo-sensors; or `ref.open()`). Login runs
 device-auth via the app's own scheme (PKCE — the deep link never carries the
 token) and unlocks User / Gates / Configs / Experiments / Feedback / I18n /
 Events panels, with live value forcing through the SDK's programmatic
-overrides. Install it alongside the SDK — `npm install @shipeasy/react-native-devtools
+overrides. The sheet opens content-sized; drag its grab handle up — or tap it —
+to fill the screen, drag down to dismiss. Install it alongside the SDK — `npm install @shipeasy/react-native-devtools
 react-hook-form @hookform/resolvers` — it is a separate package so an app that
 only reads flags never pulls a UI toolchain in.
 Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/react-native-devtools.md>

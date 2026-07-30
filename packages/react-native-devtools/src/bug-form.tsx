@@ -22,7 +22,7 @@ import type { CapturedScreen } from "./expo-adapters";
 import { useBugForm, useIdentityEmail, useScreenCapture } from "./hooks";
 import type { DevtoolsConfig } from "./hooks";
 import { CreateSuccess } from "./create-success";
-import { Button, Field, Muted, Title, useTheme } from "./ui";
+import { Button, Field, Muted, useTheme } from "./ui";
 
 /** Auto-attached system context (mirrors the web form's auto-captured
  *  pageUrl/userAgent — here it's the platform + app metadata the host gives). */
@@ -169,10 +169,11 @@ export function BugForm(props: {
       contentContainerStyle={styles.form}
       showsVerticalScrollIndicator={false}
     >
-      <Title style={styles.heading}>Report a bug</Title>
+      {/* No heading: the sheet header already names this screen ("Report a bug"
+          / "New bug"), and a phone sheet can't spare the duplicate line. */}
       <Muted style={styles.blurb}>
         Goes straight to the project's triage queue — the more you can tell us, the faster it's
-        fixed.
+        fixed
       </Muted>
 
       <ControlledField
@@ -212,7 +213,7 @@ export function BugForm(props: {
           label="Your email"
           labelHint="optional"
           placeholder="you@example.com"
-          hint="Only used to follow up on this report."
+          hint="Only used to follow up on this report"
           autoCapitalize="none"
           keyboardType="email-address"
         />
@@ -239,10 +240,9 @@ export function BugForm(props: {
 }
 
 const styles = StyleSheet.create({
-  blurb: { marginBottom: 18 },
+  blurb: { marginBottom: 18, marginTop: 2 },
   cancel: { marginTop: 6 },
   form: { paddingBottom: 32, paddingTop: 6 },
-  heading: { marginBottom: 4 },
   identityDot: { borderRadius: 999, height: 8, width: 8 },
   identityRow: {
     alignItems: "center",

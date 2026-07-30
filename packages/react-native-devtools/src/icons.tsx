@@ -35,7 +35,8 @@ export type DevtoolsIconName =
   | "i18n"
   | "feedback"
   | "events"
-  | "bug";
+  | "bug"
+  | "feature";
 
 /** Text-glyph fallback for runtimes without react-native-svg. */
 const FALLBACK: Record<DevtoolsIconName, string> = {
@@ -47,6 +48,7 @@ const FALLBACK: Record<DevtoolsIconName, string> = {
   feedback: "🐞",
   events: "📈",
   bug: "🐞",
+  feature: "💡",
 };
 
 /** The Lucide primitives for each icon, emitted as react-native-svg children.
@@ -105,6 +107,14 @@ function shapes(name: DevtoolsIconName): ReactNode {
           <Path d="M21 18l-3-2" />
           <Path d="M3 6l3 2" />
           <Path d="M21 6l-3 2" />
+        </>
+      );
+    case "feature": // lucide "lightbulb"
+      return (
+        <>
+          <Path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5a6 6 0 0 0-12 0c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5" />
+          <Path d="M9 18h6" />
+          <Path d="M10 22h4" />
         </>
       );
     case "events": // lucide "activity"

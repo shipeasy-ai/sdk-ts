@@ -271,7 +271,7 @@ export function useDevtoolsAuth(
       await storage.set(SESSION_KEY, JSON.stringify(s)).catch(() => {});
     } catch (e) {
       if (!(e instanceof LoginCancelled)) {
-        setError(e instanceof Error ? e.message : "Login failed. Please try again.");
+        setError(e instanceof Error ? e.message : "Login failed. Please try again");
       }
     } finally {
       setLoggingIn(false);
@@ -560,9 +560,9 @@ export function useBugForm(args: {
       } catch (e) {
         if (e instanceof PublicTicketsDisabled) {
           setPublicDisabled(true);
-          setSubmitError("Public bug reporting is not enabled for this project.");
+          setSubmitError("Public bug reporting is not enabled for this project");
         } else {
-          setSubmitError(e instanceof Error ? e.message : "Submit failed. Please try again.");
+          setSubmitError(e instanceof Error ? e.message : "Submit failed. Please try again");
         }
       }
     })();
@@ -658,9 +658,9 @@ export function useFeatureForm(args: {
       } catch (e) {
         if (e instanceof PublicTicketsDisabled) {
           setPublicDisabled(true);
-          setSubmitError("Public feature requests are not enabled for this project.");
+          setSubmitError("Public feature requests are not enabled for this project");
         } else {
-          setSubmitError(e instanceof Error ? e.message : "Submit failed. Please try again.");
+          setSubmitError(e instanceof Error ? e.message : "Submit failed. Please try again");
         }
       }
     })();

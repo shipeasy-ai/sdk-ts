@@ -170,7 +170,7 @@ function DetailView(props: {
       await client.updateOps(id, p);
       query.refresh();
     } catch (e) {
-      setMutateError(e instanceof Error ? e.message : "Update failed.");
+      setMutateError(e instanceof Error ? e.message : "Update failed");
     } finally {
       setMutating(false);
     }
@@ -193,7 +193,7 @@ function DetailView(props: {
         query.refresh();
       }
     } catch (e) {
-      setMutateError(e instanceof Error ? e.message : "Upload failed.");
+      setMutateError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }
@@ -261,7 +261,7 @@ function DetailView(props: {
       ) : null}
       {!editableContent ? (
         <Muted style={styles.autoNote}>
-          Auto-filed {label(kind)} ticket — its content isn’t editable here.
+          Auto-filed {label(kind)} ticket — its content isn't editable here
         </Muted>
       ) : null}
 
@@ -447,7 +447,7 @@ export function FeedbackPanel(props: {
         <ErrorState message={query.error} onRetry={query.refresh} />
       ) : items.length === 0 ? (
         <View style={styles.empty}>
-          <Muted>{needle ? "No matches." : "Nothing open here."}</Muted>
+          <Muted>{needle ? "No matches" : "Nothing open here"}</Muted>
         </View>
       ) : (
         <ScrollView

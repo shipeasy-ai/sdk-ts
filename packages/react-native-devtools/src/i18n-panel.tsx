@@ -42,7 +42,7 @@ function KeyRow(props: {
       setEditing(false);
       props.onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed.");
+      setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -129,7 +129,7 @@ export function I18nPanel(props: { client: DevtoolsClient }): ReactNode {
         <ErrorState message={keysQuery.error} onRetry={keysQuery.refresh} />
       ) : keys.length === 0 ? (
         <View style={styles.empty}>
-          <Muted>{needle ? "No matching keys." : "No translation keys yet."}</Muted>
+          <Muted>{needle ? "No matching keys" : "No translation keys yet"}</Muted>
         </View>
       ) : (
         <FlatList

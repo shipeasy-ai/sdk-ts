@@ -86,7 +86,7 @@ function VariantNode(props: {
       {open ? (
         <View style={styles.variantBody}>
           {fields.length === 0 ? (
-            <Muted>No params.</Muted>
+            <Muted>No params</Muted>
           ) : (
             fields.map((f) => (
               <ValueTree
@@ -174,7 +174,7 @@ export function ExperimentDetailScreen(props: {
         </ChipRow>
       ) : (
         <Muted style={styles.noBridge}>
-          Forcing a variant needs the app to configure the Shipeasy client SDK.
+          Forcing a variant needs the app to configure the Shipeasy client SDK
         </Muted>
       )}
 
@@ -187,7 +187,7 @@ export function ExperimentDetailScreen(props: {
         ))
       ) : (
         <Muted>
-          {universes.loading ? "Loading universe…" : "This universe declares no params."}
+          {universes.loading ? "Loading universe…" : "This universe declares no params"}
         </Muted>
       )}
 
