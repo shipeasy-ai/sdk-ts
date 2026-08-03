@@ -254,6 +254,22 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
   const root = document.createElement("div");
   shadow.appendChild(root);
 
+  // Isolate keyboard events from the host page. Events that originate inside
+  // this open shadow tree retarget to `#shipeasy-devtools` when they reach
+  // window/document listeners, so host-app hotkey guards that only check
+  // INPUT/TEXTAREA (e.g. "G _" navigation chords) miss them and fire while
+  // the user is typing into an overlay search field. Stop bubbling out of the
+  // shadow for ordinary keystrokes. Escape and ⌘/Ctrl+Enter still reach
+  // document-level overlay handlers (inline config editor, feedback modals,
+  // i18n popper) that listen in the bubble phase on `document`.
+  function isolateHostHotkeys(e: KeyboardEvent): void {
+    if (e.key === "Escape") return;
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") return;
+    e.stopPropagation();
+  }
+  shadow.addEventListener("keydown", isolateHostHotkeys);
+  shadow.addEventListener("keyup", isolateHostHotkeys);
+
   // Allow the embedding page to override the accent colour. Setting it as an
   // inline style on the shadow host overrides the :host { --accent } rule in
   // the shadow stylesheet (inline styles beat stylesheet rules in the cascade).
@@ -1556,6 +1572,8 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       window.removeEventListener("resize", onWinResize);
       window.removeEventListener("se:state:update", onStateUpdate);
       window.removeEventListener(DEVTOOLS_UNAUTHED_EVENT, onUnauthed);
+      shadow.removeEventListener("keydown", isolateHostHotkeys);
+      shadow.removeEventListener("keyup", isolateHostHotkeys);
       unsubControls();
       mo.disconnect();
       host.remove();

@@ -1,5 +1,19 @@
 # Changelog
 
+## browser-devtools (2026-08-03)
+
+Overlay-only fix (`@shipeasy/browser-devtools` / hosted `se-devtools.js`);
+`@shipeasy/sdk` itself is unchanged.
+
+### Fixed: typing in the overlay no longer fires host-app hotkeys
+
+Keydowns from inside the open shadow tree retarget to `#shipeasy-devtools` for
+`window`/`document` listeners, so host-app hotkey guards that only check
+`INPUT`/`TEXTAREA` (e.g. dashboard "G _" navigation chords) still fired while
+typing into an overlay search field. The overlay now `stopPropagation`s
+keydown/keyup inside the shadow (Escape and ⌘/Ctrl+Enter still bubble for the
+overlay's own document-level handlers).
+
 ## react-native-devtools 1.1.0 (2026-07-30)
 
 Overlay-only release (`@shipeasy/react-native-devtools`); `@shipeasy/sdk` itself
