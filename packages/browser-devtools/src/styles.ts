@@ -1152,8 +1152,10 @@ button { font-family: inherit; }
 .se-annot-text-input { font-family:ui-sans-serif, system-ui, sans-serif; }
 
 /* Lightbox modal — preview of an attached screenshot or recording.
-   Capped at 50vw/50vh (per request — small enough to not dominate the page)
-   with a strong border + elevation so it stays visible against arbitrary
+   Use most of the viewport so a full-page capture is inspectable; leave a
+   modest margin so the customer page still peeks around the edges. A prior
+   50vw/50vh cap made tall screenshots look "clamped to the first half of
+   the page". Strong border + elevation keep it visible against arbitrary
    dark / busy customer backgrounds. */
 .dtf-lightbox { position:fixed; inset:0; z-index:2147483647;
   background:rgba(0,0,0,0.78); backdrop-filter:blur(8px);
@@ -1161,7 +1163,7 @@ button { font-family: inherit; }
   display:grid; place-items:center; padding:24px;
   animation:dtf-modal-bg-in .14s ease-out; }
 .dtf-lightbox .frame { position:relative;
-  max-width:min(50vw, 1100px); max-height:50vh;
+  max-width:min(92vw, 1400px); max-height:90vh;
   display:flex; flex-direction:column; gap:10px;
   padding:14px; box-sizing:border-box;
   background:var(--bg-1);
@@ -1173,7 +1175,7 @@ button { font-family: inherit; }
     0 0 40px -8px color-mix(in oklab, var(--accent) 50%, transparent);
   animation:dtf-modal-in .18s cubic-bezier(.2,.8,.3,1); }
 .dtf-lightbox img, .dtf-lightbox video { display:block;
-  max-width:100%; max-height:calc(50vh - 80px);
+  max-width:100%; max-height:calc(90vh - 80px);
   width:auto; height:auto; object-fit:contain;
   border-radius:6px; border:1px solid var(--line);
   background:#000; }

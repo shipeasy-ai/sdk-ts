@@ -2,7 +2,7 @@
 
 ## browser-devtools (2026-08-03)
 
-Overlay-only fix (`@shipeasy/browser-devtools` / hosted `se-devtools.js`);
+Overlay-only fixes (`@shipeasy/browser-devtools` / hosted `se-devtools.js`);
 `@shipeasy/sdk` itself is unchanged.
 
 ### Fixed: typing in the overlay no longer fires host-app hotkeys
@@ -13,6 +13,13 @@ Keydowns from inside the open shadow tree retarget to `#shipeasy-devtools` for
 typing into an overlay search field. The overlay now `stopPropagation`s
 keydown/keyup inside the shadow (Escape and ⌘/Ctrl+Enter still bubble for the
 overlay's own document-level handlers).
+
+### Fixed: screenshot lightbox clamped to half the viewport
+
+The attachment preview lightbox was capped at `50vw` / `50vh`, so a tall
+screenshot looked like it had been clamped to the first half of the page.
+The frame now uses most of the viewport (`92vw` / `90vh`) while keeping a
+modest margin so the host page still peeks around the edges.
 
 ## react-native-devtools 1.1.0 (2026-07-30)
 

@@ -15,6 +15,7 @@ import {
 } from "../overrides";
 import { AuthError, DevtoolsApi, DEVTOOLS_UNAUTHED_EVENT } from "../api";
 import { scriptTagOrigin } from "../index";
+import { STYLES } from "../styles";
 
 function setSearch(search: string): void {
   window.history.replaceState({}, "", `${window.location.pathname}${search}`);
@@ -146,5 +147,19 @@ describe("DevtoolsApi shim", () => {
     expect(api.hideAdminLinks).toBe(true);
     api.hideAdminLinks = false; // mutable — the overlay refreshes the kill-switch flag
     expect(api.hideAdminLinks).toBe(false);
+  });
+});
+
+describe("screenshot lightbox sizing", () => {
+  // Regression for ops #70 — a 50vw/50vh cap made tall captures look like they
+  // were clamped to the first half of the page. Keep the lightbox large enough
+  // to inspect a full viewport capture.
+  it("lets the frame use most of the viewport, not half", () => {
+    expect(STYLES).toMatch(/\.dtf-lightbox \.frame \{[^}]*max-height:90vh/);
+    expect(STYLES).toMatch(/\.dtf-lightbox \.frame \{[^}]*max-width:min\(92vw/);
+    expect(STYLES).toMatch(
+      /\.dtf-lightbox img, \.dtf-lightbox video \{[^}]*max-height:calc\(90vh - 80px\)/,
+    );
+    expect(STYLES).not.toMatch(/\.dtf-lightbox \.frame \{[^}]*max-height:50vh/);
   });
 });
