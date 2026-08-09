@@ -1,4 +1,36 @@
+import type { Plugin } from "tsup";
 import { defineConfig } from "tsup";
+
+/**
+ * Keep the Next-only ambient `next/headers` import UNANALYSABLE in the published
+ * server bundle.
+ *
+ * The source writes it as `import("next" + "/headers")` on purpose, but esbuild
+ * constant-folds that back into a single string literal — and a literal is the
+ * one form that breaks non-Next consumers: Rollup/Vite resolve it while bundling
+ * and hard-fail ("Rollup failed to resolve import 'next/headers'") long before
+ * the try/catch around it can run. This package has no dependencies and no peers;
+ * installing it to read a flag must never make a build resolve Next.
+ *
+ * So re-split the concatenation in the emitted chunk. The two bundlers that
+ * matter behave differently on it, which is exactly what we want:
+ *   • webpack / Turbopack EVALUATE the concatenation, so a Next app still maps it
+ *     to Next's own bundled `next/headers` — the ambient cookie read (and its
+ *     request scope) keeps working, which an ignore-comment would have broken.
+ *   • Rollup / Vite refuse to analyse it and leave a runtime-only import, which
+ *     simply throws in a non-Next runtime and lands in the catch.
+ * Verified end to end by `src/__tests__/bundler-portability.test.ts` (bundles the
+ * emitted files) and by a real `next build` on both bundlers.
+ */
+const FOLDED = 'import("next/headers")';
+const SPLIT = 'import("next" + "/headers")';
+const unfoldNextHeaders: Plugin = {
+  name: "unfold-next-headers",
+  renderChunk(code) {
+    if (!code.includes(FOLDED)) return;
+    return { code: code.split(FOLDED).join(SPLIT) };
+  },
+};
 
 export default defineConfig([
   {
@@ -7,6 +39,7 @@ export default defineConfig([
     format: ["cjs", "esm"],
     dts: true,
     clean: true,
+    plugins: [unfoldNextHeaders],
   },
   {
     entry: { index: "src/client/index.ts" },

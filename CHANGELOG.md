@@ -63,6 +63,29 @@ Trailing full stops dropped from overlay copy (house style), the duplicate form
 heading removed (the sheet header already names the screen), and the grab handle
 is a real drag target.
 
+## 9.0.2 (2026-08-09)
+
+### Fixed: bundling the server entry no longer tries to resolve `next/headers`
+
+`@shipeasy/sdk` has never depended on Next — the `next/headers` read in
+`shipeasy()` is a Next-only ambient fallback in a `try/catch`, for Next apps that
+never pass `opts.cookies`. But the catch is a *runtime* guard, and the specifier
+was a plain literal, so any non-Next app that BUNDLED the server entry had its
+build fail while resolving it:
+
+```
+[vite]: Rollup failed to resolve import "next/headers" from "@shipeasy/sdk/dist/server/index.mjs"
+```
+
+The published bundle now carries the specifier in a form Rollup and Vite decline
+to analyse (so it stays a runtime-only lookup that lands in the catch off Next),
+while webpack and Turbopack still evaluate it — a Next app keeps binding to its
+own bundled `next/headers`, and the ambient cookie read (and the stable anonymous
+bucketing that depends on it) is unchanged. Verified with a real `next build` on
+both bundlers plus a Vite SSR bundle of a non-Next app.
+
+No API change. Apps that already pass `cookies` were never affected.
+
 ## 9.0.1 (2026-07-27)
 
 ### Docs: where `see()` extras go in the chain

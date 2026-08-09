@@ -2028,6 +2028,50 @@ export type ServerCookieSource =
   | Request
   | { get(name: string): { value: string } | undefined };
 
+/** The slice of `next/headers` the ambient fallback below uses. Both members are
+ *  optional — a runtime that resolves the module but not these (or a future Next
+ *  that renames them) must degrade to "no cookie", never throw. */
+type NextHeadersModule = {
+  headers?: () => Promise<Headers> | Headers;
+  cookies?: () =>
+    | Promise<{ get: (n: string) => { value: string } | undefined }>
+    | { get: (n: string) => { value: string } | undefined };
+};
+
+/** Soft-load Next.js's ambient `next/headers`. Returns null in every runtime that
+ *  does not have it — Cloudflare Workers, Express, Hono, plain Node — where the
+ *  caller passes `opts.cookies` instead.
+ *
+ *  Next is NOT a dependency and NOT a peer of this package, and two separate
+ *  things have to hold for that to stay true:
+ *
+ *  1. **Runtime** — a missing module must not escape `shipeasy()`. That is the
+ *     `catch`.
+ *  2. **Build time** — a bare `import("next/headers")` string literal is
+ *     statically analysable, so Rollup/Vite resolve it while bundling a non-Next
+ *     app and hard-fail ("Rollup failed to resolve import 'next/headers'") long
+ *     before any `catch` can run.
+ *
+ *  Hence the odd-looking concatenation, which is load-bearing and split back
+ *  apart in the published bundle by the `unfold-next-headers` tsup plugin (esbuild
+ *  constant-folds it here): webpack and Turbopack EVALUATE it, so a Next app still
+ *  binds to Next's own bundled `next/headers` and the request-scoped cookie read
+ *  keeps working, while Rollup and Vite decline to analyse it and leave a
+ *  runtime-only import that just lands in the catch off Next.
+ *
+ *  What NOT to do: a `webpackIgnore`/`turbopackIgnore` comment also silences the
+ *  build error, but it makes Next load a SECOND, unbundled copy outside the
+ *  request scope — the ambient read then fails at runtime and every request mints
+ *  a fresh anonymous id. Same for hiding the specifier in a plain variable:
+ *  Turbopack folds it, webpack does not, so webpack Next apps break silently. */
+async function loadNextHeaders(): Promise<NextHeadersModule | null> {
+  try {
+    return (await import("next" + "/headers")) as NextHeadersModule;
+  } catch {
+    return null;
+  }
+}
+
 /** Normalise any {@link ServerCookieSource} to a plain name → value reader.
  *  Returns null when there is nothing usable to read from. */
 function cookieReader(src: ServerCookieSource | undefined): ((n: string) => string | undefined) | null {
@@ -2303,22 +2347,14 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   }
   if (!resolvedUrlOverrides) {
     try {
-      // Dynamic import keeps Next.js out of the SDK's hard dependency graph.
-      // Falls back silently in non-Next.js runtimes (Cloudflare Workers, etc.).
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore — next/headers is an optional peer; absent in non-Next.js runtimes
-      const { headers, cookies } = (await import("next/headers")) as {
-        headers: () => Promise<Headers> | Headers;
-        cookies: () => Promise<{ get: (n: string) => { value: string } | undefined }> | {
-          get: (n: string) => { value: string } | undefined;
-        };
-      };
-      const h = await Promise.resolve(headers());
-      const search = h.get("x-se-search") ?? "";
+      // Next-only ambient fallback; null in every other runtime (see loadNextHeaders).
+      const next = await loadNextHeaders();
+      const h = next?.headers ? await Promise.resolve(next.headers()) : null;
+      const search = h?.get("x-se-search") ?? "";
       if (search) {
         resolvedUrlOverrides = search;
-      } else {
-        const c = await Promise.resolve(cookies());
+      } else if (next?.cookies) {
+        const c = await Promise.resolve(next.cookies());
         if (c.get?.("se_edit_labels")?.value === "1") {
           resolvedUrlOverrides = "se_edit_labels=1";
         }
@@ -2331,15 +2367,11 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
   let resolvedOverrideCookie = opts.overrideCookie ?? readCookie?.("se_ov");
   if (!resolvedOverrideCookie) {
     try {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore — next/headers is an optional peer; absent in non-Next.js runtimes
-      const { cookies } = (await import("next/headers")) as {
-        cookies: () =>
-          | Promise<{ get: (n: string) => { value: string } | undefined }>
-          | { get: (n: string) => { value: string } | undefined };
-      };
-      const c = await Promise.resolve(cookies());
-      resolvedOverrideCookie = c.get?.("se_ov")?.value;
+      const next = await loadNextHeaders();
+      if (next?.cookies) {
+        const c = await Promise.resolve(next.cookies());
+        resolvedOverrideCookie = c.get?.("se_ov")?.value;
+      }
     } catch {}
   }
 
@@ -2395,17 +2427,13 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
       let sawCookieSource = readCookie !== null;
       if (!anonId) {
         try {
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore — next/headers is an optional peer; absent in non-Next.js runtimes
-          const { cookies } = (await import("next/headers")) as {
-            cookies: () =>
-              | Promise<{ get: (n: string) => { value: string } | undefined }>
-              | { get: (n: string) => { value: string } | undefined };
-          };
-          const c = await Promise.resolve(cookies());
-          sawCookieSource = true;
-          const raw = c.get?.(ANON_ID_COOKIE)?.value;
-          if (raw && ANON_ID_RX.test(raw)) anonId = raw; // untrusted cookie — validated
+          const next = await loadNextHeaders();
+          if (next?.cookies) {
+            const c = await Promise.resolve(next.cookies());
+            sawCookieSource = true;
+            const raw = c.get?.(ANON_ID_COOKIE)?.value;
+            if (raw && ANON_ID_RX.test(raw)) anonId = raw; // untrusted cookie — validated
+          }
         } catch {}
       }
       if (!anonId) {
