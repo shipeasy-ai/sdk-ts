@@ -262,7 +262,11 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
   // shadow for ordinary keystrokes. Escape and ⌘/Ctrl+Enter still reach
   // document-level overlay handlers (inline config editor, feedback modals,
   // i18n popper) that listen in the bubble phase on `document`.
-  function isolateHostHotkeys(e: KeyboardEvent): void {
+  // Typed as `Event`, not `KeyboardEvent`: ShadowRoot only overloads
+  // addEventListener for "slotchange", so every other type falls through to the
+  // plain `EventListener` signature.
+  function isolateHostHotkeys(evt: Event): void {
+    const e = evt as KeyboardEvent;
     if (e.key === "Escape") return;
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") return;
     e.stopPropagation();
