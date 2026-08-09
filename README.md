@@ -109,4 +109,4 @@ the [Testing](https://github.com/shipeasy-ai/sdk/blob/main/docs/pages/testing.md
 ## License
 
 See [LICENSE](https://github.com/shipeasy-ai/sdk/blob/main/LICENSE). Evaluation is tested against the cross-language
-MurmurHash3 vectors in `experiment-platform/04-evaluation.md`.
+MurmurHash3 vectors in [Rollouts & bucketing](https://docs.shipeasy.ai/flags/gates/rollouts).

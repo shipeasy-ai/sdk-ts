@@ -178,9 +178,9 @@ await flags.ready();                    // optional — await first /sdk/evaluat
 if (flags.getFlag("new_checkout")) { /* ... */ }
 ```
 
-> For React projects, [`@shipeasy/sdk-react`](https://github.com/shipeasy-ai/sdk-react)
-> wraps this package with a `<ShipeasyProvider>` and hooks (thin layer over the
-> same vanilla API).
+> React needs no wrapper package: the API is framework-agnostic, so a component
+> reads a flag with the same `new Client(user)` a route handler uses. See
+> [Browser / React](#browser--react-use-client) below.
 
 ### 3. Middleware — mint the bucketing cookie at the edge (optional)
 

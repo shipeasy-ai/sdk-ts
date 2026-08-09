@@ -9,8 +9,9 @@ experiments, metrics, and i18n. It ships **two entrypoints** from one package:
 - `@shipeasy/sdk/client` — the browser (authenticates with the public
   **client** key).
 
-The APIs are framework-agnostic: everything works from vanilla JS. React
-conveniences live in the separate `@shipeasy/sdk-react` wrapper.
+The APIs are framework-agnostic: everything works from vanilla JS, which is why
+there is no React wrapper package to install — a component reads a flag the
+same way a route handler does.
 
 ## Mental model: `configure()` once, then `new Client(user)`
 
