@@ -39,8 +39,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r --include-workspace-root run type-check
-      - run: pnpm -r --include-workspace-root run test
+      # Build BEFORE test, same order as test.yml: the bundler-portability suite
+      # bundles the emitted dist (the source is not what ships), and rebuilding it
+      # from inside the test just to satisfy step order wastes a minute here.
       - run: pnpm -r --include-workspace-root run build
+      - run: pnpm -r --include-workspace-root run test
 
       # ----- npm -----
       # Trusted Publishing via OIDC — no token required. Requires a matching

@@ -1,8 +1,9 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 /**
  * `@shipeasy/sdk` has NO dependencies on a framework and NO peer dependencies —
@@ -46,11 +47,13 @@ async function bundleAsNonNextApp(entry: string): Promise<void> {
 }
 
 describe("bundler portability", () => {
-  it("ships the built server bundle (CI builds before it tests)", () => {
-    expect(existsSync(SERVER_BUNDLE), `missing ${SERVER_BUNDLE} — run \`pnpm build\` first`).toBe(
-      true,
-    );
-  });
+  // These assert on the emitted files, so they need a build. CI builds first,
+  // but a bare `vitest run` in a clean checkout must not fail for step-order
+  // reasons — build on demand when dist isn't there.
+  beforeAll(() => {
+    if (existsSync(SERVER_BUNDLE) && existsSync(CLIENT_BUNDLE)) return;
+    execFileSync("pnpm", ["run", "build"], { cwd: root, stdio: "inherit" });
+  }, 180_000);
 
   it("keeps the next/headers specifier unanalysable in the emitted bundle", () => {
     for (const file of ["dist/server/index.mjs", "dist/server/index.js"]) {
