@@ -4563,10 +4563,13 @@ paths:
                   eventName: checkout_completed
                   query: count(checkout_completed)
                   queryIr:
-                    agg:
-                      kind: count_events
-                    metric: checkout_completed
-                    filters: []
+                    v: 2
+                    expr:
+                      node: agg
+                      event: checkout_completed
+                      agg:
+                        kind: count
+                      filters: []
                   direction: higher_better
                   version: 1
         '400':
@@ -4724,11 +4727,14 @@ paths:
                 eventName: purchase
                 query: sum(purchase, amount)
                 queryIr:
-                  agg:
-                    kind: sum
-                  metric: purchase
-                  valueLabel: amount
-                  filters: []
+                  v: 2
+                  expr:
+                    node: agg
+                    event: purchase
+                    agg:
+                      kind: sum
+                    valueLabel: amount
+                    filters: []
                 direction: higher_better
                 winsorizePct: 99
                 version: 1
