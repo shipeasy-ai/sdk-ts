@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ApproveEventData, ApproveEventErrors, ApproveEventResponses, CreateAlertRuleData, CreateAlertRuleErrors, CreateAlertRuleResponses, CreateAttributeData, CreateAttributeErrors, CreateAttributeResponses, CreateConfigData, CreateConfigErrors, CreateConfigResponses, CreateConnectorData, CreateConnectorErrors, CreateConnectorResponses, CreateEventData, CreateEventErrors, CreateEventResponses, CreateExperimentData, CreateExperimentErrors, CreateExperimentResponses, CreateGateData, CreateGateErrors, CreateGateResponses, CreateGateTemplateData, CreateGateTemplateErrors, CreateGateTemplateResponses, CreateI18nDraftData, CreateI18nDraftErrors, CreateI18nDraftResponses, CreateI18nProfileData, CreateI18nProfileErrors, CreateI18nProfileResponses, CreateKeyData, CreateKeyErrors, CreateKeyResponses, CreateKillswitchData, CreateKillswitchErrors, CreateKillswitchResponses, CreateMetricData, CreateMetricErrors, CreateMetricResponses, CreateOpsCommentData, CreateOpsCommentErrors, CreateOpsCommentResponses, CreateOpsItemData, CreateOpsItemErrors, CreateOpsItemResponses, CreateTriggerConnectorData, CreateTriggerConnectorErrors, CreateTriggerConnectorResponses, CreateUniverseData, CreateUniverseErrors, CreateUniverseResponses, DeleteAlertRuleData, DeleteAlertRuleErrors, DeleteAlertRuleResponses, DeleteAttributeData, DeleteAttributeErrors, DeleteAttributeResponses, DeleteConfigData, DeleteConfigErrors, DeleteConfigResponses, DeleteConnectorData, DeleteConnectorErrors, DeleteConnectorResponses, DeleteEventData, DeleteEventErrors, DeleteEventResponses, DeleteExperimentData, DeleteExperimentErrors, DeleteExperimentResponses, DeleteGateData, DeleteGateErrors, DeleteGateResponses, DeleteGateTemplateData, DeleteGateTemplateErrors, DeleteGateTemplateResponses, DeleteKillswitchData, DeleteKillswitchErrors, DeleteKillswitchResponses, DeleteMetricData, DeleteMetricErrors, DeleteMetricResponses, DeleteUniverseData, DeleteUniverseErrors, DeleteUniverseResponses, DisableGateData, DisableGateErrors, DisableGateResponses, DiscardConfigDraftData, DiscardConfigDraftErrors, DiscardConfigDraftResponses, EnableGateData, EnableGateErrors, EnableGateResponses, FileErrorTicketData, FileErrorTicketErrors, FileErrorTicketResponses, FireConnectorData, FireConnectorErrors, FireConnectorResponses, GetAttributeData, GetAttributeErrors, GetAttributeResponses, GetConfigData, GetConfigErrors, GetConfigResponses, GetConnectorData, GetConnectorErrors, GetConnectorResponses, GetCurrentProjectData, GetCurrentProjectErrors, GetCurrentProjectResponses, GetErrorData, GetErrorErrors, GetErrorResponses, GetErrorSeriesData, GetErrorSeriesErrors, GetErrorSeriesResponses, GetEventData, GetEventErrors, GetEventResponses, GetExperimentData, GetExperimentErrors, GetExperimentResponses, GetExperimentResultsData, GetExperimentResultsErrors, GetExperimentResultsResponses, GetExperimentTimeseriesData, GetExperimentTimeseriesErrors, GetExperimentTimeseriesResponses, GetGateTemplateData, GetGateTemplateErrors, GetGateTemplateResponses, GetKillswitchData, GetKillswitchErrors, GetKillswitchResponses, GetMetricData, GetMetricErrors, GetMetricResponses, GetOpsItemData, GetOpsItemErrors, GetOpsItemResponses, LinkPrToOpsItemData, LinkPrToOpsItemErrors, LinkPrToOpsItemResponses, ListAlertRulesData, ListAlertRulesErrors, ListAlertRulesResponses, ListAttributesData, ListAttributesErrors, ListAttributesResponses, ListConfigActivityData, ListConfigActivityErrors, ListConfigActivityResponses, ListConfigsData, ListConfigsErrors, ListConfigsResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListErrorsData, ListErrorsErrors, ListErrorsResponses, ListEventsData, ListEventsErrors, ListEventsResponses, ListExperimentsData, ListExperimentsErrors, ListExperimentsResponses, ListGatesData, ListGatesErrors, ListGatesResponses, ListGateTemplatesData, ListGateTemplatesErrors, ListGateTemplatesResponses, ListI18nDraftsData, ListI18nDraftsErrors, ListI18nDraftsResponses, ListI18nKeysData, ListI18nKeysErrors, ListI18nKeysResponses, ListI18nProfilesData, ListI18nProfilesErrors, ListI18nProfilesResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListKillswitchesData, ListKillswitchesErrors, ListKillswitchesResponses, ListMetricsData, ListMetricsErrors, ListMetricsResponses, ListOpsCommentsData, ListOpsCommentsErrors, ListOpsCommentsResponses, ListOpsItemsData, ListOpsItemsErrors, ListOpsItemsResponses, ListSlackChannelsData, ListSlackChannelsErrors, ListSlackChannelsResponses, ListUniversesData, ListUniversesErrors, ListUniversesResponses, NotifyOpsData, NotifyOpsErrors, NotifyOpsResponses, PublishConfigDraftData, PublishConfigDraftErrors, PublishConfigDraftResponses, PublishI18nProfileData, PublishI18nProfileErrors, PublishI18nProfileResponses, PushI18nKeysData, PushI18nKeysErrors, PushI18nKeysResponses, ReanalyzeExperimentData, ReanalyzeExperimentErrors, ReanalyzeExperimentResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, SaveConfigDraftData, SaveConfigDraftErrors, SaveConfigDraftResponses, SearchResourcesData, SearchResourcesErrors, SearchResourcesResponses, SetExperimentMetricsData, SetExperimentMetricsErrors, SetExperimentMetricsResponses, SetExperimentStatusData, SetExperimentStatusErrors, SetExperimentStatusResponses, SetI18nLabelData, SetI18nLabelErrors, SetI18nLabelResponses, SetKillswitchSwitchData, SetKillswitchSwitchErrors, SetKillswitchSwitchResponses, SetKillswitchValueData, SetKillswitchValueErrors, SetKillswitchValueResponses, TestConnectorData, TestConnectorErrors, TestConnectorResponses, UnsetKillswitchSwitchData, UnsetKillswitchSwitchErrors, UnsetKillswitchSwitchResponses, UpdateAlertRuleData, UpdateAlertRuleErrors, UpdateAlertRuleResponses, UpdateAttributeData, UpdateAttributeErrors, UpdateAttributeResponses, UpdateConfigData, UpdateConfigErrors, UpdateConfigResponses, UpdateConfigSchemaData, UpdateConfigSchemaErrors, UpdateConfigSchemaResponses, UpdateConnectorData, UpdateConnectorErrors, UpdateConnectorResponses, UpdateErrorStatusData, UpdateErrorStatusErrors, UpdateErrorStatusResponses, UpdateEventData, UpdateEventErrors, UpdateEventResponses, UpdateExperimentData, UpdateExperimentErrors, UpdateExperimentResponses, UpdateGateData, UpdateGateErrors, UpdateGateResponses, UpdateGateTemplateData, UpdateGateTemplateErrors, UpdateGateTemplateResponses, UpdateI18nDraftData, UpdateI18nDraftErrors, UpdateI18nDraftResponses, UpdateI18nKeyData, UpdateI18nKeyErrors, UpdateI18nKeyResponses, UpdateKillswitchData, UpdateKillswitchErrors, UpdateKillswitchResponses, UpdateMetricData, UpdateMetricErrors, UpdateMetricResponses, UpdateOpsItemData, UpdateOpsItemErrors, UpdateOpsItemResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTriggerConnectorData, UpdateTriggerConnectorErrors, UpdateTriggerConnectorResponses, UpdateUniverseData, UpdateUniverseErrors, UpdateUniverseResponses, UpsertProjectData, UpsertProjectErrors, UpsertProjectResponses } from './types.gen';
+import type { AckOpsItemData, AckOpsItemErrors, AckOpsItemResponses, AddToGateWhitelistData, AddToGateWhitelistErrors, AddToGateWhitelistResponses, ApproveEventData, ApproveEventErrors, ApproveEventResponses, CreateAlertRuleData, CreateAlertRuleErrors, CreateAlertRuleResponses, CreateAttributeData, CreateAttributeErrors, CreateAttributeResponses, CreateConfigData, CreateConfigErrors, CreateConfigResponses, CreateConnectorData, CreateConnectorErrors, CreateConnectorResponses, CreateEventData, CreateEventErrors, CreateEventResponses, CreateExperimentData, CreateExperimentErrors, CreateExperimentReadoutData, CreateExperimentReadoutErrors, CreateExperimentReadoutResponses, CreateExperimentResponses, CreateGateData, CreateGateErrors, CreateGateResponses, CreateGateTemplateData, CreateGateTemplateErrors, CreateGateTemplateResponses, CreateI18nDraftData, CreateI18nDraftErrors, CreateI18nDraftResponses, CreateI18nProfileData, CreateI18nProfileErrors, CreateI18nProfileResponses, CreateKeyData, CreateKeyErrors, CreateKeyResponses, CreateKillswitchData, CreateKillswitchErrors, CreateKillswitchResponses, CreateMetricData, CreateMetricErrors, CreateMetricResponses, CreateOpsCommentData, CreateOpsCommentErrors, CreateOpsCommentResponses, CreateOpsInvestigationData, CreateOpsInvestigationErrors, CreateOpsInvestigationResponses, CreateOpsItemData, CreateOpsItemErrors, CreateOpsItemResponses, CreatePublicBugData, CreatePublicBugErrors, CreatePublicBugResponses, CreatePublicFeatureRequestData, CreatePublicFeatureRequestErrors, CreatePublicFeatureRequestResponses, CreateTriggerConnectorData, CreateTriggerConnectorErrors, CreateTriggerConnectorResponses, CreateUniverseData, CreateUniverseErrors, CreateUniverseResponses, DeleteAlertRuleData, DeleteAlertRuleErrors, DeleteAlertRuleResponses, DeleteAttributeData, DeleteAttributeErrors, DeleteAttributeResponses, DeleteConfigData, DeleteConfigErrors, DeleteConfigResponses, DeleteConnectorData, DeleteConnectorErrors, DeleteConnectorResponses, DeleteEventData, DeleteEventErrors, DeleteEventResponses, DeleteExperimentData, DeleteExperimentErrors, DeleteExperimentResponses, DeleteGateData, DeleteGateErrors, DeleteGateResponses, DeleteGateTemplateData, DeleteGateTemplateErrors, DeleteGateTemplateResponses, DeleteI18nDraftData, DeleteI18nDraftErrors, DeleteI18nDraftResponses, DeleteI18nKeyData, DeleteI18nKeyErrors, DeleteI18nKeyResponses, DeleteI18nProfileData, DeleteI18nProfileErrors, DeleteI18nProfileResponses, DeleteKillswitchData, DeleteKillswitchErrors, DeleteKillswitchResponses, DeleteMetricData, DeleteMetricErrors, DeleteMetricResponses, DeleteOpsItemData, DeleteOpsItemErrors, DeleteOpsItemResponses, DeleteUniverseData, DeleteUniverseErrors, DeleteUniverseResponses, DisableGateData, DisableGateErrors, DisableGateResponses, DiscardConfigDraftData, DiscardConfigDraftErrors, DiscardConfigDraftResponses, EnableGateData, EnableGateErrors, EnableGateResponses, FileErrorTicketData, FileErrorTicketErrors, FileErrorTicketResponses, FireConnectorData, FireConnectorErrors, FireConnectorResponses, GetAttributeData, GetAttributeErrors, GetAttributeResponses, GetConfigData, GetConfigErrors, GetConfigResponses, GetConnectorData, GetConnectorErrors, GetConnectorResponses, GetCurrentProjectData, GetCurrentProjectErrors, GetCurrentProjectResponses, GetErrorData, GetErrorErrors, GetErrorResponses, GetErrorSeriesData, GetErrorSeriesErrors, GetErrorSeriesResponses, GetEventData, GetEventErrors, GetEventResponses, GetExperimentData, GetExperimentErrors, GetExperimentReadoutData, GetExperimentReadoutErrors, GetExperimentReadoutResponses, GetExperimentResponses, GetExperimentResultsData, GetExperimentResultsErrors, GetExperimentResultsResponses, GetExperimentTimeseriesData, GetExperimentTimeseriesErrors, GetExperimentTimeseriesResponses, GetGateData, GetGateErrors, GetGateResponses, GetGateTemplateData, GetGateTemplateErrors, GetGateTemplateResponses, GetGateWhitelistData, GetGateWhitelistErrors, GetGateWhitelistResponses, GetKillswitchData, GetKillswitchErrors, GetKillswitchResponses, GetMetricData, GetMetricErrors, GetMetricResponses, GetMetricSeriesData, GetMetricSeriesErrors, GetMetricSeriesResponses, GetOpsItemData, GetOpsItemErrors, GetOpsItemResponses, GetProjectData, GetProjectErrors, GetProjectResponses, LinkPrToOpsItemData, LinkPrToOpsItemErrors, LinkPrToOpsItemResponses, ListAlertRulesData, ListAlertRulesErrors, ListAlertRulesResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAttributesData, ListAttributesErrors, ListAttributesResponses, ListConfigActivityData, ListConfigActivityErrors, ListConfigActivityResponses, ListConfigsData, ListConfigsErrors, ListConfigsResponses, ListConfigVersionsData, ListConfigVersionsErrors, ListConfigVersionsResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListErrorsData, ListErrorsErrors, ListErrorsResponses, ListEventsData, ListEventsErrors, ListEventsResponses, ListExperimentsData, ListExperimentsErrors, ListExperimentsResponses, ListGateActivityData, ListGateActivityErrors, ListGateActivityResponses, ListGatesData, ListGatesErrors, ListGatesResponses, ListGateTemplatesData, ListGateTemplatesErrors, ListGateTemplatesResponses, ListI18nDraftKeysData, ListI18nDraftKeysErrors, ListI18nDraftKeysResponses, ListI18nDraftsData, ListI18nDraftsErrors, ListI18nDraftsResponses, ListI18nKeysData, ListI18nKeysErrors, ListI18nKeysResponses, ListI18nProfilesData, ListI18nProfilesErrors, ListI18nProfilesResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListKillswitchesData, ListKillswitchesErrors, ListKillswitchesResponses, ListMetricExperimentsData, ListMetricExperimentsErrors, ListMetricExperimentsResponses, ListMetricsData, ListMetricsErrors, ListMetricsResponses, ListOpsAgentsData, ListOpsAgentsErrors, ListOpsAgentsResponses, ListOpsCommentsData, ListOpsCommentsErrors, ListOpsCommentsResponses, ListOpsInvestigationsData, ListOpsInvestigationsErrors, ListOpsInvestigationsResponses, ListOpsItemsData, ListOpsItemsErrors, ListOpsItemsResponses, ListSlackChannelsData, ListSlackChannelsErrors, ListSlackChannelsResponses, ListUniversesData, ListUniversesErrors, ListUniversesResponses, NotifyOpsData, NotifyOpsErrors, NotifyOpsResponses, PublishConfigDraftData, PublishConfigDraftErrors, PublishConfigDraftResponses, PublishI18nProfileData, PublishI18nProfileErrors, PublishI18nProfileResponses, PushI18nKeysData, PushI18nKeysErrors, PushI18nKeysResponses, ReanalyzeExperimentData, ReanalyzeExperimentErrors, ReanalyzeExperimentResponses, RemoveFromGateWhitelistData, RemoveFromGateWhitelistErrors, RemoveFromGateWhitelistResponses, ResolveErrorData, ResolveErrorErrors, ResolveErrorResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, SaveConfigDraftData, SaveConfigDraftErrors, SaveConfigDraftResponses, SearchResourcesData, SearchResourcesErrors, SearchResourcesResponses, SetExperimentMetricsData, SetExperimentMetricsErrors, SetExperimentMetricsResponses, SetExperimentStatusData, SetExperimentStatusErrors, SetExperimentStatusResponses, SetGateWhitelistData, SetGateWhitelistErrors, SetGateWhitelistResponses, SetI18nLabelData, SetI18nLabelErrors, SetI18nLabelResponses, SetKillswitchSwitchData, SetKillswitchSwitchErrors, SetKillswitchSwitchResponses, SetKillswitchValueData, SetKillswitchValueErrors, SetKillswitchValueResponses, TestConnectorData, TestConnectorErrors, TestConnectorResponses, ToggleKillswitchData, ToggleKillswitchErrors, ToggleKillswitchResponses, UnarchiveMetricData, UnarchiveMetricErrors, UnarchiveMetricResponses, UnsetKillswitchSwitchData, UnsetKillswitchSwitchErrors, UnsetKillswitchSwitchResponses, UpdateAlertData, UpdateAlertErrors, UpdateAlertResponses, UpdateAlertRuleData, UpdateAlertRuleErrors, UpdateAlertRuleResponses, UpdateAttributeData, UpdateAttributeErrors, UpdateAttributeResponses, UpdateConfigData, UpdateConfigErrors, UpdateConfigResponses, UpdateConfigSchemaData, UpdateConfigSchemaErrors, UpdateConfigSchemaResponses, UpdateConnectorData, UpdateConnectorErrors, UpdateConnectorResponses, UpdateErrorStatusData, UpdateErrorStatusErrors, UpdateErrorStatusResponses, UpdateEventData, UpdateEventErrors, UpdateEventResponses, UpdateExperimentData, UpdateExperimentErrors, UpdateExperimentResponses, UpdateGateData, UpdateGateErrors, UpdateGateResponses, UpdateGateTemplateData, UpdateGateTemplateErrors, UpdateGateTemplateResponses, UpdateI18nDraftData, UpdateI18nDraftErrors, UpdateI18nDraftResponses, UpdateI18nKeyData, UpdateI18nKeyErrors, UpdateI18nKeyResponses, UpdateKeyData, UpdateKeyErrors, UpdateKeyResponses, UpdateKillswitchData, UpdateKillswitchErrors, UpdateKillswitchResponses, UpdateMetricData, UpdateMetricErrors, UpdateMetricResponses, UpdateOpsInvestigationData, UpdateOpsInvestigationErrors, UpdateOpsInvestigationResponses, UpdateOpsItemData, UpdateOpsItemErrors, UpdateOpsItemResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTriggerConnectorData, UpdateTriggerConnectorErrors, UpdateTriggerConnectorResponses, UpdateUniverseData, UpdateUniverseErrors, UpdateUniverseResponses, UpsertI18nDraftKeyData, UpsertI18nDraftKeyErrors, UpsertI18nDraftKeyResponses, UpsertI18nKeysData, UpsertI18nKeysErrors, UpsertI18nKeysResponses, UpsertProjectData, UpsertProjectErrors, UpsertProjectResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -72,6 +72,19 @@ export const deleteGate = <ThrowOnError extends boolean = false>(options: Option
 });
 
 /**
+ * Get one gate
+ *
+ * Returns the full gate row — including the gatekeeper `stack`, resolved creator/last-editor emails, and the edit `version` — for one gate, addressed by id or `name`.
+ *
+ * **Use case:** Inspect a single gate's current rollout, rules, and stack before editing it, without paging through the whole list.
+ */
+export const getGate = <ThrowOnError extends boolean = false>(options: Options<GetGateData, ThrowOnError>): RequestResult<GetGateResponses, GetGateErrors, ThrowOnError> => (options.client ?? client).get<GetGateResponses, GetGateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/gates/{id}',
+    ...options
+});
+
+/**
  * Update a feature gate
  *
  * Partial update — only supplied fields change. Array fields (`rules`, `stack`) **replace** wholesale; there is no merge or append.
@@ -121,6 +134,95 @@ export const disableGate = <ThrowOnError extends boolean = false>(options: Optio
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/gates/{id}/disable',
     ...options
+});
+
+/**
+ * List gate activity
+ *
+ * Returns recent audit rows for one gate (create, update, enable, disable, delete) ordered newest first. Use the `limit` query parameter to cap the result (1–100, default 20).
+ *
+ * **Use case:** Render the activity feed in the gate detail panel or answer "who ramped this gate, and when?" during an incident review.
+ */
+export const listGateActivity = <ThrowOnError extends boolean = false>(options: Options<ListGateActivityData, ThrowOnError>): RequestResult<ListGateActivityResponses, ListGateActivityErrors, ThrowOnError> => (options.client ?? client).get<ListGateActivityResponses, ListGateActivityErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/gates/{id}/activity',
+    ...options
+});
+
+/**
+ * Remove entries from a gate's whitelist
+ *
+ * Removes identities from the gate's whitelist. Entries that aren't on the list are skipped, so the call is idempotent.
+ *
+ * Removing the last entry leaves an empty whitelist block in place; to drop the block itself use `PUT` with `entries: []`.
+ *
+ * **Use case:** Revoke one beta tester's access without touching anyone else's.
+ */
+export const removeFromGateWhitelist = <ThrowOnError extends boolean = false>(options: Options<RemoveFromGateWhitelistData, ThrowOnError>): RequestResult<RemoveFromGateWhitelistResponses, RemoveFromGateWhitelistErrors, ThrowOnError> => (options.client ?? client).delete<RemoveFromGateWhitelistResponses, RemoveFromGateWhitelistErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/gates/{id}/whitelist',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Read a gate's whitelist
+ *
+ * Returns the gate's whitelist — the always-first allowlist that admits the listed identities before any targeting rule or percentage rollout is evaluated.
+ *
+ * A gate with no whitelist returns `entries: []` (and the default `attr`), never a 404 — so a caller can read-then-write without special-casing the empty gate.
+ *
+ * **Use case:** Check whether an account is already let through before adding it.
+ */
+export const getGateWhitelist = <ThrowOnError extends boolean = false>(options: Options<GetGateWhitelistData, ThrowOnError>): RequestResult<GetGateWhitelistResponses, GetGateWhitelistErrors, ThrowOnError> => (options.client ?? client).get<GetGateWhitelistResponses, GetGateWhitelistErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/gates/{id}/whitelist',
+    ...options
+});
+
+/**
+ * Add entries to a gate's whitelist
+ *
+ * Adds identities to the gate's whitelist, creating the block if the gate doesn't have one yet. Entries already on the list are skipped, so the call is idempotent and safe to retry.
+ *
+ * Adding to a gate that already has a whitelist keyed on the other attribute is rejected (409) rather than silently re-keying the entries already there — use `PUT` to switch `attr` deliberately.
+ *
+ * **Use case:** Let one more customer into a private beta without reading the current list first.
+ */
+export const addToGateWhitelist = <ThrowOnError extends boolean = false>(options: Options<AddToGateWhitelistData, ThrowOnError>): RequestResult<AddToGateWhitelistResponses, AddToGateWhitelistErrors, ThrowOnError> => (options.client ?? client).post<AddToGateWhitelistResponses, AddToGateWhitelistErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/gates/{id}/whitelist',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Replace a gate's whitelist
+ *
+ * Replaces the gate's whole whitelist with `entries`, creating the block if the gate didn't have one. Idempotent — the same call twice leaves the same list.
+ *
+ * This is the only whitelist call that can switch `attr` (`email` ⇄ `user_id`) or clear the block: `entries: []` removes the whitelist from the gate entirely.
+ *
+ * **Use cases**
+ *
+ * - **Pin an exact list** — `{ "entries": ["alice@acme.dev", "bob@acme.dev"] }`.
+ * - **Switch to user ids** — `{ "attr": "user_id", "entries": ["usr_123"] }`.
+ * - **Drop the whitelist** — `{ "entries": [] }`.
+ */
+export const setGateWhitelist = <ThrowOnError extends boolean = false>(options: Options<SetGateWhitelistData, ThrowOnError>): RequestResult<SetGateWhitelistResponses, SetGateWhitelistErrors, ThrowOnError> => (options.client ?? client).put<SetGateWhitelistResponses, SetGateWhitelistErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/gates/{id}/whitelist',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -301,6 +403,38 @@ export const reanalyzeExperiment = <ThrowOnError extends boolean = false>(option
 });
 
 /**
+ * Mint a readout snapshot
+ *
+ * Freezes the current results view into an immutable, dated readout snapshot — verdict, headline, per-metric numbers, the caveat list with its acknowledgment state, enrollment, and a hash of the assignment-relevant config. Ship/stop flows mint one automatically; "Share readout" mints one on demand. Snapshots are never updated after insert.
+ *
+ * Pass `requireAllAcknowledged: true` to enforce ship gating server-side — returns `422` while any open caveat is not listed in `acknowledgedCaveatIds`.
+ *
+ * **Use case:** Capture "what the data said when we decided" before shipping or stopping, so the decision stays auditable even after results move.
+ */
+export const createExperimentReadout = <ThrowOnError extends boolean = false>(options: Options<CreateExperimentReadoutData, ThrowOnError>): RequestResult<CreateExperimentReadoutResponses, CreateExperimentReadoutErrors, ThrowOnError> => (options.client ?? client).post<CreateExperimentReadoutResponses, CreateExperimentReadoutErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/experiments/{id}/readouts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get a readout snapshot
+ *
+ * Returns one immutable readout snapshot — the frozen results view (verdict, headline, per-metric numbers, caveats, enrollment) captured when it was minted, plus the `configHash` that tells you whether it is still comparable to the live view.
+ *
+ * **Use case:** Render a shared, dated readout exactly as it looked at decision time.
+ */
+export const getExperimentReadout = <ThrowOnError extends boolean = false>(options: Options<GetExperimentReadoutData, ThrowOnError>): RequestResult<GetExperimentReadoutResponses, GetExperimentReadoutErrors, ThrowOnError> => (options.client ?? client).get<GetExperimentReadoutResponses, GetExperimentReadoutErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/experiments/{id}/readouts/{readoutId}',
+    ...options
+});
+
+/**
  * List dynamic configs
  *
  * Returns a single page of configs ordered by `updated_at desc, id desc`. Each row includes the latest published `version` per env and any active drafts.
@@ -324,7 +458,7 @@ export const listConfigs = <ThrowOnError extends boolean = false>(options?: Opti
  *
  * - **Minimal create** — `name` + `schema`. Initial value defaults to `{}`.
  * - **Seeded create** — supply a flat `value` to publish the same object on every env.
- * - **Per-env seed** — supply a `{ env: value }` map for different per-env starting values.
+ * - **Per-env seed** — supply a `{ env: value }` map under `value`, or pass the env keys `dev`/`staging`/`prod` directly (each overrides `value` for that env and is published at version 1).
  */
 export const createConfig = <ThrowOnError extends boolean = false>(options: Options<CreateConfigData, ThrowOnError>): RequestResult<CreateConfigResponses, CreateConfigErrors, ThrowOnError> => (options.client ?? client).post<CreateConfigResponses, CreateConfigErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -365,15 +499,13 @@ export const getConfig = <ThrowOnError extends boolean = false>(options: Options
 /**
  * Update a dynamic config
  *
- * Partial update. When `value` is supplied it is **republished on every env** (new version per env). When `schema` is supplied it replaces the current schema; every existing value is re-validated.
- *
- * For env-scoped edits, use the draft/publish flow (`PUT /{id}/drafts` then `POST /{id}/publish`) instead.
+ * Partial update. When `value` is supplied it is **republished on every env** (new version per env). A per-env key (`dev`/`staging`/`prod`) publishes a new version to **only that env**, immediately, overriding `value` for it. When `schema` is supplied it replaces the current schema; every existing value is re-validated.
  *
  * **Use cases**
  *
  * - **Republish flat value** — `{ "value": {…} }` sets the same value on every env.
+ * - **Publish one env** — `{ "prod": {…} }` publishes a new version to prod only, instantly.
  * - **Schema migration** — `{ "schema": {…} }` replaces the schema; existing values are re-validated.
- * - **Env-scoped edits** — use `PUT /{id}/drafts` + `POST /{id}/publish` instead of PATCH.
  */
 export const updateConfig = <ThrowOnError extends boolean = false>(options: Options<UpdateConfigData, ThrowOnError>): RequestResult<UpdateConfigResponses, UpdateConfigErrors, ThrowOnError> => (options.client ?? client).patch<UpdateConfigResponses, UpdateConfigErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -468,6 +600,19 @@ export const updateConfigSchema = <ThrowOnError extends boolean = false>(options
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * List config version history
+ *
+ * Returns every published version of the config's value on one env, newest first. The `env` query parameter picks the environment (`dev`, `staging`, or `prod`) and defaults to `prod`; an unknown env returns `400`. The config's JSON Schema is config-level and not versioned — this is value history only.
+ *
+ * **Use case:** Render the History timeline in the config detail pane (value diff + restore), or audit which value was live on prod at a given version.
+ */
+export const listConfigVersions = <ThrowOnError extends boolean = false>(options: Options<ListConfigVersionsData, ThrowOnError>): RequestResult<ListConfigVersionsResponses, ListConfigVersionsErrors, ThrowOnError> => (options.client ?? client).get<ListConfigVersionsResponses, ListConfigVersionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/configs/{id}/versions',
+    ...options
 });
 
 /**
@@ -612,6 +757,32 @@ export const setKillswitchSwitch = <ThrowOnError extends boolean = false>(option
 export const setKillswitchValue = <ThrowOnError extends boolean = false>(options: Options<SetKillswitchValueData, ThrowOnError>): RequestResult<SetKillswitchValueResponses, SetKillswitchValueErrors, ThrowOnError> => (options.client ?? client).put<SetKillswitchValueResponses, SetKillswitchValueErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/killswitches/{id}/value',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Toggle a killswitch or one of its switches
+ *
+ * Flips a killswitch on one environment and publishes a new version there. This is the one-call incident verb: it reads the current value, flips it, and publishes, so you don't have to fetch the killswitch first.
+ *
+ * Every body field is optional, which is what makes the call widen cleanly:
+ *
+ * - **Flip the killswitch** — `{}`. Flips the flat `value` on `prod`.
+ * - **Flip one sub-switch** — `{ "switchKey": "eu_region" }`. Flips that entry on `prod`, creating it (from `false`) if it isn't in the map yet.
+ * - **Set it idempotently** — `{ "switchKey": "eu_region", "value": true }`. Publishes exactly that value, so a retried call can't undo the first one. A `null` `value` means "flip", not "set to null".
+ * - **Choose the environment** — add `"env": "staging"`. Omitted, `env` is `prod`.
+ *
+ * The response reports both `previous` and `value`, so a caller that asked for a flip can see what it actually changed.
+ *
+ * Prefer this over `PUT /{id}/value` and `PUT /{id}/switch` unless you specifically need those endpoints' unconditional set semantics.
+ */
+export const toggleKillswitch = <ThrowOnError extends boolean = false>(options: Options<ToggleKillswitchData, ThrowOnError>): RequestResult<ToggleKillswitchResponses, ToggleKillswitchErrors, ThrowOnError> => (options.client ?? client).post<ToggleKillswitchResponses, ToggleKillswitchErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/killswitches/{id}/toggle',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -855,7 +1026,7 @@ export const listMetrics = <ThrowOnError extends boolean = false>(options?: Opti
  *
  * **Use cases**
  *
- * - **Track an event** — `count_users(<event>)` for unique-user counts.
+ * - **Track an event** — `count(<event>)` for event counts.
  * - **Sum a value** — `sum(<event>, <label>)` for revenue / quantity metrics.
  * - **Experiment success metric** — create the metric, then attach its id to an experiment.
  */
@@ -905,6 +1076,51 @@ export const getMetric = <ThrowOnError extends boolean = false>(options: Options
 export const updateMetric = <ThrowOnError extends boolean = false>(options: Options<UpdateMetricData, ThrowOnError>): RequestResult<UpdateMetricResponses, UpdateMetricErrors, ThrowOnError> => (options.client ?? client).patch<UpdateMetricResponses, UpdateMetricErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/metrics/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List experiments using a metric
+ *
+ * Returns every experiment that attaches this metric — as `goal`, `guardrail`, or `secondary` — ordered with running experiments first, then by role weight (goal > guardrail > secondary).
+ *
+ * **Use case:** See who depends on a metric before editing or archiving it — e.g. the metric detail panel's "used by" list.
+ */
+export const listMetricExperiments = <ThrowOnError extends boolean = false>(options: Options<ListMetricExperimentsData, ThrowOnError>): RequestResult<ListMetricExperimentsResponses, ListMetricExperimentsErrors, ThrowOnError> => (options.client ?? client).get<ListMetricExperimentsResponses, ListMetricExperimentsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/metrics/{id}/experiments',
+    ...options
+});
+
+/**
+ * Unarchive a metric
+ *
+ * Reverses a soft-delete (archive), making the metric live again. Idempotent — unarchiving a metric that is already live succeeds with no effect.
+ *
+ * **Use case:** Undo an accidental archive (the metrics list "Undo" toast calls this).
+ */
+export const unarchiveMetric = <ThrowOnError extends boolean = false>(options: Options<UnarchiveMetricData, ThrowOnError>): RequestResult<UnarchiveMetricResponses, UnarchiveMetricErrors, ThrowOnError> => (options.client ?? client).post<UnarchiveMetricResponses, UnarchiveMetricErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/metrics/{id}/unarchive',
+    ...options
+});
+
+/**
+ * Get a metric's time series
+ *
+ * Compiles the metric's typed IR into Analytics Engine SQL and returns the bucketed series over the requested window (near-real-time; ingest lag is seconds). The window bounds are epoch **seconds**; `to` must be strictly greater than `from`. The response echoes the SQL that produced the rows.
+ *
+ * Returns `422` when the stored definition can't compile (e.g. a label or event has gone away — re-save the metric), and `502`/`503` when the analytics upstream fails or isn't configured.
+ *
+ * **Use case:** Render the metric trend chart / sparkline, or pull raw bucketed values to feed an external dashboard.
+ */
+export const getMetricSeries = <ThrowOnError extends boolean = false>(options: Options<GetMetricSeriesData, ThrowOnError>): RequestResult<GetMetricSeriesResponses, GetMetricSeriesErrors, ThrowOnError> => (options.client ?? client).post<GetMetricSeriesResponses, GetMetricSeriesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/metrics/{id}/series',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -1014,7 +1230,7 @@ export const approveEvent = <ThrowOnError extends boolean = false>(options: Opti
 /**
  * List the operational queue
  *
- * Returns the unified ops queue (bugs, feature requests, errors, alerts) in work order — highest priority first, oldest first within a priority — so consumers work it top-down. Filter by `type` and/or `status`, and cap with `limit`. Human-gated holding states (items awaiting human sign-off in the dashboard) are never returned by `all`/default status.
+ * Returns the unified ops queue (bugs, feature requests, errors, alerts, measurement plans) in work order — highest priority first, oldest first within a priority — so consumers work it top-down. Filter by `type` and/or `status`, and cap with `limit`. Human-gated holding states (items awaiting human sign-off in the dashboard) are never returned by `all`/default status.
  *
  * **Use case:** Pull the open queue to triage — e.g. every `bug` still `open` — before working items down one by one.
  */
@@ -1042,6 +1258,67 @@ export const createOpsItem = <ThrowOnError extends boolean = false>(options: Opt
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * File a bug
+ *
+ * Files one bug onto a project's queue, awaiting human approval. This is the **public** intake: it authenticates with a *client* SDK key rather than an admin key, so it can be called from a CLI, an installer script, a devtools overlay, or any shipped code — the same places a client key already lives.
+ *
+ * Three gates decide whether a ticket is filed, and nothing else the caller sends can widen them:
+ *
+ * 1. the key is a `client` key carrying the `tickets:public_create` scope,
+ * 2. the key's project has public ticket creation enabled, and
+ * 3. the item is filed as `pending_approval` — parked out of the work queue until a human promotes it in the dashboard.
+ *
+ * The project is the key's own project; there is no `X-Project-Id` to pass and no way to file into someone else's queue. Repeat submissions of the same title dedupe against the open ticket already tracking it, which returns `200` with `deduped: true` instead of filing again.
+ *
+ * This endpoint is served by the Shipeasy **edge worker** (`api.shipeasy.ai`), not the admin API — see `servers` below.
+ *
+ * **Use case:** `shipeasy setup` fails on a customer's machine and self-reports the failure with the user's consent — `{ "title": "Setup failed at Feature installs", "stepsToReproduce": "…", "actualResult": "…" }`.
+ */
+export const createPublicBug = <ThrowOnError extends boolean = false>(options: Options<CreatePublicBugData, ThrowOnError>): RequestResult<CreatePublicBugResponses, CreatePublicBugErrors, ThrowOnError> => (options.client ?? client).post<CreatePublicBugResponses, CreatePublicBugErrors, ThrowOnError>({
+    security: [{ name: 'X-SDK-Key', type: 'apiKey' }],
+    url: '/ops/bug',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * File a feature request
+ *
+ * Files one feature request onto a project's queue, awaiting human approval. The feature-request counterpart to `POST /ops/bug`, with the same three gates: a `client` key carrying `tickets:public_create`, a project that has opted in, and a `pending_approval` state forced server-side.
+ *
+ * The project is the key's own project; there is no `X-Project-Id` to pass. Repeat submissions of the same title dedupe against the open ticket already tracking it, which returns `200` with `deduped: true` instead of filing again.
+ *
+ * This endpoint is served by the Shipeasy **edge worker** (`api.shipeasy.ai`), not the admin API — see `servers` below.
+ *
+ * **Use case:** An in-product "request a feature" form posts what the user asked for — `{ "title": "Dark mode", "useCase": "Reduce eye strain at night" }`.
+ */
+export const createPublicFeatureRequest = <ThrowOnError extends boolean = false>(options: Options<CreatePublicFeatureRequestData, ThrowOnError>): RequestResult<CreatePublicFeatureRequestResponses, CreatePublicFeatureRequestErrors, ThrowOnError> => (options.client ?? client).post<CreatePublicFeatureRequestResponses, CreatePublicFeatureRequestErrors, ThrowOnError>({
+    security: [{ name: 'X-SDK-Key', type: 'apiKey' }],
+    url: '/ops/feature-request',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete a queue item
+ *
+ * Permanently delete a queue item — any type — along with its comment thread, attachments, tags, and investigation records. A human (dashboard) action: the route is never allow-listed for restricted ops keys. Irreversible; to take an item out of the queue without destroying it, set its status (`wont_fix`/`resolved`) instead.
+ *
+ * **Use case:** Remove a junk or duplicate report for good.
+ */
+export const deleteOpsItem = <ThrowOnError extends boolean = false>(options: Options<DeleteOpsItemData, ThrowOnError>): RequestResult<DeleteOpsItemResponses, DeleteOpsItemErrors, ThrowOnError> => (options.client ?? client).delete<DeleteOpsItemResponses, DeleteOpsItemErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}',
+    ...options
 });
 
 /**
@@ -1095,6 +1372,124 @@ export const linkPrToOpsItem = <ThrowOnError extends boolean = false>(options: O
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Ack an item (start a run)
+ *
+ * Acknowledge a queue item — a person or an AI agent declaring "I'm on this
+ * now". Opens a run: stamps who picked the item up and when, assigns them as
+ * owner, and moves the item into the matching working status
+ * (`investigating_by_ai` for an AI ack, `in_progress` for a human one). The
+ * dashboard renders the open run as a live working indicator (which agent +
+ * time since the run started).
+ *
+ * **AI ack.** Pass `agent` with your own agent type (`claude`, `cursor`,
+ * `copilot`, `jules`; `gemini` aliases `jules`) and, when you have one, the
+ * run's `sessionId` so the dashboard can deep-link to the session. If the
+ * project has no connected trigger connector of that type the call fails
+ * with `AGENT_NOT_CONNECTED` — list the available agents with `ops agents
+ * list` and use one of those (or connect the agent under Settings →
+ * Triggers).
+ *
+ * **Completion.** The run closes automatically on the loop's final actions —
+ * linking the fixing PR (`link-pr`), an ops-notify escalation, or a
+ * completion status change (`ready_for_qa`/`resolved`) — and the dashboard
+ * then shows the run result (final action, PR, duration, session link).
+ * A repeat ack supersedes the previous open run.
+ *
+ * **Use case:** Call this first when picking an item up, so the team sees
+ * who/what is working on it in real time.
+ */
+export const ackOpsItem = <ThrowOnError extends boolean = false>(options: Options<AckOpsItemData, ThrowOnError>): RequestResult<AckOpsItemResponses, AckOpsItemErrors, ThrowOnError> => (options.client ?? client).post<AckOpsItemResponses, AckOpsItemErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/ack',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List an item's investigation records
+ *
+ * The structured, read-only investigation records on a queue item — the
+ * findings / blocking questions / QA notes an AI agent posted while working
+ * it, plus its `working` run rows. Returns `published` records only, newest
+ * first (max 50).
+ *
+ * **Use case:** Read what a previous agent run already found before starting
+ * your own investigation of the item.
+ */
+export const listOpsInvestigations = <ThrowOnError extends boolean = false>(options: Options<ListOpsInvestigationsData, ThrowOnError>): RequestResult<ListOpsInvestigationsResponses, ListOpsInvestigationsErrors, ThrowOnError> => (options.client ?? client).get<ListOpsInvestigationsResponses, ListOpsInvestigationsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/investigation',
+    ...options
+});
+
+/**
+ * Record an investigation
+ *
+ * Append one structured investigation record to a queue item — the AI-write
+ * seam the cockpit's detail panel renders read-only. Post your findings
+ * (`kind: investigated`), a blocking question for the team (`kind:
+ * question`), or how to verify the fix (`kind: ready_for_qa` with
+ * `qaNotes`). Append-only and create-only, so it is safe for restricted ops
+ * keys.
+ *
+ * **Use case:** After working an item, leave a findings write-up (summary,
+ * markdown findings, sources inspected, confidence) so the team — and the
+ * next agent run — sees what you learned.
+ */
+export const createOpsInvestigation = <ThrowOnError extends boolean = false>(options: Options<CreateOpsInvestigationData, ThrowOnError>): RequestResult<CreateOpsInvestigationResponses, CreateOpsInvestigationErrors, ThrowOnError> => (options.client ?? client).post<CreateOpsInvestigationResponses, CreateOpsInvestigationErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/investigation',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update an investigation record
+ *
+ * Update one existing investigation record in place — the write-back seam for
+ * the `working` run record you were handed when a run was launched. Fill in
+ * the `summary`/`findings`, attach the fixing PR, record your `confidence`
+ * and the `sources` you inspected, or flip its `kind` off `working` once the
+ * investigation is done. A partial patch: send only the fields you want to
+ * change. Safe for restricted ops keys (it never reads or deletes).
+ *
+ * **Use case:** A run started with an empty `working` record; as you work,
+ * PATCH it with your findings so the cockpit's detail panel fills in live —
+ * no need to append a second record.
+ */
+export const updateOpsInvestigation = <ThrowOnError extends boolean = false>(options: Options<UpdateOpsInvestigationData, ThrowOnError>): RequestResult<UpdateOpsInvestigationResponses, UpdateOpsInvestigationErrors, ThrowOnError> => (options.client ?? client).patch<UpdateOpsInvestigationResponses, UpdateOpsInvestigationErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/investigation/{investigationId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List connected AI agents
+ *
+ * The project's connected AI agents — one per authenticated trigger
+ * connector (Claude / Cursor / Copilot / Jules). These are the agent types
+ * `ops ack` accepts and the agents a queue item can be assigned to.
+ *
+ * **Use case:** Discover which `agent` values an AI ack can use, e.g. after
+ * an `AGENT_NOT_CONNECTED` error.
+ */
+export const listOpsAgents = <ThrowOnError extends boolean = false>(options?: Options<ListOpsAgentsData, ThrowOnError>): RequestResult<ListOpsAgentsResponses, ListOpsAgentsErrors, ThrowOnError> => (options?.client ?? client).get<ListOpsAgentsResponses, ListOpsAgentsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/agent-profiles',
+    ...options
 });
 
 /**
@@ -1235,6 +1630,49 @@ export const updateAlertRule = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
+ * List fired alerts
+ *
+ * Returns the project's FIRED alerts as a **bare JSON array** (no pagination envelope), ordered by `createdAt desc`. Defaults to the currently-firing ones (`status=active`); pass a `status` to widen to resolved/dismissed history or `all`.
+ *
+ * A fired alert is an **instance** of an alert rule, and an instance IS its ops queue item — the same row `/api/admin/ops` returns with `type: "alert"`, viewed through the alert lens. One rule produces many instances over its life and at most one is open at a time: when the condition clears the instance closes, and the next firing is a NEW instance with its own id and history. That is why `severity` reads off the rule (the queue item carries it as `priority`) and why resolving the queue item and clearing the alert are one act, not two rows to keep in step.
+ *
+ * Instances are opened only by the platform — the UI's killswitch handlers plus the worker's analysis consumer and alerts cron — never filed by hand, so this surface is list + triage (via PATCH), with no create. The rules that *define* metric-threshold alerts live at `/api/admin/alert-rules`.
+ *
+ * **Use case:** Snapshot what is currently firing for an on-call view or the home Alerts block, or pull `status=all` to audit how a noisy rule has behaved over time.
+ */
+export const listAlerts = <ThrowOnError extends boolean = false>(options?: Options<ListAlertsData, ThrowOnError>): RequestResult<ListAlertsResponses, ListAlertsErrors, ThrowOnError> => (options?.client ?? client).get<ListAlertsResponses, ListAlertsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/alerts',
+    ...options
+});
+
+/**
+ * Update a fired alert
+ *
+ * Triage writes on one fired alert — the only mutations this surface allows. All body fields are optional (at least one required); only the fields present are changed.
+ *
+ * - **`status`** — flip between `active` / `resolved` / `dismissed`. `resolved` and `dismissed` stamp `resolvedAt` / `dismissedAt`; `active` re-opens and clears both. These write the underlying queue item's own status (`resolved` / `wont_fix` / `open`), so clearing an alert here and resolving it in the ops queue are the same act. A cleared instance is never revived: if the condition fires again it opens a NEW instance with its own id.
+ * - **`assigneeId`** — the PERSON owner (a `users.id`), or `null` to unassign.
+ * - **`agent`** — the AGENT owner: a connected trigger connector's id, or the built-in `"jarvis"` (**Enterprise plan only** — `403` otherwise), or `null` to clear. Person and agent halves are independent.
+ *
+ * Returns the updated row; `404` if the alert does not exist in the project.
+ *
+ * **Use cases**
+ *
+ * - **Wave off a known condition** — `{ "status": "dismissed" }` on an alert that needs no action.
+ * - **Hand it to someone** — `{ "assigneeId": "…" }` from the ops cockpit's Owner column.
+ */
+export const updateAlert = <ThrowOnError extends boolean = false>(options: Options<UpdateAlertData, ThrowOnError>): RequestResult<UpdateAlertResponses, UpdateAlertErrors, ThrowOnError> => (options.client ?? client).patch<UpdateAlertResponses, UpdateAlertErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/alerts/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Show the current project
  *
  * Returns the project the caller's auth header resolves to — plan, status, billing, and which modules are enabled. The server reads the project from the credential, so there is no id parameter. Powers `whoami`.
@@ -1270,6 +1708,19 @@ export const upsertProject = <ThrowOnError extends boolean = false>(options: Opt
 });
 
 /**
+ * Show a project by id
+ *
+ * Returns one project by id — the same full shape as `GET /api/admin/projects/current`. The id in the path must match the project the caller's credential resolves to (a credential can only read its own project); any other id is a 403.
+ *
+ * **Use case:** Re-fetch the project row after a `PATCH` when you already hold its id.
+ */
+export const getProject = <ThrowOnError extends boolean = false>(options: Options<GetProjectData, ThrowOnError>): RequestResult<GetProjectResponses, GetProjectErrors, ThrowOnError> => (options.client ?? client).get<GetProjectResponses, GetProjectErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/projects/{id}',
+    ...options
+});
+
+/**
  * Update the current project
  *
  * Update the current project's settings — name, domain, slug, default environment, timezone, experiment-analysis knobs (statistical method, significance threshold, auto-rollback, minimum sample days), and the per-module enable flags. Partial: only the fields you send change.
@@ -1293,7 +1744,7 @@ export const updateProject = <ThrowOnError extends boolean = false>(options: Opt
  *
  * Returns every locale profile in the project (e.g. `en:prod`, `fr:prod`).
  *
- * **Use case:** Discover which locale profiles exist before pushing keys or publishing a chunk.
+ * **Use case:** Discover which locale profiles exist before pushing keys or publishing.
  */
 export const listI18nProfiles = <ThrowOnError extends boolean = false>(options?: Options<ListI18nProfilesData, ThrowOnError>): RequestResult<ListI18nProfilesResponses, ListI18nProfilesErrors, ThrowOnError> => (options?.client ?? client).get<ListI18nProfilesResponses, ListI18nProfilesErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -1332,11 +1783,13 @@ export const listI18nKeys = <ThrowOnError extends boolean = false>(options?: Opt
 });
 
 /**
- * Push new i18n keys (insert-only)
+ * Push i18n keys (insert-only, or `force` to overwrite)
  *
- * Add NEW keys to a profile. Insert-only — existing keys are left untouched (overwrite one with `updateI18nKey`).
+ * Add NEW keys to a profile. Insert-only by default — existing keys are left untouched and reported back as `skipped`.
  *
- * **Use case:** Seed newly-extracted keys without clobbering translations already in the profile.
+ * Pass `force: true` to overwrite the existing ones in bulk with the submitted values: they come back as `updated` instead of `skipped`. Without `force` the only overwrite paths are `updateI18nKey` (one key) and the devtools-only `upsertI18nKeys`.
+ *
+ * **Use case:** Seed newly-extracted keys without clobbering translations already in the profile — or re-push a whole source-language file with `force` after the copy changed.
  */
 export const pushI18nKeys = <ThrowOnError extends boolean = false>(options: Options<PushI18nKeysData, ThrowOnError>): RequestResult<PushI18nKeysResponses, PushI18nKeysErrors, ThrowOnError> => (options.client ?? client).post<PushI18nKeysResponses, PushI18nKeysErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -1346,6 +1799,38 @@ export const pushI18nKeys = <ThrowOnError extends boolean = false>(options: Opti
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Bulk upsert i18n keys (overwrite)
+ *
+ * Bulk upsert keys into a profile — existing keys ARE overwritten, new ones inserted. The profile's KV snapshot is rebuilt and the CDN purged before the call returns, so the edits go live on their own.
+ *
+ * This is the overwrite counterpart of the insert-only `pushI18nKeys`. It backs the devtools overlay's in-product "Apply changes" label editing and is deliberately not surfaced by the CLI or MCP — those surfaces only expose the insert-only push so a whole `en.json` can't wholesale-overwrite prod.
+ *
+ * **Use case:** Apply a batch of in-product label edits (devtools overlay) in one call.
+ */
+export const upsertI18nKeys = <ThrowOnError extends boolean = false>(options: Options<UpsertI18nKeysData, ThrowOnError>): RequestResult<UpsertI18nKeysResponses, UpsertI18nKeysErrors, ThrowOnError> => (options.client ?? client).put<UpsertI18nKeysResponses, UpsertI18nKeysErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/i18n/keys',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete one i18n key
+ *
+ * Permanently delete a single key from its profile. The profile's KV snapshot is rebuilt and the CDN purged as part of this call, so the removal goes live on its own.
+ *
+ * **Use case:** Remove a stale or mistakenly-pushed key without touching the rest of the profile.
+ */
+export const deleteI18nKey = <ThrowOnError extends boolean = false>(options: Options<DeleteI18nKeyData, ThrowOnError>): RequestResult<DeleteI18nKeyResponses, DeleteI18nKeyErrors, ThrowOnError> => (options.client ?? client).delete<DeleteI18nKeyResponses, DeleteI18nKeyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/i18n/keys/{id}',
+    ...options
 });
 
 /**
@@ -1398,6 +1883,19 @@ export const createI18nDraft = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
+ * Delete a translation draft
+ *
+ * Permanently delete a staged translation draft. Its staged keys are removed with it; the target profile's live keys are untouched.
+ *
+ * **Use case:** Discard a draft that will never ship instead of leaving it abandoned.
+ */
+export const deleteI18nDraft = <ThrowOnError extends boolean = false>(options: Options<DeleteI18nDraftData, ThrowOnError>): RequestResult<DeleteI18nDraftResponses, DeleteI18nDraftErrors, ThrowOnError> => (options.client ?? client).delete<DeleteI18nDraftResponses, DeleteI18nDraftErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/i18n/drafts/{draftId}',
+    ...options
+});
+
+/**
  * Update a translation draft
  *
  * Transition a draft's lifecycle state (`open` / `merged` / `abandoned`).
@@ -1415,9 +1913,52 @@ export const updateI18nDraft = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
+ * Delete an i18n profile
+ *
+ * Soft-delete a locale profile. The project's default profile cannot be deleted (409). The profile's keys are retained in the database but the profile no longer resolves for listing or publishing.
+ *
+ * **Use case:** Retire a locale that is no longer shipped.
+ */
+export const deleteI18nProfile = <ThrowOnError extends boolean = false>(options: Options<DeleteI18nProfileData, ThrowOnError>): RequestResult<DeleteI18nProfileResponses, DeleteI18nProfileErrors, ThrowOnError> => (options.client ?? client).delete<DeleteI18nProfileResponses, DeleteI18nProfileErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/i18n/profiles/{profileId}',
+    ...options
+});
+
+/**
+ * List a draft's staged keys
+ *
+ * Returns every staged key in a translation draft — the values queued to ship when the draft is merged.
+ *
+ * **Use case:** Review a machine-translation draft's staged strings before marking it merged.
+ */
+export const listI18nDraftKeys = <ThrowOnError extends boolean = false>(options: Options<ListI18nDraftKeysData, ThrowOnError>): RequestResult<ListI18nDraftKeysResponses, ListI18nDraftKeysErrors, ThrowOnError> => (options.client ?? client).get<ListI18nDraftKeysResponses, ListI18nDraftKeysErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/i18n/drafts/{draftId}/keys',
+    ...options
+});
+
+/**
+ * Upsert one staged draft key
+ *
+ * Upsert a single staged key into an **open** draft — inserted when new, overwritten when it already exists. A draft that is `merged` or `abandoned` rejects the write (400). `{{var}}` placeholder names are auto-derived from the value.
+ *
+ * **Use case:** Stage or correct one translation in a draft under review without touching the live profile.
+ */
+export const upsertI18nDraftKey = <ThrowOnError extends boolean = false>(options: Options<UpsertI18nDraftKeyData, ThrowOnError>): RequestResult<UpsertI18nDraftKeyResponses, UpsertI18nDraftKeyErrors, ThrowOnError> => (options.client ?? client).post<UpsertI18nDraftKeyResponses, UpsertI18nDraftKeyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/i18n/drafts/{draftId}/keys',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Publish a profile live
  *
- * Publish a profile to the CDN — rebuild its KV snapshot + purge the edge. Publishing is PROFILE-WIDE: the whole profile is snapshotted into one KV blob, so the optional `chunk` in the body is an audit label only (it does not scope what ships).
+ * Publish a profile to the CDN — rebuild its KV snapshot + purge the edge. Publishing is PROFILE-WIDE: the whole profile is snapshotted into one KV blob, so the body takes no options.
  *
  * **Use case:** Ship the latest translations live after pushing/updating keys.
  */
@@ -1466,9 +2007,9 @@ export const listErrors = <ThrowOnError extends boolean = false>(options?: Optio
 /**
  * Get a tracked error
  *
- * Returns a single tracked error by its id, including the latest occurrence's stack, extras, and consequence. Returns `404` if no such error exists in the project.
+ * Returns a single tracked error by its id, including the latest occurrence's stack, extras, and consequence, plus `occurrences` — the sampled per-instance detail rows behind the issue (newest first; exhaustive while the issue is small, thinned at volume, capped at 100). Returns `404` if no such error exists in the project.
  *
- * **Use case:** Drill into one issue — fetch its full stack and `seenUrls` to investigate, or to render the detail panel behind a row in the errors list.
+ * **Use case:** Drill into one issue — fetch its full stack and `seenUrls` to investigate, or walk `occurrences` to see how the failing message/stack varies across instances.
  */
 export const getError = <ThrowOnError extends boolean = false>(options: Options<GetErrorData, ThrowOnError>): RequestResult<GetErrorResponses, GetErrorErrors, ThrowOnError> => (options.client ?? client).get<GetErrorResponses, GetErrorErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -1510,6 +2051,19 @@ export const updateErrorStatus = <ThrowOnError extends boolean = false>(options:
 export const fileErrorTicket = <ThrowOnError extends boolean = false>(options: Options<FileErrorTicketData, ThrowOnError>): RequestResult<FileErrorTicketResponses, FileErrorTicketErrors, ThrowOnError> => (options.client ?? client).post<FileErrorTicketResponses, FileErrorTicketErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/errors/{id}/file',
+    ...options
+});
+
+/**
+ * Resolve a tracked error
+ *
+ * Marks one tracked error `resolved` — the single-purpose "close out" action. Takes no body; it is `PATCH /api/admin/errors/{id}` pinned to `{ "status": "resolved" }`, exposed so tooling can close an error without being handed the full open/resolved/ignored status machine. A resolved error reopens automatically (ingestion-side) if it recurs, so resolving is always safe: a premature resolve un-does itself on the next occurrence. Returns the updated row; `404` if the error does not exist.
+ *
+ * **Use case:** Close out a tracked error from an agent or script once its fix has shipped — e.g. after a deploy, resolve every open issue the change addressed and let recurrence reopen anything that wasn't actually fixed.
+ */
+export const resolveError = <ThrowOnError extends boolean = false>(options: Options<ResolveErrorData, ThrowOnError>): RequestResult<ResolveErrorResponses, ResolveErrorErrors, ThrowOnError> => (options.client ?? client).post<ResolveErrorResponses, ResolveErrorErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/errors/{id}/resolve',
     ...options
 });
 
@@ -1728,6 +2282,25 @@ export const listKeys = <ThrowOnError extends boolean = false>(options?: Options
 export const createKey = <ThrowOnError extends boolean = false>(options: Options<CreateKeyData, ThrowOnError>): RequestResult<CreateKeyResponses, CreateKeyErrors, ThrowOnError> => (options.client ?? client).post<CreateKeyResponses, CreateKeyErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/keys',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update an API key's label
+ *
+ * Renames a key or re-notes what it is for. **Only `name` and `description` are editable** — everything that gives the key its authority (`type`, `env`, `scopes`, `expires_at`) is fixed at mint, because the worker derives the read env and permissions from the key itself. To change any of those, rotate: mint a replacement and revoke this one.
+ *
+ * Omitted fields are left untouched; send `null` to clear one. Returns the updated key row. Revoked keys can still be relabelled (the audit trail outlives the credential). Returns `404` if no such key exists in the project.
+ *
+ * **Use case:** A key minted by `shipeasy setup` carries an auto-composed provenance label — rename it to the service that actually holds it and note the rotation owner.
+ */
+export const updateKey = <ThrowOnError extends boolean = false>(options: Options<UpdateKeyData, ThrowOnError>): RequestResult<UpdateKeyResponses, UpdateKeyErrors, ThrowOnError> => (options.client ?? client).patch<UpdateKeyResponses, UpdateKeyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/keys/{id}',
     ...options,
     headers: {
         'Content-Type': 'application/json',

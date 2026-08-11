@@ -31,7 +31,15 @@ import type {
 import { DEFAULT_ADMIN_BASE_URL, PERMISSIVE_CONFIG_SCHEMA } from "./types";
 // Generated `z.infer` request shapes (@hey-api zod plugin). `createBug` /
 // `createFeatureRequest` inject the `type` discriminator, so callers omit it.
-import type { CreateBugRequestInput, CreateFeatureRequestRequestInput } from "./generated/zod.gen";
+import type { z } from "zod";
+import type { zCreateBugRequest, zCreateFeatureRequestRequest } from "./generated/zod.gen";
+
+// The PRE-PARSE shape, not `z.infer`. Fields carrying a schema default
+// (`subscribers`, `tags`) are required in the parsed output and optional in the
+// input — a caller filing a bug supplies neither, so `z.input` is the side of
+// the schema a request body belongs on.
+type CreateBugInput = z.input<typeof zCreateBugRequest>;
+type CreateFeatureRequestInput = z.input<typeof zCreateFeatureRequestRequest>;
 import type {
   CreateOpsItemRequest,
   UpdateOpsItemRequest,
@@ -563,7 +571,7 @@ export class DevtoolsClient {
     this.cache.delete(`featureRequest:${id}`);
   }
 
-  async createBug(input: Omit<CreateBugRequestInput, "type">): Promise<{ id: string }> {
+  async createBug(input: Omit<CreateBugInput, "type">): Promise<{ id: string }> {
     const r = this.unwrap(
       "/api/admin/ops",
       await createOpsItem({
@@ -619,7 +627,7 @@ export class DevtoolsClient {
   }
 
   async createFeatureRequest(
-    input: Omit<CreateFeatureRequestRequestInput, "type">,
+    input: Omit<CreateFeatureRequestInput, "type">,
   ): Promise<{ id: string }> {
     const r = this.unwrap(
       "/api/admin/ops",

@@ -2,100 +2,112 @@
 
 import * as z from 'zod';
 
-export const zListGatesResponse = z.object({
-    data: z.array(z.object({
-        id: z.string(),
-        name: z.string().max(128).regex(/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?)?$/),
-        enabled: z.union([
-            z.boolean(),
-            z.int().gte(0).lte(1)
+/**
+ * The single wire shape for a gate row, shared by `ListGatesResponse` (`data[]` items) and `GET /api/admin/gates/{id}`.
+ */
+export const zGateApiRow = z.object({
+    id: z.string(),
+    name: z.string().max(128).regex(/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?)?$/),
+    enabled: z.union([
+        z.boolean(),
+        z.int().gte(0).lte(1)
+    ]),
+    type: z.enum(['targeting', 'holdout']).optional(),
+    rolloutPct: z.int().gte(0).lte(10000),
+    rules: z.array(z.object({
+        attr: z.string().min(1),
+        op: z.enum([
+            'eq',
+            'neq',
+            'in',
+            'not_in',
+            'gt',
+            'gte',
+            'lt',
+            'lte',
+            'contains',
+            'regex',
+            'semver_gt',
+            'semver_gte',
+            'semver_lt',
+            'semver_lte',
+            'gate_pass',
+            'exp_in'
         ]),
-        type: z.enum(['targeting', 'holdout']).optional(),
-        rolloutPct: z.int().gte(0).lte(10000),
-        rules: z.array(z.object({
-            attr: z.string().min(1),
-            op: z.enum([
-                'eq',
-                'neq',
-                'in',
-                'not_in',
-                'gt',
-                'gte',
-                'lt',
-                'lte',
-                'contains',
-                'regex',
-                'semver_gt',
-                'semver_gte',
-                'semver_lt',
-                'semver_lte',
-                'gate_pass',
-                'exp_in'
-            ]),
-            value: z.unknown()
-        })).optional(),
-        salt: z.string().optional(),
-        title: z.string().nullish(),
-        description: z.string().nullish(),
-        folder: z.string().nullish(),
-        groupName: z.string().nullish(),
-        ownerEmail: z.string().nullish(),
-        stack: z.array(z.union([z.object({
-                id: z.string().min(1),
-                type: z.literal('condition'),
-                name: z.string().optional(),
-                fromTemplate: z.string().nullish(),
-                pass: z.enum(['all', 'any']).optional(),
-                rules: z.array(z.object({
-                    attr: z.string().min(1),
-                    op: z.enum([
-                        'eq',
-                        'neq',
-                        'in',
-                        'not_in',
-                        'gt',
-                        'gte',
-                        'lt',
-                        'lte',
-                        'contains',
-                        'regex',
-                        'semver_gt',
-                        'semver_gte',
-                        'semver_lt',
-                        'semver_lte',
-                        'gate_pass',
-                        'exp_in'
-                    ]),
-                    value: z.unknown()
-                })).optional().default([]),
-                rolloutPct: z.int().gte(0).lte(10000).optional(),
-                bucketBy: z.string().optional(),
-                salt: z.string().optional(),
-                ramp: z.object({
-                    from: z.int().gte(0).lte(10000),
-                    to: z.int().gte(0).lte(10000),
-                    startAt: z.int().gte(0).lte(9007199254740991),
-                    durationMs: z.int().gt(0).lte(9007199254740991)
-                }).optional(),
-                locked: z.boolean().optional()
-            }), z.object({
-                id: z.string().min(1),
-                type: z.literal('rollout'),
-                name: z.string().optional(),
-                fromTemplate: z.string().nullish(),
-                rolloutPct: z.int().gte(0).lte(10000),
-                bucketBy: z.string().optional(),
-                salt: z.string().optional(),
-                ramp: z.object({
-                    from: z.int().gte(0).lte(10000),
-                    to: z.int().gte(0).lte(10000),
-                    startAt: z.int().gte(0).lte(9007199254740991),
-                    durationMs: z.int().gt(0).lte(9007199254740991)
-                }).optional(),
-                locked: z.boolean().optional()
-            })])).nullish(),
-        updatedAt: z.string()
-    })),
+        value: z.unknown()
+    })).optional(),
+    salt: z.string().optional(),
+    title: z.string().nullish(),
+    description: z.string().nullish(),
+    folder: z.string().nullish(),
+    groupName: z.string().nullish(),
+    ownerEmail: z.string().nullish(),
+    stack: z.array(z.union([z.object({
+            id: z.string().min(1),
+            type: z.literal('condition'),
+            name: z.string().optional(),
+            fromTemplate: z.string().nullish(),
+            pass: z.enum(['all', 'any']).optional(),
+            rules: z.array(z.object({
+                attr: z.string().min(1),
+                op: z.enum([
+                    'eq',
+                    'neq',
+                    'in',
+                    'not_in',
+                    'gt',
+                    'gte',
+                    'lt',
+                    'lte',
+                    'contains',
+                    'regex',
+                    'semver_gt',
+                    'semver_gte',
+                    'semver_lt',
+                    'semver_lte',
+                    'gate_pass',
+                    'exp_in'
+                ]),
+                value: z.unknown()
+            })).optional().default([]),
+            rolloutPct: z.int().gte(0).lte(10000).optional(),
+            bucketBy: z.string().optional(),
+            salt: z.string().optional(),
+            ramp: z.object({
+                from: z.int().gte(0).lte(10000),
+                to: z.int().gte(0).lte(10000),
+                startAt: z.int().gte(0).lte(9007199254740991),
+                durationMs: z.int().gt(0).lte(9007199254740991)
+            }).optional(),
+            locked: z.boolean().optional(),
+            whitelist: z.boolean().optional()
+        }), z.object({
+            id: z.string().min(1),
+            type: z.literal('rollout'),
+            name: z.string().optional(),
+            fromTemplate: z.string().nullish(),
+            rolloutPct: z.int().gte(0).lte(10000),
+            bucketBy: z.string().optional(),
+            salt: z.string().optional(),
+            ramp: z.object({
+                from: z.int().gte(0).lte(10000),
+                to: z.int().gte(0).lte(10000),
+                startAt: z.int().gte(0).lte(9007199254740991),
+                durationMs: z.int().gt(0).lte(9007199254740991)
+            }).optional(),
+            locked: z.boolean().optional()
+        })])).nullish(),
+    updatedAt: z.string(),
+    creatorEmail: z.string().nullable(),
+    updaterEmail: z.string().nullable(),
+    version: z.int().gte(1).lte(9007199254740991),
+    createdAt: z.string().nullable()
+});
+
+export type GateApiRowInput = z.infer<typeof zGateApiRow>;
+
+export const zListGatesResponse = z.object({
+    data: z.array(zGateApiRow),
     next_cursor: z.string().nullable()
 });
 
@@ -128,7 +140,8 @@ export const zErrorCode = z.enum([
     'EXPERIMENT_RUNNING_ARCHIVE',
     'EXPERIMENT_IMMUTABLE_FIELD',
     'METRIC_NOT_FOUND',
-    'METRIC_UNKNOWN_ID'
+    'METRIC_UNKNOWN_ID',
+    'AGENT_NOT_CONNECTED'
 ]);
 
 export type ErrorCodeInput = z.infer<typeof zErrorCode>;
@@ -223,7 +236,8 @@ export const zCreateGateRequest = z.object({
                 startAt: z.int().gte(0).lte(9007199254740991),
                 durationMs: z.int().gt(0).lte(9007199254740991)
             }).optional(),
-            locked: z.boolean().optional()
+            locked: z.boolean().optional(),
+            whitelist: z.boolean().optional()
         }), z.object({
             id: z.string().min(1),
             type: z.literal('rollout'),
@@ -336,7 +350,8 @@ export const zUpdateGateRequest = z.object({
                 startAt: z.int().gte(0).lte(9007199254740991),
                 durationMs: z.int().gt(0).lte(9007199254740991)
             }).optional(),
-            locked: z.boolean().optional()
+            locked: z.boolean().optional(),
+            whitelist: z.boolean().optional()
         }), z.object({
             id: z.string().min(1),
             type: z.literal('rollout'),
@@ -385,47 +400,150 @@ export const zDisableGateResponse = z.object({
 
 export type DisableGateResponseInput = z.infer<typeof zDisableGateResponse>;
 
-export const zListExperimentsResponse = z.object({
-    data: z.array(z.object({
-        id: z.string(),
-        name: z.string().max(128).regex(/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?)?$/),
-        description: z.string().nullable(),
-        hypothesis: z.string().nullable(),
-        tag: z.string().nullable(),
-        ownerEmail: z.string().nullable(),
-        audience: z.string().nullable(),
-        bucketBy: z.string().min(1).max(128).regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).nullable(),
-        folder: z.string().nullable(),
-        status: z.enum([
-            'draft',
-            'running',
-            'stopped',
-            'archived'
-        ]),
-        universe: z.string(),
-        targetingGate: z.string().nullable(),
-        holdoutGate: z.string().nullish(),
-        allocationPct: z.int().gte(-9007199254740991).lte(9007199254740991),
-        reservedHeadroom: z.int().gte(0).lte(10000).optional(),
-        salt: z.string(),
-        params: z.record(z.string(), z.enum([
-            'string',
-            'bool',
-            'number'
-        ])),
-        groups: z.array(z.object({
-            name: z.string().min(1).max(64),
-            weight: z.int().gte(0).lte(10000),
-            params: z.record(z.string(), z.unknown()).optional().default({})
-        })),
-        significanceThreshold: z.number(),
-        minRuntimeDays: z.int().gte(-9007199254740991).lte(9007199254740991),
-        minSampleSize: z.int().gte(-9007199254740991).lte(9007199254740991),
-        sequentialTesting: z.boolean(),
-        startedAt: z.string().nullable(),
-        stoppedAt: z.string().nullish(),
-        updatedAt: z.string()
+/**
+ * Recent audit rows for one gate, newest first.
+ */
+export const zListGateActivityResponse = z.array(z.object({
+    id: z.string(),
+    action: z.string(),
+    actorEmail: z.string(),
+    actorType: z.enum([
+        'user',
+        'cli',
+        'system'
+    ]),
+    payload: z.unknown(),
+    createdAt: z.string()
+}));
+
+export type ListGateActivityResponseInput = z.infer<typeof zListGateActivityResponse>;
+
+/**
+ * Which identity attribute the whitelist matches on. `email` compares the caller's `email`; `user_id` compares the caller's `userID`. A whitelist matches on exactly one of the two at a time.
+ */
+export const zGateWhitelistAttr = z.enum(['email', 'user_id']);
+
+export type GateWhitelistAttrInput = z.infer<typeof zGateWhitelistAttr>;
+
+/**
+ * A gate's whitelist — the always-first allowlist that admits the listed identities before any targeting rule or rollout runs. Backed by the pinned `whitelist` entry at the head of the gate's `stack`, so it is the same list the dashboard's Whitelist block edits.
+ */
+export const zGateWhitelist = z.object({
+    id: z.string(),
+    name: z.string(),
+    attr: zGateWhitelistAttr,
+    entries: z.array(z.string().min(1))
+});
+
+export type GateWhitelistInput = z.infer<typeof zGateWhitelist>;
+
+/**
+ * Body for `PUT /api/admin/gates/{id}/whitelist`. Replaces the whole list — idempotent, and the only call that can switch `attr` or clear the whitelist.
+ */
+export const zSetGateWhitelistRequest = z.object({
+    attr: zGateWhitelistAttr.optional(),
+    entries: z.array(z.string().min(1))
+});
+
+export type SetGateWhitelistRequestInput = z.infer<typeof zSetGateWhitelistRequest>;
+
+/**
+ * Body for `POST /api/admin/gates/{id}/whitelist`. Adds entries to the whitelist, creating it if the gate doesn't have one.
+ */
+export const zAddToGateWhitelistRequest = z.object({
+    attr: zGateWhitelistAttr.optional(),
+    entries: z.array(z.string().min(1)).min(1)
+});
+
+export type AddToGateWhitelistRequestInput = z.infer<typeof zAddToGateWhitelistRequest>;
+
+/**
+ * Body for `DELETE /api/admin/gates/{id}/whitelist`. Removes entries from the whitelist. Removing the last entry leaves an empty whitelist in place — use `PUT` with `entries: []` to drop the block itself.
+ */
+export const zRemoveFromGateWhitelistRequest = z.object({
+    entries: z.array(z.string().min(1)).min(1)
+});
+
+export type RemoveFromGateWhitelistRequestInput = z.infer<typeof zRemoveFromGateWhitelistRequest>;
+
+export const zExperimentApiRow = z.object({
+    id: z.string(),
+    name: z.string().max(128).regex(/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?)?$/),
+    description: z.string().nullable(),
+    hypothesis: z.string().nullable(),
+    tag: z.string().nullable(),
+    ownerEmail: z.string().nullable(),
+    audience: z.string().nullable(),
+    bucketBy: z.string().min(1).max(128).regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).nullable(),
+    folder: z.string().nullable(),
+    status: z.enum([
+        'draft',
+        'running',
+        'stopped',
+        'archived'
+    ]),
+    universe: z.string(),
+    targetingGate: z.string().nullable(),
+    holdoutGate: z.string().nullable(),
+    allocationPct: z.int().gte(-9007199254740991).lte(9007199254740991),
+    reservedHeadroom: z.int().gte(0).lte(10000),
+    hashVersion: z.int().gte(1),
+    poolOffsetBp: z.int().gte(0).lte(10000).nullable(),
+    poolSizeBp: z.int().gte(0).lte(10000).nullable(),
+    salt: z.string(),
+    params: z.record(z.string(), z.enum([
+        'string',
+        'bool',
+        'number'
+    ])),
+    groups: z.array(z.object({
+        name: z.string().min(1).max(64),
+        weight: z.int().gte(0).lte(10000),
+        params: z.record(z.string(), z.unknown()).optional().default({})
     })),
+    significanceThreshold: z.number(),
+    minRuntimeDays: z.int().gte(-9007199254740991).lte(9007199254740991),
+    minSampleSize: z.int().gte(-9007199254740991).lte(9007199254740991),
+    sequentialTesting: z.boolean(),
+    startedAt: z.string().nullable(),
+    stoppedAt: z.string().nullable(),
+    updatedAt: z.string(),
+    version: z.int().nullable(),
+    creatorEmail: z.string().nullish(),
+    updaterEmail: z.string().nullish(),
+    verdict: z.enum([
+        'ship',
+        'hold',
+        'wait',
+        'invalid',
+        'draft'
+    ]).optional(),
+    verdictTitle: z.string().optional(),
+    verdictWhy: z.string().optional(),
+    goalMetric: z.object({
+        id: z.string(),
+        name: z.string()
+    }).nullish(),
+    guardrails: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        eventName: z.string().nullish()
+    })).optional(),
+    guardrailCount: z.int().gte(0).optional(),
+    primaryLiftPct: z.number().nullish(),
+    significancePct: z.number().nullish(),
+    sampleSize: z.int().nullish(),
+    exposure: z.array(z.object({
+        ds: z.string(),
+        value: z.number()
+    })).optional(),
+    exposureTotal: z.int().nullish()
+});
+
+export type ExperimentApiRowInput = z.infer<typeof zExperimentApiRow>;
+
+export const zListExperimentsResponse = z.object({
+    data: z.array(zExperimentApiRow),
     next_cursor: z.string().nullable()
 });
 
@@ -446,10 +564,7 @@ export const zExperimentInlineMetric = z.object({
     query: z.string().min(1).max(4096).optional(),
     event: z.string().min(1).max(256).optional(),
     aggregation: z.enum([
-        'count_users',
         'count_events',
-        'retention_7d',
-        'retention_30d',
         'sum',
         'avg'
     ]).optional(),
@@ -504,47 +619,6 @@ export const zCreateExperimentResponse = z.object({
 });
 
 export type CreateExperimentResponseInput = z.infer<typeof zCreateExperimentResponse>;
-
-export const zGetExperimentResponse = z.object({
-    id: z.string(),
-    name: z.string().max(128).regex(/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?)?$/),
-    description: z.string().nullable(),
-    hypothesis: z.string().nullable(),
-    tag: z.string().nullable(),
-    ownerEmail: z.string().nullable(),
-    audience: z.string().nullable(),
-    bucketBy: z.string().min(1).max(128).regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).nullable(),
-    folder: z.string().nullable(),
-    status: z.enum([
-        'draft',
-        'running',
-        'stopped',
-        'archived'
-    ]),
-    universe: z.string(),
-    targetingGate: z.string().nullable(),
-    allocationPct: z.int().gte(-9007199254740991).lte(9007199254740991),
-    salt: z.string(),
-    params: z.record(z.string(), z.enum([
-        'string',
-        'bool',
-        'number'
-    ])),
-    groups: z.array(z.object({
-        name: z.string().min(1).max(64),
-        weight: z.int().gte(0).lte(10000),
-        params: z.record(z.string(), z.unknown()).optional().default({})
-    })),
-    significanceThreshold: z.number(),
-    minRuntimeDays: z.int().gte(-9007199254740991).lte(9007199254740991),
-    minSampleSize: z.int().gte(-9007199254740991).lte(9007199254740991),
-    sequentialTesting: z.boolean(),
-    startedAt: z.string().nullable(),
-    stoppedAt: z.string().nullish(),
-    updatedAt: z.string()
-});
-
-export type GetExperimentResponseInput = z.infer<typeof zGetExperimentResponse>;
 
 export const zDeleteExperimentResponse = z.object({
     ok: z.literal(true)
@@ -655,6 +729,37 @@ export const zSetExperimentMetricsResponse = z.object({
 
 export type SetExperimentMetricsResponseInput = z.infer<typeof zSetExperimentMetricsResponse>;
 
+/**
+ * One persisted analysis row (`experiment_results`) for a single metric/group/day slice. Camel-case wire names; nullable statistics are `null` on control rows, empty arms, or when the analysis pass hasn't produced them.
+ */
+export const zExperimentResultRow = z.object({
+    metric: z.string(),
+    groupName: z.string(),
+    ds: z.string(),
+    n: z.int().nullable(),
+    mean: z.number().nullable(),
+    variance: z.number().nullable(),
+    delta: z.number().nullable(),
+    deltaPct: z.number().nullable(),
+    ci95Low: z.number().nullable(),
+    ci95High: z.number().nullable(),
+    ci99Low: z.number().nullable(),
+    ci99High: z.number().nullable(),
+    ciLow: z.number().nullable(),
+    ciHigh: z.number().nullable(),
+    pValue: z.number().nullable(),
+    expectedN: z.int().nullable(),
+    realizedMde: z.number().nullable(),
+    srmPValue: z.number().nullable(),
+    srmDetected: z.int(),
+    msprtSignificant: z.int().nullable(),
+    msprtLambda: z.number().nullable(),
+    isFinal: z.int(),
+    peekWarning: z.int()
+});
+
+export type ExperimentResultRowInput = z.infer<typeof zExperimentResultRow>;
+
 export const zGetExperimentResultsResponse = z.object({
     experiment: z.object({
         id: z.string(),
@@ -666,17 +771,7 @@ export const zGetExperimentResultsResponse = z.object({
             'archived'
         ])
     }),
-    results: z.array(z.object({
-        metric: z.string(),
-        group_name: z.string(),
-        ds: z.string(),
-        n: z.number().nullable(),
-        mean: z.number().nullable(),
-        delta_pct: z.number().nullable(),
-        p_value: z.number().nullable(),
-        srm_detected: z.number().nullable(),
-        realized_mde: z.number().nullable()
-    })),
+    results: z.array(zExperimentResultRow),
     verdict: z.enum([
         'ship',
         'hold',
@@ -699,33 +794,115 @@ export const zGetExperimentTimeseriesResponse = z.object({
             'archived'
         ])
     }),
-    series: z.array(z.object({
-        metric: z.string(),
-        group_name: z.string(),
-        ds: z.string(),
-        n: z.number().nullable(),
-        mean: z.number().nullable(),
-        delta_pct: z.number().nullable(),
-        p_value: z.number().nullable(),
-        srm_detected: z.number().nullable()
-    }))
+    series: z.array(zExperimentResultRow)
 });
 
 export type GetExperimentTimeseriesResponseInput = z.infer<typeof zGetExperimentTimeseriesResponse>;
 
 export const zReanalyzeExperimentResponse = z.object({
     id: z.string(),
-    queued: z.literal(true)
+    queued: z.boolean()
 });
 
 export type ReanalyzeExperimentResponseInput = z.infer<typeof zReanalyzeExperimentResponse>;
+
+/**
+ * Body for `POST /api/admin/experiments/{id}/readouts`. Mints an immutable, dated readout snapshot of the current results view — "this is what we saw when we decided".
+ */
+export const zCreateExperimentReadoutRequest = z.object({
+    kind: z.enum([
+        'manual',
+        'ship',
+        'stop'
+    ]),
+    acknowledgedCaveatIds: z.array(z.string()).optional(),
+    requireAllAcknowledged: z.boolean().optional()
+});
+
+export type CreateExperimentReadoutRequestInput = z.infer<typeof zCreateExperimentReadoutRequest>;
+
+export const zCreateExperimentReadoutResponse = z.object({
+    id: z.string()
+});
+
+export type CreateExperimentReadoutResponseInput = z.infer<typeof zCreateExperimentReadoutResponse>;
+
+/**
+ * Frozen per-metric numbers as rendered at mint time. Display-shaped, not row-shaped — the snapshot keeps rendering exactly what was decided on even if derivations change later.
+ */
+export const zExperimentReadoutMetric = z.object({
+    name: z.string(),
+    role: z.enum([
+        'goal',
+        'guardrail',
+        'secondary'
+    ]),
+    delta: z.number().nullable(),
+    deltaPct: z.number().nullable(),
+    ci: z.tuple([z.number(), z.number()]).nullable(),
+    p: z.number().nullable(),
+    sig: z.boolean(),
+    pass: z.boolean().optional()
+});
+
+export type ExperimentReadoutMetricInput = z.infer<typeof zExperimentReadoutMetric>;
+
+/**
+ * One caveat from the results view, frozen with its acknowledgment state at mint time.
+ */
+export const zExperimentReadoutCaveat = z.object({
+    id: z.string(),
+    severity: z.enum([
+        'info',
+        'warn',
+        'danger'
+    ]),
+    text: z.string(),
+    acknowledged: z.boolean()
+});
+
+export type ExperimentReadoutCaveatInput = z.infer<typeof zExperimentReadoutCaveat>;
+
+/**
+ * An immutable, dated readout snapshot — the frozen results view captured when a decision was made. Never updated after insert.
+ */
+export const zExperimentReadoutApiRow = z.object({
+    id: z.string(),
+    experimentId: z.string(),
+    experimentName: z.string(),
+    kind: z.enum([
+        'manual',
+        'ship',
+        'stop'
+    ]),
+    createdBy: z.string(),
+    createdAt: z.string(),
+    verdict: z.string(),
+    title: z.string(),
+    why: z.string(),
+    configHash: z.string(),
+    metricsJson: z.array(zExperimentReadoutMetric).nullable(),
+    caveatsJson: z.array(zExperimentReadoutCaveat).nullable(),
+    usersJson: z.object({
+        groups: z.array(z.object({
+            name: z.string(),
+            n: z.number()
+        })),
+        days: z.number()
+    }).nullable()
+});
+
+export type ExperimentReadoutApiRowInput = z.infer<typeof zExperimentReadoutApiRow>;
 
 export const zListConfigsResponse = z.object({
     data: z.array(z.object({
         id: z.string(),
         name: z.string().max(128),
         description: z.string().nullable(),
+        folder: z.string().nullable(),
         schema: z.record(z.string(), z.unknown()),
+        creatorEmail: z.string().nullish(),
+        createdAt: z.string().nullish(),
         updatedAt: z.string(),
         envs: z.record(z.string(), z.object({
             version: z.int().gte(-9007199254740991).lte(9007199254740991),
@@ -753,14 +930,17 @@ export const zConfigName = z.string().max(128).regex(/^(?:_default|[a-z0-9](?:[a
 export type ConfigNameInput = z.infer<typeof zConfigName>;
 
 /**
- * Body for `POST /api/admin/configs`. `name` + `schema` required.
+ * Body for `POST /api/admin/configs`. `name` + `schema` required. Per-env `dev`/`staging`/`prod` values are published to that env at version 1 (overriding `value`).
  */
 export const zCreateConfigRequest = z.object({
     name: zConfigName,
     description: z.string().max(512).optional(),
     folder: zFolder.optional(),
     schema: z.record(z.string(), z.unknown()),
-    value: z.unknown().optional()
+    value: z.record(z.string(), z.unknown()).optional(),
+    dev: z.record(z.string(), z.unknown()).optional(),
+    staging: z.record(z.string(), z.unknown()).optional(),
+    prod: z.record(z.string(), z.unknown()).optional()
 });
 
 export type CreateConfigRequestInput = z.infer<typeof zCreateConfigRequest>;
@@ -776,7 +956,10 @@ export const zGetConfigResponse = z.object({
     id: z.string(),
     name: z.string().max(128),
     description: z.string().nullable(),
+    folder: z.string().nullable(),
     schema: z.record(z.string(), z.unknown()),
+    creatorEmail: z.string().nullish(),
+    createdAt: z.string().nullish(),
     updatedAt: z.string(),
     envs: z.record(z.string(), z.object({
         version: z.int().gte(-9007199254740991).lte(9007199254740991),
@@ -801,11 +984,14 @@ export const zDeleteConfigResponse = z.object({
 export type DeleteConfigResponseInput = z.infer<typeof zDeleteConfigResponse>;
 
 /**
- * Body for `PATCH /api/admin/configs/{id}`. Partial — only supplied fields change. `value` republishes on every env.
+ * Body for `PATCH /api/admin/configs/{id}`. Partial — only supplied fields change. `value` republishes on every env; per-env `dev`/`staging`/`prod` publish a new version to just that env.
  */
 export const zUpdateConfigRequest = z.object({
     schema: z.record(z.string(), z.unknown()).optional(),
-    value: z.unknown().optional(),
+    value: z.record(z.string(), z.unknown()).optional(),
+    dev: z.record(z.string(), z.unknown()).optional(),
+    staging: z.record(z.string(), z.unknown()).optional(),
+    prod: z.record(z.string(), z.unknown()).optional(),
     folder: zFolder.optional()
 });
 
@@ -833,7 +1019,7 @@ export type EnvInput = z.infer<typeof zEnv>;
  */
 export const zSaveConfigDraftRequest = z.object({
     env: zEnv,
-    value: z.unknown()
+    value: z.record(z.string(), z.unknown())
 });
 
 export type SaveConfigDraftRequestInput = z.infer<typeof zSaveConfigDraftRequest>;
@@ -912,11 +1098,26 @@ export const zUpdateConfigSchemaResponse = z.object({
 
 export type UpdateConfigSchemaResponseInput = z.infer<typeof zUpdateConfigSchemaResponse>;
 
+/**
+ * Full published-value history for one (config, env), newest first. The config's schema is config-level and not versioned — this is value history only.
+ */
+export const zListConfigVersionsResponse = z.array(z.object({
+    version: z.int().gte(1).lte(9007199254740991),
+    value: z.unknown(),
+    publishedAt: z.string(),
+    publishedBy: z.string()
+}));
+
+export type ListConfigVersionsResponseInput = z.infer<typeof zListConfigVersionsResponse>;
+
 export const zListKillswitchesResponse = z.object({
     data: z.array(z.object({
         id: z.string(),
         name: z.string().max(128),
         description: z.string().nullable(),
+        folder: z.string().nullable(),
+        creatorEmail: z.string().nullable(),
+        createdAt: z.string().nullable(),
         updatedAt: z.string(),
         envs: z.record(z.string(), z.object({
             value: z.boolean(),
@@ -955,6 +1156,9 @@ export const zGetKillswitchResponse = z.object({
     id: z.string(),
     name: z.string().max(128),
     description: z.string().nullable(),
+    folder: z.string().nullable(),
+    creatorEmail: z.string().nullable(),
+    createdAt: z.string().nullable(),
     updatedAt: z.string(),
     envs: z.record(z.string(), z.object({
         value: z.boolean(),
@@ -1058,6 +1262,34 @@ export const zSetKillswitchValueResponse = z.object({
 });
 
 export type SetKillswitchValueResponseInput = z.infer<typeof zSetKillswitchValueResponse>;
+
+/**
+ * Body for `POST /api/admin/killswitches/{id}/toggle`. Every field is optional, so the four useful calls read as one method with a widening argument list:
+ *
+ * - `{}` — flip the flat value on prod.
+ * - `{ "switchKey": "eu_region" }` — flip that sub-switch on prod.
+ * - `{ "switchKey": "eu_region", "value": true }` — set that sub-switch on prod, idempotently.
+ * - `{ "switchKey": "eu_region", "value": true, "env": "staging" }` — the same, on a chosen env.
+ */
+export const zToggleKillswitchRequest = z.object({
+    switchKey: z.string().max(64).regex(/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/).nullish(),
+    value: z.boolean().nullish(),
+    env: zEnv.optional()
+});
+
+export type ToggleKillswitchRequestInput = z.infer<typeof zToggleKillswitchRequest>;
+
+export const zToggleKillswitchResponse = z.object({
+    id: z.string(),
+    env: zEnv,
+    switchKey: z.string().max(64).regex(/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/).nullable(),
+    previous: z.boolean(),
+    value: z.boolean(),
+    version: z.int().gte(-9007199254740991).lte(9007199254740991),
+    published: zKillswitchValue
+});
+
+export type ToggleKillswitchResponseInput = z.infer<typeof zToggleKillswitchResponse>;
 
 export const zUniverseParam = z.object({
     name: z.string().min(1).max(128).regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/),
@@ -1276,16 +1508,6 @@ export const zUpdateGateTemplateResponse = z.object({
 export type UpdateGateTemplateResponseInput = z.infer<typeof zUpdateGateTemplateResponse>;
 
 /**
- * Every auto-inferred targeting attribute in the project.
- */
-export const zListAttributesResponse = z.array(z.object({
-    name: z.string(),
-    type: z.string().optional()
-}));
-
-export type ListAttributesResponseInput = z.infer<typeof zListAttributesResponse>;
-
-/**
  * Declared value type of a targeting attribute.
  */
 export const zAttributeType = z.enum([
@@ -1297,6 +1519,25 @@ export const zAttributeType = z.enum([
 ]);
 
 export type AttributeTypeInput = z.infer<typeof zAttributeType>;
+
+/**
+ * Every targeting attribute in the project (declared and auto-inferred).
+ */
+export const zListAttributesResponse = z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    type: zAttributeType,
+    enumValues: z.array(z.string()).nullish(),
+    required: z.union([z.literal(0), z.literal(1)]).optional(),
+    description: z.string().nullish(),
+    sdkPath: z.string().nullish(),
+    createdAt: z.string().optional(),
+    source: z.enum(['auto', 'manual']).optional(),
+    lastSeenAt: z.string().nullish(),
+    deprecated: z.union([z.literal(0), z.literal(1)]).optional()
+}));
+
+export type ListAttributesResponseInput = z.infer<typeof zListAttributesResponse>;
 
 /**
  * Body for `POST /api/admin/attributes`. Declares a targeting attribute.
@@ -1370,94 +1611,33 @@ export const zUpdateAttributeResponse = z.object({
 export type UpdateAttributeResponseInput = z.infer<typeof zUpdateAttributeResponse>;
 
 /**
- * Typed query IR — the structured alternative to the `query` DSL string. Exactly one of `query` / `query_ir` is supplied per metric body.
+ * How the metric's series is DRAWN, as opposed to what it measures. Both parts used to be DSL functions (`expected(q, seasonal)`, `forecast(q, …)`), which meant turning a band on minted a different metric; they are properties now, so every chart of the metric picks them up and nothing that JUDGES the metric — an alert rule, the experiment analyzer — reads them at all.
+ */
+export const zMetricDisplayConfig = z.object({
+    band: z.object({
+        method: z.enum(['seasonal']),
+        sigma: z.number().gt(0).optional()
+    }).optional(),
+    forecast: z.object({
+        method: z.enum(['linear', 'seasonal']),
+        horizon: z.int().gte(1).lte(500).optional()
+    }).optional()
+});
+
+export type MetricDisplayConfigInput = z.infer<typeof zMetricDisplayConfig>;
+
+/**
+ * A metric definition as a typed expression tree — the structured alternative to the `query` DSL string, and what the API stores. Exactly one of `query` / `query_ir` is supplied per metric body; `query` is the same definition written as text, and is the spelling to prefer.
+ * Until 2026-08-10 this documented a single aggregation (`{agg, metric, filters}`, with `ratio` as a special case). That shape no longer exists — stored metrics were migrated and the code that read it was deleted — so a body sending it is rejected. Send the `query` string instead, or the tree below.
  */
 export const zQueryIr = z.object({
-    agg: z.union([
-        z.object({
-            kind: z.literal('count_users')
-        }),
-        z.object({
-            kind: z.literal('count_events')
-        }),
-        z.object({
-            kind: z.literal('sum')
-        }),
-        z.object({
-            kind: z.literal('avg')
-        }),
-        z.object({
-            kind: z.literal('min')
-        }),
-        z.object({
-            kind: z.literal('max')
-        }),
-        z.object({
-            kind: z.literal('unique')
-        }),
-        z.object({
-            kind: z.literal('quantile'),
-            p: z.union([
-                z.literal(0.5),
-                z.literal(0.75),
-                z.literal(0.9),
-                z.literal(0.95),
-                z.literal(0.99),
-                z.literal(0.999)
-            ])
-        }),
-        z.object({
-            kind: z.literal('retention_Nd'),
-            n: z.int().gte(1).lte(90)
-        }),
-        z.object({
-            kind: z.literal('ratio'),
-            numerator: z.object({
-                agg: z.enum(['count_users', 'count_events']),
-                metric: z.string().min(1).max(128),
-                filters: z.array(z.object({
-                    label: z.string().regex(/^[a-z_][a-z0-9_]{0,63}$/),
-                    op: z.enum([
-                        '=',
-                        '!=',
-                        '=~',
-                        '!~'
-                    ]),
-                    value: z.string().max(512)
-                })).max(16).optional()
-            }),
-            denominator: z.object({
-                agg: z.enum(['count_users', 'count_events']),
-                metric: z.string().min(1).max(128),
-                filters: z.array(z.object({
-                    label: z.string().regex(/^[a-z_][a-z0-9_]{0,63}$/),
-                    op: z.enum([
-                        '=',
-                        '!=',
-                        '=~',
-                        '!~'
-                    ]),
-                    value: z.string().max(512)
-                })).max(16).optional()
-            })
-        })
-    ]),
-    metric: z.string().min(1).max(128),
-    valueLabel: z.string().min(1).max(128).optional(),
-    filters: z.array(z.object({
-        label: z.string().regex(/^[a-z_][a-z0-9_]{0,63}$/),
-        op: z.enum([
-            '=',
-            '!=',
-            '=~',
-            '!~'
-        ]),
-        value: z.string().max(512)
-    })).max(16).optional().default([]),
+    v: z.literal(2),
+    expr: z.record(z.string(), z.unknown()),
     groupBy: z.object({
         op: z.enum(['by', 'without']),
-        labels: z.array(z.string().regex(/^[a-z_][a-z0-9_]{0,63}$/)).max(5)
-    }).optional()
+        labels: z.array(z.string().regex(/^[a-z_][a-z0-9_]{0,63}$/)).max(8)
+    }).optional(),
+    display: zMetricDisplayConfig.optional()
 });
 
 export type QueryIrInput = z.infer<typeof zQueryIr>;
@@ -1471,7 +1651,14 @@ export const zListMetricsResponse = z.array(z.object({
     folder: z.string().nullable(),
     eventName: z.string(),
     query: z.string().nullable(),
-    queryIr: zQueryIr,
+    queryIr: zQueryIr.nullable(),
+    displayName: z.string().nullable(),
+    presetId: z.string().nullable(),
+    unit: z.string().nullable(),
+    version: z.int(),
+    deletedAt: z.string().nullable(),
+    creatorEmail: z.string().nullish(),
+    updaterEmail: z.string().nullish(),
     direction: z.enum([
         'higher_better',
         'lower_better',
@@ -1479,11 +1666,18 @@ export const zListMetricsResponse = z.array(z.object({
     ]).optional(),
     winsorizePct: z.number().optional(),
     defaultMinEffectOfInterest: z.number().nullish(),
-    createdAt: z.string().optional(),
+    createdAt: z.string().nullish(),
     updatedAt: z.string().optional()
 }));
 
 export type ListMetricsResponseInput = z.infer<typeof zListMetricsResponse>;
+
+/**
+ * What a human calls the metric — "Checkout revenue" beside the `checkout.revenue` that identifies it. Unlike `name` it is free text, it is editable, and nothing addresses the metric by it: the dashboard leads with it and falls back to `name` when it is absent, so a metric nobody named simply reads as its key. Send `null` to clear it.
+ */
+export const zMetricDisplayName = z.string().nullable();
+
+export type MetricDisplayNameInput = z.infer<typeof zMetricDisplayName>;
 
 /**
  * Source event the query reads from.
@@ -1525,16 +1719,26 @@ export const zMetricDirection = z.enum([
 export type MetricDirectionInput = z.infer<typeof zMetricDirection>;
 
 /**
+ * Display unit (e.g. `ms`, `%`, `$`), or `null` when unitless.
+ */
+export const zMetricDisplayUnit = z.string().nullable();
+
+export type MetricDisplayUnitInput = z.infer<typeof zMetricDisplayUnit>;
+
+/**
  * Create a metric, supplying the query as a `query` DSL string.
  */
 export const zCreateMetricWithQuery = z.object({
     name: zMetricName,
+    display_name: zMetricDisplayName.optional(),
     folder: zFolder.optional(),
     event_name: zMetricEventName,
     query: zMetricQueryDsl,
     winsorize_pct: zMetricWinsorizePct.optional(),
     default_min_effect_of_interest: zMetricDefaultMinEffectOfInterest.optional(),
-    direction: zMetricDirection.optional()
+    direction: zMetricDirection.optional(),
+    unit: zMetricDisplayUnit.optional(),
+    display: zMetricDisplayConfig.optional()
 });
 
 export type CreateMetricWithQueryInput = z.infer<typeof zCreateMetricWithQuery>;
@@ -1544,12 +1748,15 @@ export type CreateMetricWithQueryInput = z.infer<typeof zCreateMetricWithQuery>;
  */
 export const zCreateMetricWithQueryIr = z.object({
     name: zMetricName,
+    display_name: zMetricDisplayName.optional(),
     folder: zFolder.optional(),
     event_name: zMetricEventName,
     query_ir: zQueryIr,
     winsorize_pct: zMetricWinsorizePct.optional(),
     default_min_effect_of_interest: zMetricDefaultMinEffectOfInterest.optional(),
-    direction: zMetricDirection.optional()
+    direction: zMetricDirection.optional(),
+    unit: zMetricDisplayUnit.optional(),
+    display: zMetricDisplayConfig.optional()
 });
 
 export type CreateMetricWithQueryIrInput = z.infer<typeof zCreateMetricWithQueryIr>;
@@ -1583,7 +1790,12 @@ export const zGetMetricResponse = z.object({
     folder: z.string().nullable(),
     eventName: z.string(),
     query: z.string().nullable(),
-    queryIr: zQueryIr,
+    queryIr: zQueryIr.nullable(),
+    displayName: z.string().nullable(),
+    presetId: z.string().nullable(),
+    unit: z.string().nullable(),
+    version: z.int(),
+    deletedAt: z.string().nullable(),
     direction: z.enum([
         'higher_better',
         'lower_better',
@@ -1591,7 +1803,7 @@ export const zGetMetricResponse = z.object({
     ]).optional(),
     winsorizePct: z.number().optional(),
     defaultMinEffectOfInterest: z.number().nullish(),
-    createdAt: z.string().optional(),
+    createdAt: z.string().nullish(),
     updatedAt: z.string().optional()
 });
 
@@ -1610,12 +1822,15 @@ export type DeleteMetricResponseInput = z.infer<typeof zDeleteMetricResponse>;
  * Update-metric variant that replaces the query with a `query` DSL string.
  */
 export const zUpdateMetricWithQuery = z.object({
+    display_name: zMetricDisplayName.optional(),
     folder: zFolder.optional(),
     event_name: zMetricEventName.optional(),
     query: zMetricQueryDsl,
     winsorize_pct: zMetricWinsorizePct.optional(),
     default_min_effect_of_interest: zMetricDefaultMinEffectOfInterest.optional(),
-    direction: zMetricDirection.optional()
+    direction: zMetricDirection.optional(),
+    unit: zMetricDisplayUnit.optional(),
+    display: zMetricDisplayConfig.optional()
 });
 
 export type UpdateMetricWithQueryInput = z.infer<typeof zUpdateMetricWithQuery>;
@@ -1624,25 +1839,31 @@ export type UpdateMetricWithQueryInput = z.infer<typeof zUpdateMetricWithQuery>;
  * Update-metric variant that replaces the query with a typed `query_ir`.
  */
 export const zUpdateMetricWithQueryIr = z.object({
+    display_name: zMetricDisplayName.optional(),
     folder: zFolder.optional(),
     event_name: zMetricEventName.optional(),
     query_ir: zQueryIr,
     winsorize_pct: zMetricWinsorizePct.optional(),
     default_min_effect_of_interest: zMetricDefaultMinEffectOfInterest.optional(),
-    direction: zMetricDirection.optional()
+    direction: zMetricDirection.optional(),
+    unit: zMetricDisplayUnit.optional(),
+    display: zMetricDisplayConfig.optional()
 });
 
 export type UpdateMetricWithQueryIrInput = z.infer<typeof zUpdateMetricWithQueryIr>;
 
 /**
- * Update-metric variant that leaves the query untouched (metadata-only edit — folder, event, winsorisation, default minimum effect of interest, direction).
+ * Update-metric variant that leaves the query untouched (metadata-only edit — folder, event, winsorisation, default minimum effect of interest, direction, display unit, band and projection).
  */
 export const zUpdateMetricFields = z.object({
+    display_name: zMetricDisplayName.optional(),
     folder: zFolder.optional(),
     event_name: zMetricEventName.optional(),
     winsorize_pct: zMetricWinsorizePct.optional(),
     default_min_effect_of_interest: zMetricDefaultMinEffectOfInterest.optional(),
-    direction: zMetricDirection.optional()
+    direction: zMetricDirection.optional(),
+    unit: zMetricDisplayUnit.optional(),
+    display: zMetricDisplayConfig.optional()
 });
 
 export type UpdateMetricFieldsInput = z.infer<typeof zUpdateMetricFields>;
@@ -1659,6 +1880,64 @@ export const zUpdateMetricRequest = z.union([
 export type UpdateMetricRequestInput = z.infer<typeof zUpdateMetricRequest>;
 
 /**
+ * Experiments that attach this metric, ordered with running experiments first, then by role weight (goal > guardrail > secondary), then by name.
+ */
+export const zListMetricExperimentsResponse = z.object({
+    experiments: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        status: z.enum([
+            'draft',
+            'running',
+            'stopped',
+            'archived'
+        ]),
+        role: z.enum([
+            'goal',
+            'guardrail',
+            'secondary'
+        ])
+    }))
+});
+
+export type ListMetricExperimentsResponseInput = z.infer<typeof zListMetricExperimentsResponse>;
+
+/**
+ * Unarchive (undo soft-delete) acknowledgement.
+ */
+export const zUnarchiveMetricResponse = z.object({
+    ok: z.literal(true)
+});
+
+export type UnarchiveMetricResponseInput = z.infer<typeof zUnarchiveMetricResponse>;
+
+/**
+ * Time window for the metric series. Bounds are epoch **seconds** (Analytics Engine stores the event timestamp in seconds). `to` must be strictly greater than `from`.
+ */
+export const zGetMetricSeriesRequest = z.object({
+    from: z.int().gte(0),
+    to: z.int().gte(0),
+    bucket: z.int().gte(60).lte(86400).optional().default(3600)
+});
+
+export type GetMetricSeriesRequestInput = z.infer<typeof zGetMetricSeriesRequest>;
+
+/**
+ * Bucketed values for one metric, compiled from its typed IR and executed against the Analytics Engine SQL API, plus the SQL that produced them. Capped at 5000 rows (high-cardinality `groupBy` series are truncated).
+ */
+export const zGetMetricSeriesResponse = z.object({
+    sql: z.string(),
+    rows: z.array(z.object({
+        t: z.int(),
+        v: z.number(),
+        lo: z.number().optional(),
+        hi: z.number().optional()
+    }))
+});
+
+export type GetMetricSeriesResponseInput = z.infer<typeof zGetMetricSeriesResponse>;
+
+/**
  * Every catalogued event in the project (including pending auto-discovered names).
  */
 export const zListEventsResponse = z.array(z.object({
@@ -1667,14 +1946,15 @@ export const zListEventsResponse = z.array(z.object({
     folder: z.string().max(256).regex(/^[a-zA-Z0-9_-]+$/).nullish(),
     description: z.string().nullable(),
     properties: z.array(z.object({
-        name: z.string().min(1).max(64),
+        name: z.string().min(1).max(64).regex(/^[a-zA-Z_][a-zA-Z_0-9]*$/),
         type: z.enum([
             'string',
             'number',
             'boolean'
         ]),
         required: z.boolean().optional().default(false),
-        description: z.string().optional().default('')
+        description: z.string().optional().default(''),
+        pending: z.boolean().optional()
     })),
     pending: z.int().gte(-9007199254740991).lte(9007199254740991),
     createdAt: z.string()
@@ -1686,11 +1966,11 @@ export type ListEventsResponseInput = z.infer<typeof zListEventsResponse>;
  * Body for `POST /api/admin/events`. Only `name` is required.
  */
 export const zCreateEventRequest = z.object({
-    name: z.string().regex(/^[a-zA-Z0-9_][a-zA-Z0-9_\-.]{0,127}$/),
+    name: z.string().regex(/^[a-zA-Z0-9_][a-zA-Z0-9_\-.]{0,49}$/),
     folder: zFolder.optional(),
     description: z.string().optional(),
     properties: z.array(z.object({
-        name: z.string().min(1).max(64),
+        name: z.string().min(1).max(64).regex(/^[a-zA-Z_][a-zA-Z_0-9]*$/),
         type: z.enum([
             'string',
             'number',
@@ -1722,14 +2002,15 @@ export const zGetEventResponse = z.object({
     folder: z.string().max(256).regex(/^[a-zA-Z0-9_-]+$/).nullish(),
     description: z.string().nullable(),
     properties: z.array(z.object({
-        name: z.string().min(1).max(64),
+        name: z.string().min(1).max(64).regex(/^[a-zA-Z_][a-zA-Z_0-9]*$/),
         type: z.enum([
             'string',
             'number',
             'boolean'
         ]),
         required: z.boolean().optional().default(false),
-        description: z.string().optional().default('')
+        description: z.string().optional().default(''),
+        pending: z.boolean().optional()
     })),
     pending: z.int().gte(-9007199254740991).lte(9007199254740991),
     createdAt: z.string()
@@ -1753,7 +2034,7 @@ export const zUpdateEventRequest = z.object({
     folder: zFolder.optional(),
     description: z.string().optional(),
     properties: z.array(z.object({
-        name: z.string().min(1).max(64),
+        name: z.string().min(1).max(64).regex(/^[a-zA-Z_][a-zA-Z_0-9]*$/),
         type: z.enum([
             'string',
             'number',
@@ -1782,7 +2063,7 @@ export const zApproveEventRequest = z.object({
     folder: zFolder.optional(),
     description: z.string().optional(),
     properties: z.array(z.object({
-        name: z.string().min(1).max(64),
+        name: z.string().min(1).max(64).regex(/^[a-zA-Z_][a-zA-Z_0-9]*$/),
         type: z.enum([
             'string',
             'number',
@@ -1805,14 +2086,14 @@ export const zApproveEventResponse = z.object({
 export type ApproveEventResponseInput = z.infer<typeof zApproveEventResponse>;
 
 /**
- * Lifecycle status of a queue item. The working flow is `open` → `triaged` → `in_progress` → `ready_for_qa` → `resolved` (or `wont_fix`, terminal from any earlier stage). `ready_for_qa` is what a developer sets once a fix lands; `resolved` is the QA sign-off, normally flipped in the dashboard after verification — set it directly from code only when the fix has been verified end-to-end. Two human-gated holding states park an item OUT of the work queue until a human promotes it to `open` in the dashboard, so `GET /api/admin/ops` excludes them under `status=all`/default and returns them only when requested as an exact `status`: `pending_approval` is the pre-open approval gate for untriaged inbound (e.g. connector requests filed from a customer's connectors panel) so it never gets auto-implemented — approving = flipping the status to `open`; `triage` is the onboarding-help bucket — questions/errors submitted to the "Stuck in onboarding?" assistant are funnelled into the platform project as `triage` rows so the team can see where people get stuck and follow up, keeping onboarding chatter out of the work queue until a human moves real items to `open`.
+ * Lifecycle status of a queue item. The working flow is `open` → `in_progress` → `ready_for_qa` → `resolved` (or `wont_fix`, terminal from any earlier stage). `blocked` marks an item that can't progress until an external dependency clears — a working state a human sets and clears. `ready_for_qa` is what a developer sets once a fix lands; `resolved` is the QA sign-off, normally flipped in the dashboard after verification — set it directly from code only when the fix has been verified end-to-end. `investigating_by_ai` is a system-owned display state — set when the AI agent (Jarvis) picks an item up to investigate, never chosen by a human — so it is shown but not offered as a manual choice. `pending_approval` is the one human-gated holding state: it parks an item OUT of the work queue until a human promotes it to `open` in the dashboard, so `GET /api/admin/ops` excludes it under `status=all`/default and returns it only when requested as an exact `status`. It covers untriaged inbound that must never be auto-implemented — connector requests filed from a customer's connectors panel, and questions funnelled in from the "Stuck in onboarding?" assistant — where approving means flipping the status to `open`. Two earlier values were removed in favour of this single gate: `triage` (the onboarding-help bucket, now `pending_approval`) and `triaged` (a redundant "looked at but not started" step, now plain `open`).
  */
 export const zOpsItemStatus = z.enum([
     'open',
     'pending_approval',
-    'triage',
-    'triaged',
+    'investigating_by_ai',
     'in_progress',
+    'blocked',
     'ready_for_qa',
     'resolved',
     'wont_fix'
@@ -1833,97 +2114,22 @@ export const zOpsItemPriority = z.enum([
 export type OpsItemPriorityInput = z.infer<typeof zOpsItemPriority>;
 
 /**
- * A page of queue items, newest first.
+ * Where automation has taken an item in the investigation lifecycle — the signal the ops cockpit renders as "what AI did" plus the one action expected of the user. It is **written as a side-effect of the actions that already happen**, never authored on its own: linking a PR sets `pr_ready`, moving to `in_progress` sets `working`, `ready_for_qa` sets `ready_for_qa`, a system/assistant reply sets `question`, resolving clears it, and creation seeds `backlog` or `investigated`/`detected` for auto-filed error/alert tickets. `backlog` is the single "nothing has happened yet" state — how urgent that is reads off `priority`, not off a separate state, and its one action is to hand the item to an agent. `pr_merged` and `pr_closed` are written by the GitHub `pull_request` webhook when the linked PR reaches a terminal outcome — merged (the fix shipped, resolve the item) or closed without merging (the fix was rejected, decide what happens next). Absent on rows filed before the field existed — consumers should treat a missing value as "derive from the other fields".
  */
-export const zListOpsItemsResponse = z.array(z.object({
-    id: z.string(),
-    number: z.number().nullable(),
-    type: z.enum([
-        'bug',
-        'feature_request',
-        'error',
-        'alert',
-        'measure_plan'
-    ]),
-    title: z.string(),
-    status: zOpsItemStatus,
-    priority: zOpsItemPriority.nullable(),
-    sourceRef: z.string().nullish(),
-    createdAt: z.string()
-}));
-
-export type ListOpsItemsResponseInput = z.infer<typeof zListOpsItemsResponse>;
-
-/**
- * Delivery target for a notification; `null` = use the project default.
- */
-export const zNotificationTarget = z.object({
-    slackChannel: z.object({
-        id: z.string().min(1),
-        name: z.string().min(1)
-    }).nullish(),
-    email: z.email().nullish()
-}).nullable();
-
-export type NotificationTargetInput = z.infer<typeof zNotificationTarget>;
-
-/**
- * Bug-kind fields for `POST /api/admin/ops` (sent with `type: bug`).
- */
-export const zCreateBugRequest = z.object({
-    type: z.enum(['bug']),
-    title: z.string().min(1).max(200).regex(/^\S(.*\S)?$/),
-    stepsToReproduce: z.string().max(8000).optional().default(''),
-    actualResult: z.string().max(8000).optional().default(''),
-    expectedResult: z.string().max(8000).optional().default(''),
-    priority: zOpsItemPriority.nullish(),
-    reporterEmail: z.email().nullish(),
-    pageUrl: z.url().nullish(),
-    userAgent: z.string().max(500).nullish(),
-    viewport: z.string().max(40).nullish(),
-    context: z.record(z.string(), z.unknown()).nullish(),
-    notify: zNotificationTarget.nullish()
-});
-
-export type CreateBugRequestInput = z.infer<typeof zCreateBugRequest>;
-
-/**
- * Feature-request-kind fields for `POST /api/admin/ops` (sent with `type: feature_request`).
- */
-export const zCreateFeatureRequestRequest = z.object({
-    type: z.enum(['feature_request']),
-    title: z.string().min(1).max(200).regex(/^\S(.*\S)?$/),
-    description: z.string().max(8000).optional().default(''),
-    useCase: z.string().max(8000).optional().default(''),
-    priority: zOpsItemPriority.nullish(),
-    reporterEmail: z.email().nullish(),
-    pageUrl: z.url().nullish(),
-    userAgent: z.string().max(500).nullish(),
-    context: z.record(z.string(), z.unknown()).nullish(),
-    notify: zNotificationTarget.nullish()
-});
-
-export type CreateFeatureRequestRequestInput = z.infer<typeof zCreateFeatureRequestRequest>;
-
-/**
- * Body for `POST /api/admin/ops`. A discriminated union on `type`: `bug` carries the bug fields, `feature_request` the feature fields. Only these two user-fileable types are accepted — `error`, `alert`, and `measure_plan` tickets are auto-filed by the platform and cannot be created over the API.
- */
-export const zCreateOpsItemRequest = z.discriminatedUnion('type', [
-    zCreateBugRequest.extend({ type: z.literal('bug') }),
-    zCreateFeatureRequestRequest.extend({ type: z.literal('feature_request') })
+export const zOpsInvestigationState = z.enum([
+    'pr_ready',
+    'pr_merged',
+    'pr_closed',
+    'investigated',
+    'detected',
+    'question',
+    'ready_for_qa',
+    'pending_approval',
+    'working',
+    'backlog'
 ]);
 
-export type CreateOpsItemRequestInput = z.infer<typeof zCreateOpsItemRequest>;
-
-/**
- * Response for `POST /api/admin/ops`.
- */
-export const zCreateOpsItemResponse = z.object({
-    id: z.string(),
-    number: z.number().nullish()
-});
-
-export type CreateOpsItemResponseInput = z.infer<typeof zCreateOpsItemResponse>;
+export type OpsInvestigationStateInput = z.infer<typeof zOpsInvestigationState>;
 
 /**
  * Auto-collected browser environment for a `bug`/`feature_request`, captured at file time.
@@ -1990,21 +2196,24 @@ export const zOpsAlertMetricSummary = z.object({
 export type OpsAlertMetricSummaryInput = z.infer<typeof zOpsAlertMetricSummary>;
 
 /**
- * Hydrated detail for an auto-filed `alert` ticket, resolving the rule → metric → event chain at request time.
+ * Detail for an `alert` ticket — the fired-alert INSTANCE this ticket is. List rows carry the stored capture subset (`source`, `dedupeKey`, `ruleId`, `detail`, `href`, `observedValue`); the single-item read hydrates the rest, resolving `severity`/`status` off the ticket itself and the rule → metric → event chain at request time.
  */
 export const zOpsAlertContext = z.object({
     source: z.enum([
         'metric_rule',
+        'killswitch_armed',
         'experiment_srm',
         'experiment_peek',
         'guardrail'
     ]),
     dedupeKey: z.string(),
+    detail: z.string().nullish(),
+    ruleId: z.string().nullish(),
     severity: z.enum([
         'danger',
         'warn',
         'info'
-    ]),
+    ]).optional(),
     observedValue: z.number().nullish(),
     href: z.string().nullish(),
     status: z.enum([
@@ -2068,10 +2277,316 @@ export const zOpsItemContext = z.object({
     browser: zOpsBrowserContext.optional(),
     error: zOpsErrorContext.optional(),
     alert: zOpsAlertContext.optional(),
-    measurePlan: zOpsMeasurePlanContext.optional()
+    measurePlan: zOpsMeasurePlanContext.optional(),
+    errorChart: z.object({
+        series: z.array(z.object({
+            t: z.number(),
+            v: z.number()
+        })),
+        domainFrom: z.number(),
+        domainTo: z.number()
+    }).optional()
 });
 
 export type OpsItemContextInput = z.infer<typeof zOpsItemContext>;
+
+/**
+ * The pull request linked to a queue item via `link-pr` (stored on `connectorData.github.pr`).
+ */
+export const zGithubPrLink = z.object({
+    number: z.number(),
+    url: z.string(),
+    linkedAt: z.string().optional(),
+    connectedToIssue: z.boolean().optional(),
+    method: z.enum(['closes', 'comment']).optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    state: z.enum([
+        'open',
+        'merged',
+        'closed'
+    ]).optional(),
+    mergedAt: z.string().optional(),
+    closedAt: z.string().optional()
+});
+
+export type GithubPrLinkInput = z.infer<typeof zGithubPrLink>;
+
+/**
+ * GitHub connector trace — the issue it opened and, once linked, the pull request.
+ */
+export const zGithubConnectorData = z.object({
+    issue: z.object({
+        number: z.number(),
+        url: z.string(),
+        owner: z.string(),
+        repo: z.string(),
+        createdAt: z.string().optional()
+    }).optional(),
+    pr: zGithubPrLink.optional()
+});
+
+export type GithubConnectorDataInput = z.infer<typeof zGithubConnectorData>;
+
+/**
+ * Slack connector trace — the message the driver posted for this item. The linked pull request is recorded on `github.pr`, not here.
+ */
+export const zSlackConnectorData = z.object({
+    message: z.object({
+        channel: z.string(),
+        ts: z.string(),
+        postedAt: z.string().optional()
+    }).optional()
+});
+
+export type SlackConnectorDataInput = z.infer<typeof zSlackConnectorData>;
+
+/**
+ * Connector linkage for one queue item, keyed by provider. Each provider's driver deep-merges its own trace into this blob, so any subset of providers may be present. Unknown/future providers may appear as additional keys.
+ */
+export const zConnectorData = z.object({
+    github: zGithubConnectorData.optional(),
+    slack: zSlackConnectorData.optional()
+});
+
+export type ConnectorDataInput = z.infer<typeof zConnectorData>;
+
+/**
+ * Delivery target for a notification; `null` = use the project default.
+ */
+export const zNotificationTarget = z.object({
+    slackChannel: z.object({
+        id: z.string().min(1),
+        name: z.string().min(1)
+    }).nullish(),
+    email: z.email().nullish()
+}).nullable();
+
+export type NotificationTargetInput = z.infer<typeof zNotificationTarget>;
+
+/**
+ * The fully-resolved owner of a queue item — a person and/or an AI agent. The two halves are independent: an item may have a person, an agent, both, or neither (both `null`).
+ */
+export const zOpsItemOwner = z.object({
+    user: z.object({
+        id: z.string(),
+        email: z.string(),
+        name: z.string().nullable()
+    }).nullable(),
+    agent: z.object({
+        connectorId: z.string().nullable(),
+        builtin: z.literal('jarvis').nullable(),
+        provider: z.enum([
+            'claude_trigger',
+            'cursor_trigger',
+            'copilot_trigger',
+            'jules_trigger',
+            'jarvis'
+        ]),
+        name: z.string()
+    }).nullable()
+});
+
+export type OpsItemOwnerInput = z.infer<typeof zOpsItemOwner>;
+
+/**
+ * The final action that closed a run record — `link_pr`/`notify` are the agent's terminal ops actions, `status` a completion status flip (ready_for_qa/resolved), `superseded` a newer ack replacing an open run.
+ */
+export const zOpsRunAction = z.enum([
+    'link_pr',
+    'notify',
+    'status',
+    'superseded'
+]);
+
+export type OpsRunActionInput = z.infer<typeof zOpsRunAction>;
+
+/**
+ * Which final action closed the run, or `null` while it is open (or a non-run record).
+ */
+export const zOpsRunActionOrNull = zOpsRunAction.nullable();
+
+export type OpsRunActionOrNullInput = z.infer<typeof zOpsRunActionOrNull>;
+
+/**
+ * One run on a queue item — who (person or AI agent) picked it up when, and, once closed, how it ended (final action + PR + session link). Opened by `POST /api/admin/ops/{handle}/ack`.
+ */
+export const zOpsRun = z.object({
+    id: z.string(),
+    agent: z.string().nullable(),
+    connectorId: z.string().nullable(),
+    ackedBy: z.string().nullable(),
+    sessionId: z.string().nullable(),
+    sessionUrl: z.string().nullable(),
+    startedAt: z.string(),
+    completedAt: z.string().nullable(),
+    completedAction: zOpsRunActionOrNull,
+    prNumber: z.number().nullable(),
+    prUrl: z.string().nullable()
+});
+
+export type OpsRunInput = z.infer<typeof zOpsRun>;
+
+/**
+ * A page of queue items, newest first.
+ */
+export const zListOpsItemsResponse = z.array(z.object({
+    id: z.string(),
+    number: z.number().nullable(),
+    type: z.enum([
+        'bug',
+        'feature_request',
+        'error',
+        'alert',
+        'measure_plan'
+    ]),
+    title: z.string(),
+    status: zOpsItemStatus,
+    priority: zOpsItemPriority.nullable(),
+    sourceRef: z.string().nullish(),
+    investigationState: zOpsInvestigationState.nullish(),
+    source: z.enum(['team', 'system']),
+    reporterEmail: z.string().nullish(),
+    stepsToReproduce: z.string().optional(),
+    actualResult: z.string().optional(),
+    expectedResult: z.string().optional(),
+    description: z.string().optional(),
+    useCase: z.string().optional(),
+    context: zOpsItemContext.nullish(),
+    connectorData: zConnectorData.nullish(),
+    notify: zNotificationTarget.nullish(),
+    assigneeId: z.string().nullish(),
+    assigneeConnectorId: z.string().nullish(),
+    assigneeAgent: z.string().nullish(),
+    owner: zOpsItemOwner,
+    run: zOpsRun.nullable(),
+    lastRun: zOpsRun.nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string()
+}));
+
+export type ListOpsItemsResponseInput = z.infer<typeof zListOpsItemsResponse>;
+
+/**
+ * Bug-kind fields for `POST /api/admin/ops` (sent with `type: bug`).
+ */
+export const zCreateBugRequest = z.object({
+    type: z.enum(['bug']),
+    title: z.string().min(1).max(200).regex(/^\S(.*\S)?$/),
+    stepsToReproduce: z.string().max(8000).optional().default(''),
+    actualResult: z.string().max(8000).optional().default(''),
+    expectedResult: z.string().max(8000).optional().default(''),
+    priority: zOpsItemPriority.nullish(),
+    status: zOpsItemStatus.optional(),
+    assigneeId: z.string().nullish(),
+    subscribers: z.array(z.email()).optional().default([]),
+    tags: z.array(z.string()).optional().default([]),
+    reporterEmail: z.email().nullish(),
+    pageUrl: z.url().nullish(),
+    userAgent: z.string().max(500).nullish(),
+    viewport: z.string().max(40).nullish(),
+    context: z.record(z.string(), z.unknown()).nullish(),
+    notify: zNotificationTarget.nullish()
+});
+
+export type CreateBugRequestInput = z.infer<typeof zCreateBugRequest>;
+
+/**
+ * Feature-request-kind fields for `POST /api/admin/ops` (sent with `type: feature_request`).
+ */
+export const zCreateFeatureRequestRequest = z.object({
+    type: z.enum(['feature_request']),
+    title: z.string().min(1).max(200).regex(/^\S(.*\S)?$/),
+    description: z.string().max(8000).optional().default(''),
+    useCase: z.string().max(8000).optional().default(''),
+    priority: zOpsItemPriority.nullish(),
+    status: zOpsItemStatus.optional(),
+    assigneeId: z.string().nullish(),
+    subscribers: z.array(z.email()).optional().default([]),
+    tags: z.array(z.string()).optional().default([]),
+    reporterEmail: z.email().nullish(),
+    pageUrl: z.url().nullish(),
+    userAgent: z.string().max(500).nullish(),
+    context: z.record(z.string(), z.unknown()).nullish(),
+    notify: zNotificationTarget.nullish()
+});
+
+export type CreateFeatureRequestRequestInput = z.infer<typeof zCreateFeatureRequestRequest>;
+
+/**
+ * Body for `POST /api/admin/ops`. A discriminated union on `type`: `bug` carries the bug fields, `feature_request` the feature fields. Only these two user-fileable types are accepted — `error`, `alert`, and `measure_plan` tickets are auto-filed by the platform and cannot be created over the API.
+ */
+export const zCreateOpsItemRequest = z.discriminatedUnion('type', [
+    zCreateBugRequest.extend({ type: z.literal('bug') }),
+    zCreateFeatureRequestRequest.extend({ type: z.literal('feature_request') })
+]);
+
+export type CreateOpsItemRequestInput = z.infer<typeof zCreateOpsItemRequest>;
+
+/**
+ * Response for `POST /api/admin/ops`.
+ */
+export const zCreateOpsItemResponse = z.object({
+    id: z.string(),
+    number: z.number().nullish()
+});
+
+export type CreateOpsItemResponseInput = z.infer<typeof zCreateOpsItemResponse>;
+
+/**
+ * Body for `POST /ops/bug`. The same bug fields as `CreateBugRequest`, minus the `type` discriminator — the path already says what is being filed.
+ */
+export const zCreatePublicBugRequest = z.object({
+    title: z.string().min(1).max(200).regex(/^\S(.*\S)?$/),
+    stepsToReproduce: z.string().max(8000).optional().default(''),
+    actualResult: z.string().max(8000).optional().default(''),
+    expectedResult: z.string().max(8000).optional().default(''),
+    priority: zOpsItemPriority.nullish(),
+    status: zOpsItemStatus.optional(),
+    assigneeId: z.string().nullish(),
+    subscribers: z.array(z.email()).optional().default([]),
+    tags: z.array(z.string()).optional().default([]),
+    reporterEmail: z.email().nullish(),
+    pageUrl: z.url().nullish(),
+    userAgent: z.string().max(500).nullish(),
+    viewport: z.string().max(40).nullish(),
+    context: z.record(z.string(), z.unknown()).nullish(),
+    notify: zNotificationTarget.nullish()
+});
+
+export type CreatePublicBugRequestInput = z.infer<typeof zCreatePublicBugRequest>;
+
+/**
+ * Response for the public ticket intake. A fresh file returns `201` with `id` + `number`; a repeat of a report already tracked by an open ticket returns `200` with that ticket's `number` and `deduped: true`.
+ */
+export const zCreatePublicTicketResponse = z.object({
+    id: z.string().optional(),
+    number: z.int(),
+    deduped: z.boolean().optional()
+});
+
+export type CreatePublicTicketResponseInput = z.infer<typeof zCreatePublicTicketResponse>;
+
+/**
+ * Body for `POST /ops/feature-request`. The same feature-request fields as `CreateFeatureRequestRequest`, minus the `type` discriminator — the path already says what is being filed.
+ */
+export const zCreatePublicFeatureRequestRequest = z.object({
+    title: z.string().min(1).max(200).regex(/^\S(.*\S)?$/),
+    description: z.string().max(8000).optional().default(''),
+    useCase: z.string().max(8000).optional().default(''),
+    priority: zOpsItemPriority.nullish(),
+    status: zOpsItemStatus.optional(),
+    assigneeId: z.string().nullish(),
+    subscribers: z.array(z.email()).optional().default([]),
+    tags: z.array(z.string()).optional().default([]),
+    reporterEmail: z.email().nullish(),
+    pageUrl: z.url().nullish(),
+    userAgent: z.string().max(500).nullish(),
+    context: z.record(z.string(), z.unknown()).nullish(),
+    notify: zNotificationTarget.nullish()
+});
+
+export type CreatePublicFeatureRequestRequestInput = z.infer<typeof zCreatePublicFeatureRequestRequest>;
 
 /**
  * A file uploaded with a bug/feature report.
@@ -2102,51 +2617,6 @@ export const zOpsItemRelated = z.object({
 export type OpsItemRelatedInput = z.infer<typeof zOpsItemRelated>;
 
 /**
- * GitHub connector trace — the issue it opened and, once linked, the pull request.
- */
-export const zGithubConnectorData = z.object({
-    issue: z.object({
-        number: z.number(),
-        url: z.string(),
-        owner: z.string(),
-        repo: z.string(),
-        createdAt: z.string().optional()
-    }).optional(),
-    pr: z.object({
-        number: z.number(),
-        url: z.string(),
-        linkedAt: z.string().optional(),
-        connectedToIssue: z.boolean().optional(),
-        method: z.enum(['closes', 'comment']).optional()
-    }).optional()
-});
-
-export type GithubConnectorDataInput = z.infer<typeof zGithubConnectorData>;
-
-/**
- * Slack connector trace — the message the driver posted for this item. The linked pull request is recorded on `github.pr`, not here.
- */
-export const zSlackConnectorData = z.object({
-    message: z.object({
-        channel: z.string(),
-        ts: z.string(),
-        postedAt: z.string().optional()
-    }).optional()
-});
-
-export type SlackConnectorDataInput = z.infer<typeof zSlackConnectorData>;
-
-/**
- * Connector linkage for one queue item, keyed by provider. Each provider's driver deep-merges its own trace into this blob, so any subset of providers may be present. Unknown/future providers may appear as additional keys.
- */
-export const zConnectorData = z.object({
-    github: zGithubConnectorData.optional(),
-    slack: zSlackConnectorData.optional()
-});
-
-export type ConnectorDataInput = z.infer<typeof zConnectorData>;
-
-/**
  * One queue item, any of the five types. Shared fields apply to all; `stepsToReproduce`/`actualResult`/`expectedResult` are bug-specific, `description`/`useCase` feature-specific. The auto-collected browser fields (page URL, user-agent, viewport) live under `context.browser` for bug/feature. `context` also carries the hydrated per-type payload for auto-filed `error`/`alert`/`measure_plan` tickets, `attachments` lists any uploaded files, and `related` gives deep links to the underlying resources.
  */
 export const zGetOpsItemResponse = z.object({
@@ -2164,6 +2634,7 @@ export const zGetOpsItemResponse = z.object({
     priority: zOpsItemPriority.nullable(),
     source: z.enum(['team', 'system']).optional(),
     sourceRef: z.string().nullish(),
+    investigationState: zOpsInvestigationState.nullish(),
     reporterEmail: z.string().nullish(),
     stepsToReproduce: z.string().optional(),
     actualResult: z.string().optional(),
@@ -2175,11 +2646,24 @@ export const zGetOpsItemResponse = z.object({
     related: zOpsItemRelated,
     connectorData: zConnectorData.nullish(),
     notify: zNotificationTarget.nullish(),
+    assigneeId: z.string().nullish(),
+    assigneeConnectorId: z.string().nullish(),
+    assigneeAgent: z.string().nullish(),
+    owner: zOpsItemOwner,
     createdAt: z.string(),
     updatedAt: z.string().optional()
 });
 
 export type GetOpsItemResponseInput = z.infer<typeof zGetOpsItemResponse>;
+
+/**
+ * Response for `DELETE /api/admin/ops/{handle}`.
+ */
+export const zDeleteOpsItemResponse = z.object({
+    ok: z.literal(true)
+});
+
+export type DeleteOpsItemResponseInput = z.infer<typeof zDeleteOpsItemResponse>;
 
 /**
  * Triage priority, or `null` when not set (in an update, `null` clears it).
@@ -2268,13 +2752,217 @@ export const zLinkPrToOpsItemRequest = z.object({
 export type LinkPrToOpsItemRequestInput = z.infer<typeof zLinkPrToOpsItemRequest>;
 
 /**
- * Response for the update / link-pr endpoints.
+ * Response for `POST /api/admin/ops/{handle}/link-pr` — the item id and the resulting PR link.
  */
 export const zLinkPrToOpsItemResponse = z.object({
-    id: z.string()
+    id: z.string(),
+    pr: zGithubPrLink.nullable()
 });
 
 export type LinkPrToOpsItemResponseInput = z.infer<typeof zLinkPrToOpsItemResponse>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/ack`. With `agent` set this is an AI ack — the named agent type must have a connected trigger connector in the project, or the call fails with `AGENT_NOT_CONNECTED` and instructions to query the available agents (`ops agents list`). `gemini` is accepted as an alias for `jules`. Without `agent` it is a HUMAN ack by the authenticated caller.
+ */
+export const zAckOpsItemRequest = z.object({
+    agent: z.enum([
+        'claude',
+        'cursor',
+        'copilot',
+        'jules',
+        'gemini',
+        'jarvis'
+    ]).optional(),
+    sessionId: z.string().max(300).optional()
+});
+
+export type AckOpsItemRequestInput = z.infer<typeof zAckOpsItemRequest>;
+
+/**
+ * Response for `POST /api/admin/ops/{handle}/ack` — the opened run.
+ */
+export const zAckOpsItemResponse = z.object({
+    id: z.string(),
+    number: z.number().nullable(),
+    status: z.string(),
+    runId: z.string(),
+    agent: z.string().nullable(),
+    connectorName: z.string().nullable(),
+    sessionId: z.string().nullable(),
+    startedAt: z.string()
+});
+
+export type AckOpsItemResponseInput = z.infer<typeof zAckOpsItemResponse>;
+
+/**
+ * One structured investigation record on a queue item — the read-only write-up an AI agent produces while working it (findings / blocking question / QA notes), rendered by the cockpit's detail panel.
+ */
+export const zOpsInvestigation = z.object({
+    id: z.string(),
+    feedbackId: z.string(),
+    kind: z.enum([
+        'investigated',
+        'detected',
+        'question',
+        'ready_for_qa',
+        'working',
+        'note'
+    ]),
+    summary: z.string().nullable(),
+    findings: z.string().nullable(),
+    question: z.string().nullable(),
+    qaNotes: z.string().nullable(),
+    agent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).nullable(),
+    model: z.string().nullable(),
+    connectorId: z.string().nullable(),
+    prNumber: z.number().nullable(),
+    prUrl: z.string().nullable(),
+    sources: z.array(z.object({
+        path: z.string().optional(),
+        url: z.string().optional(),
+        label: z.string().optional()
+    })).nullable(),
+    confidence: z.enum([
+        'low',
+        'medium',
+        'high'
+    ]).nullable(),
+    tokensUsed: z.number().nullable(),
+    durationMs: z.number().nullable(),
+    visibility: z.enum(['draft', 'published']),
+    startedAt: z.string().nullable(),
+    completedAt: z.string().nullable(),
+    sessionId: z.string().nullable(),
+    sessionUrl: z.string().nullable(),
+    ackedBy: z.string().nullable(),
+    completedAction: zOpsRunActionOrNull,
+    createdAt: z.string(),
+    updatedAt: z.string()
+});
+
+export type OpsInvestigationInput = z.infer<typeof zOpsInvestigation>;
+
+/**
+ * Response for `GET /api/admin/ops/{handle}/investigation` — the item's `published` investigation records, newest first (max 50).
+ */
+export const zListOpsInvestigationsResponse = z.array(zOpsInvestigation);
+
+export type ListOpsInvestigationsResponseInput = z.infer<typeof zListOpsInvestigationsResponse>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/investigation`. `kind` is required; include at least one content field (`summary`/`findings`/`question`/`qaNotes`) — the panel renders whatever it gets.
+ */
+export const zCreateOpsInvestigationRequest = z.object({
+    kind: z.enum([
+        'investigated',
+        'detected',
+        'question',
+        'ready_for_qa',
+        'working',
+        'note'
+    ]),
+    summary: z.string().max(2000).optional(),
+    findings: z.string().max(50000).optional(),
+    question: z.string().max(10000).optional(),
+    qaNotes: z.string().max(50000).optional(),
+    agent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).optional(),
+    model: z.string().max(200).optional(),
+    connectorId: z.string().max(200).optional(),
+    prNumber: z.int().optional(),
+    prUrl: z.url().max(2000).optional(),
+    sources: z.array(z.object({
+        path: z.string().optional(),
+        url: z.string().optional(),
+        label: z.string().optional()
+    })).max(200).optional(),
+    confidence: z.enum([
+        'low',
+        'medium',
+        'high'
+    ]).optional(),
+    tokensUsed: z.int().optional(),
+    durationMs: z.int().optional(),
+    visibility: z.enum(['draft', 'published']).optional(),
+    startedAt: z.string().optional(),
+    completedAt: z.string().optional(),
+    sessionId: z.string().max(300).optional()
+});
+
+export type CreateOpsInvestigationRequestInput = z.infer<typeof zCreateOpsInvestigationRequest>;
+
+/**
+ * Body for `PATCH /api/admin/ops/{handle}/investigation/{investigationId}` — a partial update of one existing investigation record (typically the `working` run record you were handed). Send only the fields you want to change; at least one is required.
+ */
+export const zUpdateOpsInvestigationRequest = z.object({
+    kind: z.enum([
+        'investigated',
+        'detected',
+        'question',
+        'ready_for_qa',
+        'working',
+        'note'
+    ]).optional(),
+    summary: z.string().max(2000).optional(),
+    findings: z.string().max(50000).optional(),
+    question: z.string().max(10000).optional(),
+    qaNotes: z.string().max(50000).optional(),
+    model: z.string().max(200).optional(),
+    prNumber: z.int().optional(),
+    prUrl: z.url().max(2000).optional(),
+    sources: z.array(z.object({
+        path: z.string().optional(),
+        url: z.string().optional(),
+        label: z.string().optional()
+    })).max(200).optional(),
+    confidence: z.enum([
+        'low',
+        'medium',
+        'high'
+    ]).optional(),
+    tokensUsed: z.int().optional(),
+    durationMs: z.int().optional(),
+    visibility: z.enum(['draft', 'published']).optional(),
+    completedAt: z.string().optional(),
+    sessionId: z.string().max(300).optional()
+});
+
+export type UpdateOpsInvestigationRequestInput = z.infer<typeof zUpdateOpsInvestigationRequest>;
+
+/**
+ * One connected, assignable AI agent (an authenticated trigger connector).
+ */
+export const zOpsAgentProfile = z.object({
+    connectorId: z.string(),
+    provider: z.enum([
+        'claude_trigger',
+        'cursor_trigger',
+        'copilot_trigger',
+        'jules_trigger'
+    ]),
+    name: z.string(),
+    handle: z.string()
+});
+
+export type OpsAgentProfileInput = z.infer<typeof zOpsAgentProfile>;
+
+/**
+ * The project's connected AI agents — the agent types `POST /api/admin/ops/{handle}/ack` accepts. Empty when no trigger connector is connected yet.
+ */
+export const zListOpsAgentsResponse = z.array(zOpsAgentProfile);
+
+export type ListOpsAgentsResponseInput = z.infer<typeof zListOpsAgentsResponse>;
 
 /**
  * Who wrote a comment. `user` is a teammate (their email is in `authorEmail`); `system` is Jarvis — the AI agent — which authors comments when an ops-notify escalation lands on the item and when it is `@shipeasy`-mentioned in a thread.
@@ -2364,11 +3052,28 @@ export const zListSlackChannelsResponse = z.object({
 
 export type ListSlackChannelsResponseInput = z.infer<typeof zListSlackChannelsResponse>;
 
+/**
+ * What a `composite` rule is a boolean over. `rules` are sibling alert-rule ids in the same project and `op` is how their states combine. A child's state is what the current pass concluded about it, falling back to whether it has an open instance — so a composite still means something on a tick where a child could not be evaluated, which is exactly the tick a "two of these are broken at once" rule is for. One level deep: a child may not itself be composite.
+ */
+export const zAlertCompositeSpec = z.object({
+    op: z.enum(['and', 'or']),
+    rules: z.array(z.string().min(1)).min(2)
+});
+
+export type AlertCompositeSpecInput = z.infer<typeof zAlertCompositeSpec>;
+
 export const zListAlertRulesResponse = z.array(z.object({
     id: z.string(),
     name: z.string(),
     metricId: z.string(),
     metricName: z.string().nullable(),
+    kind: z.enum([
+        'normal',
+        'anomaly',
+        'outliers',
+        'no_data',
+        'composite'
+    ]),
     comparator: z.enum([
         'gt',
         'gte',
@@ -2376,7 +3081,26 @@ export const zListAlertRulesResponse = z.array(z.object({
         'lte'
     ]),
     threshold: z.number(),
+    rangeMin: z.number().nullable(),
+    rangeMax: z.number().nullable(),
+    sigma: z.number().nullable(),
+    direction: z.enum([
+        'above',
+        'below',
+        'either'
+    ]).nullable(),
+    sustained: z.boolean(),
+    warnThreshold: z.number().nullable(),
+    recoveryThreshold: z.number().nullable(),
+    groupAlerts: z.boolean(),
+    maxGroups: z.int().nullable(),
+    noDataMinutes: z.int().nullable(),
+    delayMinutes: z.int().nullable(),
+    autoResolveMinutes: z.int().nullable(),
+    composite: zAlertCompositeSpec.nullable(),
     windowHours: z.int().gte(-9007199254740991).lte(9007199254740991),
+    bucketMinutes: z.int().nullable(),
+    requiredBuckets: z.int().nullable(),
     severity: z.enum([
         'danger',
         'warn',
@@ -2393,14 +3117,40 @@ export type ListAlertRulesResponseInput = z.infer<typeof zListAlertRulesResponse
 export const zCreateAlertRuleRequest = z.object({
     name: z.string().min(1).max(120),
     metricId: z.string().min(1),
+    kind: z.enum([
+        'normal',
+        'anomaly',
+        'outliers',
+        'no_data',
+        'composite'
+    ]).optional().default('normal'),
     comparator: z.enum([
         'gt',
         'gte',
         'lt',
         'lte'
-    ]),
-    threshold: z.number(),
+    ]).optional().default('gt'),
+    threshold: z.number().optional(),
+    rangeMin: z.number().nullish(),
+    rangeMax: z.number().nullish(),
+    sigma: z.number().gt(0).nullish(),
+    direction: z.enum([
+        'above',
+        'below',
+        'either'
+    ]).nullish(),
+    sustained: z.boolean().optional().default(false),
     windowHours: z.int().gte(1).lte(720).optional().default(24),
+    bucketMinutes: z.int().gte(1).lte(43200).nullish(),
+    requiredBuckets: z.int().gte(1).nullish(),
+    warnThreshold: z.number().nullish(),
+    recoveryThreshold: z.number().nullish(),
+    groupAlerts: z.boolean().optional().default(false),
+    maxGroups: z.int().gte(1).lte(50).nullish(),
+    noDataMinutes: z.int().gte(5).lte(43200).nullish(),
+    delayMinutes: z.int().gte(1).lte(1440).nullish(),
+    autoResolveMinutes: z.int().gte(1).nullish(),
+    composite: zAlertCompositeSpec.optional(),
     severity: z.enum([
         'danger',
         'warn',
@@ -2426,6 +3176,13 @@ export type DeleteAlertRuleResponseInput = z.infer<typeof zDeleteAlertRuleRespon
 
 export const zUpdateAlertRuleRequest = z.object({
     name: z.string().min(1).max(120).optional(),
+    kind: z.enum([
+        'normal',
+        'anomaly',
+        'outliers',
+        'no_data',
+        'composite'
+    ]).optional(),
     comparator: z.enum([
         'gt',
         'gte',
@@ -2433,7 +3190,26 @@ export const zUpdateAlertRuleRequest = z.object({
         'lte'
     ]).optional(),
     threshold: z.number().optional(),
+    rangeMin: z.number().nullish(),
+    rangeMax: z.number().nullish(),
+    sigma: z.number().gt(0).nullish(),
+    direction: z.enum([
+        'above',
+        'below',
+        'either'
+    ]).nullish(),
+    sustained: z.boolean().optional(),
+    warnThreshold: z.number().nullish(),
+    recoveryThreshold: z.number().nullish(),
+    groupAlerts: z.boolean().optional(),
+    maxGroups: z.int().gte(1).lte(50).nullish(),
+    noDataMinutes: z.int().gte(5).lte(43200).nullish(),
+    delayMinutes: z.int().gte(1).lte(1440).nullish(),
+    autoResolveMinutes: z.int().gte(1).nullish(),
+    composite: zAlertCompositeSpec.optional(),
     windowHours: z.int().gte(1).lte(720).optional(),
+    bucketMinutes: z.int().gte(1).lte(43200).nullish(),
+    requiredBuckets: z.int().gte(1).nullish(),
     severity: z.enum([
         'danger',
         'warn',
@@ -2452,7 +3228,73 @@ export const zUpdateAlertRuleResponse = z.object({
 export type UpdateAlertRuleResponseInput = z.infer<typeof zUpdateAlertRuleResponse>;
 
 /**
- * The project the caller's auth header resolves to. The shape is open — additional project fields may be present.
+ * One FIRED alert — an INSTANCE of a condition the platform observed, not the rule that defines it (alert *rules* are the `/api/admin/alert-rules` resource). Instances are never filed by hand: the UI (killswitch flips) and the worker (analysis consumer + alerts cron) open them, keyed by `(source, dedupeKey)`, and at most one instance per condition is open at a time — re-raising refreshes the open one, and the condition clearing closes it.
+ *
+ * An instance IS an ops queue item (`/api/admin/ops` with `type: "alert"`) seen through the alert lens: same `id`, `severity` is that item's `priority`, and `status` is its work status projected onto three states. Resolving the queue item and clearing the alert are therefore the same act.
+ *
+ * Every field is always present on the wire; nullable fields are `null`, never absent.
+ */
+export const zAlertApiRow = z.object({
+    id: z.string(),
+    source: z.enum([
+        'metric_rule',
+        'killswitch_armed',
+        'experiment_srm',
+        'experiment_peek',
+        'guardrail'
+    ]),
+    ruleId: z.string().nullable(),
+    severity: z.enum([
+        'danger',
+        'warn',
+        'info'
+    ]),
+    dedupeKey: z.string(),
+    title: z.string(),
+    detail: z.string(),
+    href: z.string().nullable(),
+    observedValue: z.number().nullable(),
+    status: z.enum([
+        'active',
+        'resolved',
+        'dismissed'
+    ]),
+    createdAt: z.string(),
+    resolvedAt: z.string().nullable(),
+    dismissedAt: z.string().nullable(),
+    assigneeId: z.string().nullable(),
+    assigneeConnectorId: z.string().nullable(),
+    assigneeAgent: z.string().nullable()
+});
+
+export type AlertApiRowInput = z.infer<typeof zAlertApiRow>;
+
+/**
+ * A bare JSON array of fired alerts, ordered by `createdAt` descending. There is no pagination envelope.
+ */
+export const zListAlertsResponse = z.array(zAlertApiRow);
+
+export type ListAlertsResponseInput = z.infer<typeof zListAlertsResponse>;
+
+/**
+ * Body for `PATCH /api/admin/alerts/{id}` — the triage writes the ops cockpit needs on a fired alert. All fields optional, at least one required; only the fields present are changed.
+ *
+ * Flipping `status` stamps the matching timestamp (`resolvedAt` on `resolved`, `dismissedAt` on `dismissed`; both cleared on `active`). The person owner (`assigneeId`) and the agent owner (`agent`) are independent halves — setting one never touches the other.
+ */
+export const zUpdateAlertRequest = z.object({
+    status: z.enum([
+        'active',
+        'resolved',
+        'dismissed'
+    ]).optional(),
+    assigneeId: z.string().nullish(),
+    agent: z.string().nullish()
+});
+
+export type UpdateAlertRequestInput = z.infer<typeof zUpdateAlertRequest>;
+
+/**
+ * The project the caller's auth header resolves to. The shape is open — additional project fields may be present. Stripe billing internals (`stripeCustomerId`, the `stripeItemId*` family) are intentionally undocumented.
  */
 export const zGetCurrentProjectResponse = z.object({
     id: z.string(),
@@ -2496,7 +3338,7 @@ export const zGetCurrentProjectResponse = z.object({
     defaultPower: z.number().optional(),
     ciConfidence: z.number().optional(),
     defaultAllocationPct: z.int().optional(),
-    defaultHoldout: z.int().optional(),
+    defaultHoldoutBp: z.int(),
     defaultWinsorizePct: z.int().optional(),
     defaultMei: z.number().nullish(),
     cupedBaselineDays: z.int().optional(),
@@ -2505,6 +3347,49 @@ export const zGetCurrentProjectResponse = z.object({
     msprtTauMeiFactor: z.number().optional(),
     msprtTauSdFactor: z.number().optional(),
     srmThreshold: z.number().optional(),
+    slug: z.string().nullable(),
+    logo: z.string().nullable(),
+    defaultEnv: z.enum([
+        'dev',
+        'staging',
+        'prod'
+    ]),
+    timezone: z.string(),
+    statMethod: z.enum([
+        'sequential',
+        'fixed',
+        'bayesian'
+    ]),
+    sigThreshold: z.string(),
+    autoRollback: z.boolean(),
+    minSampleDays: z.int(),
+    moduleUser: z.union([
+        z.boolean(),
+        z.number()
+    ]),
+    moduleEvents: z.union([
+        z.boolean(),
+        z.number()
+    ]),
+    allowPublicTickets: z.union([
+        z.boolean(),
+        z.number()
+    ]),
+    errorAutocloseDays: z.int(),
+    errorTicketMinOccurrences: z.int(),
+    stripeSubscriptionId: z.string().nullable(),
+    scheduledInterval: z.enum(['monthly', 'annual']).nullable(),
+    spendLimitEnabled: z.union([
+        z.boolean(),
+        z.number()
+    ]),
+    spendLimitUsd: z.int().nullable(),
+    spendAlertEmail: z.string().nullable(),
+    defaultAssigneePendingApproval: z.string().nullable(),
+    defaultAssigneeConnectorPendingApproval: z.string().nullable(),
+    defaultAssigneeOpen: z.string().nullable(),
+    defaultAssigneeConnectorOpen: z.string().nullable(),
+    deletedAt: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string()
 });
@@ -2586,7 +3471,9 @@ export const zUpdateProjectRequest = z.object({
     cupedMinBaselineUsers: z.int().gte(10).lte(100000).optional(),
     msprtTauMeiFactor: z.number().gte(0.1).lte(2).optional(),
     msprtTauSdFactor: z.number().gte(0.05).lte(1).optional(),
-    srmThreshold: z.number().gte(0.0001).lte(0.05).optional()
+    srmThreshold: z.number().gte(0.0001).lte(0.05).optional(),
+    errorAutocloseDays: z.int().gte(0).lte(365).optional(),
+    errorTicketMinOccurrences: z.int().gte(1).lte(10000).optional()
 });
 
 export type UpdateProjectRequestInput = z.infer<typeof zUpdateProjectRequest>;
@@ -2594,9 +3481,9 @@ export type UpdateProjectRequestInput = z.infer<typeof zUpdateProjectRequest>;
 export const zListI18nProfilesResponse = z.array(z.object({
     id: z.string(),
     name: z.string(),
-    isDefault: z.number().optional(),
-    createdAt: z.string().optional(),
-    deletedAt: z.string().nullish()
+    isDefault: z.number(),
+    createdAt: z.string(),
+    deletedAt: z.string().nullable()
 }));
 
 export type ListI18nProfilesResponseInput = z.infer<typeof zListI18nProfilesResponse>;
@@ -2628,12 +3515,12 @@ export const zListI18nKeysResponse = z.object({
         id: z.string(),
         key: z.string(),
         value: z.string(),
-        description: z.string().nullish(),
-        variables: z.array(z.string()).nullish(),
-        profileId: z.string().optional(),
-        chunkId: z.string().optional(),
-        updatedAt: z.string().optional(),
-        updatedBy: z.string().optional()
+        description: z.string().nullable(),
+        variables: z.array(z.string()).nullable(),
+        profileId: z.string(),
+        profileName: z.string().nullable(),
+        updatedAt: z.string(),
+        updatedBy: z.string()
     })),
     total: z.number()
 });
@@ -2641,11 +3528,10 @@ export const zListI18nKeysResponse = z.object({
 export type ListI18nKeysResponseInput = z.infer<typeof zListI18nKeysResponse>;
 
 /**
- * Body for `POST /api/admin/i18n/keys`. Insert-only: keys that already exist are never overwritten — use `PUT /keys/{id}` to change a value.
+ * Body for `PUT /api/admin/i18n/keys`. Bulk upsert (overwrite): existing keys are replaced, new ones inserted. Backs the devtools overlay's in-product label editing; deliberately not surfaced by the CLI or MCP.
  */
-export const zPushI18nKeysRequest = z.object({
+export const zUpsertI18nKeysRequest = z.object({
     profile_id: z.uuid(),
-    chunk: z.string().min(1).max(64).optional().default('default'),
     keys: z.array(z.object({
         key: z.string().min(1).max(256),
         value: z.string(),
@@ -2654,17 +3540,43 @@ export const zPushI18nKeysRequest = z.object({
     })).min(1).max(5000)
 });
 
+export type UpsertI18nKeysRequestInput = z.infer<typeof zUpsertI18nKeysRequest>;
+
+/**
+ * Result of a bulk key upsert. The affected profile's KV snapshot is rebuilt (and the CDN purged) before this returns.
+ */
+export const zUpsertI18nKeysResponse = z.object({
+    upserted: z.number()
+});
+
+export type UpsertI18nKeysResponseInput = z.infer<typeof zUpsertI18nKeysResponse>;
+
+/**
+ * Body for `POST /api/admin/i18n/keys`. Insert-only by default: keys that already exist are never overwritten — pass `force: true` to overwrite them in bulk, or use `PUT /keys/{id}` to change one value.
+ */
+export const zPushI18nKeysRequest = z.object({
+    profile_id: z.uuid(),
+    keys: z.array(z.object({
+        key: z.string().min(1).max(256),
+        value: z.string(),
+        description: z.string().optional(),
+        variables: z.array(z.string().min(1).max(64)).max(32).optional()
+    })).min(1).max(5000),
+    force: z.boolean().optional().default(false)
+});
+
 export type PushI18nKeysRequestInput = z.infer<typeof zPushI18nKeysRequest>;
 
 /**
- * Result of an insert-only key push.
+ * Result of a key push — what was inserted, what was left alone, and (with `force`) what was overwritten.
  */
 export const zPushI18nKeysResponse = z.object({
     added: z.array(z.string()),
     skipped: z.array(z.string()),
+    updated: z.array(z.string()),
     pushed_count: z.number(),
     skipped_count: z.number(),
-    chunk: z.string().optional()
+    updated_count: z.number()
 });
 
 export type PushI18nKeysResponseInput = z.infer<typeof zPushI18nKeysResponse>;
@@ -2689,20 +3601,39 @@ export const zUpdateI18nKeyResponse = z.object({
 
 export type UpdateI18nKeyResponseInput = z.infer<typeof zUpdateI18nKeyResponse>;
 
-export const zListI18nDraftsResponse = z.array(z.object({
+/**
+ * Generic success acknowledgement for operations with no meaningful payload.
+ */
+export const zOkResponse = z.object({
+    ok: z.literal(true)
+});
+
+export type OkResponseInput = z.infer<typeof zOkResponse>;
+
+/**
+ * One staged translation draft. The shape is open — additional fields may be present.
+ */
+export const zI18nDraft = z.object({
     id: z.string(),
-    name: z.string().optional(),
-    profileId: z.string().optional(),
-    sourceProfileId: z.string().nullish(),
+    name: z.string(),
+    profileId: z.string(),
+    sourceProfileId: z.string().nullable(),
     status: z.enum([
         'open',
         'merged',
         'abandoned'
-    ]).optional(),
-    createdBy: z.string().optional(),
-    createdAt: z.string().optional(),
-    publishedAt: z.string().nullish()
-}));
+    ]),
+    createdBy: z.string(),
+    createdAt: z.string(),
+    publishedAt: z.string().nullable()
+});
+
+export type I18nDraftInput = z.infer<typeof zI18nDraft>;
+
+/**
+ * Bare array of the project's staged translation drafts.
+ */
+export const zListI18nDraftsResponse = z.array(zI18nDraft);
 
 export type ListI18nDraftsResponseInput = z.infer<typeof zListI18nDraftsResponse>;
 
@@ -2718,26 +3649,6 @@ export const zCreateI18nDraftRequest = z.object({
 export type CreateI18nDraftRequestInput = z.infer<typeof zCreateI18nDraftRequest>;
 
 /**
- * One staged translation draft.
- */
-export const zI18nDraft = z.object({
-    id: z.string(),
-    name: z.string().optional(),
-    profileId: z.string().optional(),
-    sourceProfileId: z.string().nullish(),
-    status: z.enum([
-        'open',
-        'merged',
-        'abandoned'
-    ]).optional(),
-    createdBy: z.string().optional(),
-    createdAt: z.string().optional(),
-    publishedAt: z.string().nullish()
-});
-
-export type I18nDraftInput = z.infer<typeof zI18nDraft>;
-
-/**
  * Body for `PATCH /api/admin/i18n/drafts/{draftId}`. Transitions the draft's lifecycle state.
  */
 export const zUpdateI18nDraftRequest = z.object({
@@ -2751,11 +3662,36 @@ export const zUpdateI18nDraftRequest = z.object({
 export type UpdateI18nDraftRequestInput = z.infer<typeof zUpdateI18nDraftRequest>;
 
 /**
- * Body for `POST /api/admin/i18n/profiles/{profileId}/publish`. The `chunk` is an audit label only.
+ * Bare array of the draft's staged keys (no pagination envelope).
  */
-export const zPublishI18nProfileRequest = z.object({
-    chunk: z.string().optional()
+export const zListI18nDraftKeysResponse = z.array(z.object({
+    id: z.string(),
+    draftId: z.string(),
+    key: z.string(),
+    value: z.string(),
+    description: z.string().nullable(),
+    variables: z.array(z.string()).nullable(),
+    updatedBy: z.string(),
+    updatedAt: z.string()
+}));
+
+export type ListI18nDraftKeysResponseInput = z.infer<typeof zListI18nDraftKeysResponse>;
+
+/**
+ * Body for `POST /api/admin/i18n/drafts/{draftId}/keys`. Upserts one staged key into an open draft — inserted when new, overwritten when it already exists. `{{var}}` placeholder names are auto-derived from the value.
+ */
+export const zUpsertI18nDraftKeyRequest = z.object({
+    key: z.string().min(1).max(256),
+    value: z.string(),
+    description: z.string().optional()
 });
+
+export type UpsertI18nDraftKeyRequestInput = z.infer<typeof zUpsertI18nDraftKeyRequest>;
+
+/**
+ * Body for `POST /api/admin/i18n/profiles/{profileId}/publish`. Publishing is profile-wide — the whole profile is snapshotted into one KV blob — so the body takes no options.
+ */
+export const zPublishI18nProfileRequest = z.record(z.string(), z.never());
 
 export type PublishI18nProfileRequestInput = z.infer<typeof zPublishI18nProfileRequest>;
 
@@ -2765,7 +3701,6 @@ export type PublishI18nProfileRequestInput = z.infer<typeof zPublishI18nProfileR
 export const zPublishI18nProfileResponse = z.object({
     ok: z.literal(true),
     profile_id: z.string(),
-    chunk: z.string().nullable(),
     published_at: z.string(),
     version: z.string(),
     key_count: z.number(),
@@ -2818,35 +3753,56 @@ export const zSetI18nLabelResponse = z.object({
 export type SetI18nLabelResponseInput = z.infer<typeof zSetI18nLabelResponse>;
 
 /**
+ * One sampled instance behind a tracked error — the minimal per-occurrence payload (what varies between instances; everything else lives on the parent `ErrorRecord`). Every column is always present on the wire; nullable columns are `null`, never absent.
+ */
+export const zErrorOccurrence = z.object({
+    id: z.string(),
+    projectId: z.string(),
+    errorId: z.string(),
+    message: z.string(),
+    stack: z.string().nullable(),
+    url: z.string().nullable(),
+    env: z.string().nullable(),
+    side: z.string().nullable(),
+    sdkVersion: z.string().nullable(),
+    extrasJson: z.string().nullable(),
+    sampleRate: z.int().gte(1),
+    seenAt: z.string()
+});
+
+export type ErrorOccurrenceInput = z.infer<typeof zErrorOccurrence>;
+
+/**
  * A tracked production error — one row per distinct issue, keyed by `fingerprint`. Rows are never created by hand: an ingestion path (worker log drain / the `see()` SDK reporter) folds each occurrence into the matching row, bumping `count` and `lastSeenAt`. The admin surface only lists them, reads one, and flips `status`.
  *
- * Field names are camelCase (the D1 row projected through Drizzle). Many columns are nullable because the reporting source may not supply them.
+ * Field names are camelCase (the D1 row projected through Drizzle). Every row column is always present on the wire; many are *nullable* because the reporting source may not supply them — `null`, never absent. Only `occurrences` is conditional (detail reads only).
  */
 export const zErrorRecord = z.object({
     id: z.string(),
     projectId: z.string(),
     fingerprint: z.string(),
-    causedByFingerprint: z.string().nullish(),
+    causedByFingerprint: z.string().nullable(),
     message: z.string(),
-    errorType: z.string().nullish(),
-    stack: z.string().nullish(),
-    source: z.string().nullish(),
-    url: z.string().nullish(),
-    seenUrls: z.string().nullish(),
-    subject: z.string().nullish(),
-    outcome: z.string().nullish(),
-    side: z.string().nullish(),
-    env: z.string().nullish(),
+    errorType: z.string().nullable(),
+    stack: z.string().nullable(),
+    source: z.string().nullable(),
+    url: z.string().nullable(),
+    seenUrls: z.string().nullable(),
+    subject: z.string().nullable(),
+    outcome: z.string().nullable(),
+    side: z.string().nullable(),
+    env: z.string().nullable(),
     kind: z.enum([
         'caught',
         'uncaught',
         'unhandled_rejection',
         'network',
         'violation'
-    ]).nullish(),
-    lastExtrasJson: z.string().nullish(),
-    sdkVersion: z.string().nullish(),
+    ]).nullable(),
+    lastExtrasJson: z.string().nullable(),
+    sdkVersion: z.string().nullable(),
     count: z.int().gte(1),
+    occurrences: z.array(zErrorOccurrence).optional(),
     status: z.enum([
         'open',
         'resolved',
@@ -2855,13 +3811,16 @@ export const zErrorRecord = z.object({
     firstSeenAt: z.string(),
     lastSeenAt: z.string(),
     createdAt: z.string(),
-    updatedAt: z.string()
+    updatedAt: z.string(),
+    assigneeId: z.string().nullable(),
+    assigneeConnectorId: z.string().nullable(),
+    assigneeAgent: z.string().nullable()
 });
 
 export type ErrorRecordInput = z.infer<typeof zErrorRecord>;
 
 /**
- * A bare JSON array of tracked errors, ordered by `lastSeenAt` descending. There is no pagination envelope — `limit` caps the page size.
+ * A bare JSON array of tracked errors, ordered by `lastSeenAt` descending. There is no pagination envelope — `limit` caps the page size. List rows never include `occurrences` — read one error to get them.
  */
 export const zListErrorsResponse = z.array(zErrorRecord);
 
@@ -2885,7 +3844,7 @@ export type UpdateErrorStatusRequestInput = z.infer<typeof zUpdateErrorStatusReq
  */
 export const zFileErrorTicketResponse = z.object({
     id: z.string(),
-    number: z.int()
+    number: z.int().nullable()
 });
 
 export type FileErrorTicketResponseInput = z.infer<typeof zFileErrorTicketResponse>;
@@ -2937,7 +3896,7 @@ export const zConnectorEvent = z.enum(['bug.created', 'feature_request.created']
 export type ConnectorEventInput = z.infer<typeof zConnectorEvent>;
 
 /**
- * A connector row. The encrypted credentials cipher backing the connector is intentionally never serialised.
+ * A connector row. The encrypted credentials cipher backing the connector is intentionally never serialised — `hasCredentials` reports only whether one is stored.
  */
 export const zConnectorRecord = z.object({
     id: z.string(),
@@ -2948,6 +3907,7 @@ export const zConnectorRecord = z.object({
     events: z.array(zConnectorEvent),
     config: z.record(z.string(), z.unknown()),
     accountLabel: z.string().nullable(),
+    hasCredentials: z.boolean(),
     lastError: z.string().nullable(),
     lastAttemptAt: z.string().nullable(),
     lastSuccessAt: z.string().nullable(),
@@ -3004,12 +3964,25 @@ export const zCreateClaudeTriggerRequest = z.object({
 export type CreateClaudeTriggerRequestInput = z.infer<typeof zCreateClaudeTriggerRequest>;
 
 /**
+ * One repo a trigger runs against, with the branch its runs start from.
+ */
+export const zCursorTriggerRepo = z.object({
+    url: z.url(),
+    startingRef: z.string().min(1).optional()
+});
+
+export type CursorTriggerRepoInput = z.infer<typeof zCursorTriggerRepo>;
+
+/**
  * Non-secret config for a Cursor trigger.
  */
 export const zCursorTriggerConfig = z.object({
     repoUrl: z.url(),
     startingRef: z.string().min(1).optional(),
-    projectId: z.string().min(1)
+    repos: z.array(zCursorTriggerRepo).min(1).optional(),
+    projectId: z.string().min(1),
+    agentId: z.string().min(1).optional(),
+    fireText: z.string().min(1).optional()
 });
 
 export type CursorTriggerConfigInput = z.infer<typeof zCursorTriggerConfig>;
@@ -3030,13 +4003,26 @@ export const zCreateCursorTriggerRequest = z.object({
 export type CreateCursorTriggerRequestInput = z.infer<typeof zCreateCursorTriggerRequest>;
 
 /**
+ * One repo a Copilot trigger runs against, with the base branch its tasks branch from.
+ */
+export const zCopilotTriggerRepo = z.object({
+    owner: z.string().min(1),
+    repo: z.string().min(1),
+    baseRef: z.string().min(1).optional()
+});
+
+export type CopilotTriggerRepoInput = z.infer<typeof zCopilotTriggerRepo>;
+
+/**
  * Non-secret config for a Copilot trigger.
  */
 export const zCopilotTriggerConfig = z.object({
     owner: z.string().min(1),
     repo: z.string().min(1),
     baseRef: z.string().min(1).optional(),
-    projectId: z.string().min(1)
+    repos: z.array(zCopilotTriggerRepo).min(1).optional(),
+    projectId: z.string().min(1),
+    fireText: z.string().min(1).optional()
 });
 
 export type CopilotTriggerConfigInput = z.infer<typeof zCopilotTriggerConfig>;
@@ -3061,7 +4047,8 @@ export type CreateCopilotTriggerRequestInput = z.infer<typeof zCreateCopilotTrig
 export const zJulesTriggerConfig = z.object({
     source: z.string().min(1),
     startingBranch: z.string().min(1).optional(),
-    projectId: z.string().min(1)
+    projectId: z.string().min(1),
+    fireText: z.string().min(1).optional()
 });
 
 export type JulesTriggerConfigInput = z.infer<typeof zJulesTriggerConfig>;
@@ -3170,7 +4157,7 @@ export const zUpdateClaudeTriggerRequest = z.object({
 export type UpdateClaudeTriggerRequestInput = z.infer<typeof zUpdateClaudeTriggerRequest>;
 
 /**
- * Per-provider PATCH body for editing an existing `cursor_trigger` connector. `config` replaces the stored config wholesale; `name` and either credential are optional (a supplied credential rotates just that key).
+ * Per-provider PATCH body for editing an existing `cursor_trigger` connector. `config` replaces the stored config wholesale, except for the server-managed keys: the provisioned `agentId` is carried over (and dropped, so a replacement agent is provisioned, when `repoUrl`/`startingRef` change), as is the last-run pointer. `name` and either credential are optional (a supplied credential rotates just that key).
  */
 export const zUpdateCursorTriggerRequest = z.object({
     provider: z.enum(['cursor_trigger']),
@@ -3252,6 +4239,7 @@ export const zKeyRecord = z.object({
     expires_at: z.string().nullable(),
     created_by_email: z.string().nullable(),
     name: z.string().nullable(),
+    description: z.string().nullable(),
     scopes: z.array(z.string()).nullable(),
     last4: z.string().nullable()
 });
@@ -3280,7 +4268,7 @@ export const zCreateKeyRequest = z.object({
         'admin',
         'ops'
     ]),
-    name: z.string().min(1).max(80).optional(),
+    name: z.string().min(1).max(160).optional(),
     scopes: z.array(z.enum([
         'experiments:read',
         'gates:evaluate',
@@ -3320,6 +4308,20 @@ export const zCreateKeyResponse = z.object({
 });
 
 export type CreateKeyResponseInput = z.infer<typeof zCreateKeyResponse>;
+
+/**
+ * Body for `PATCH /api/admin/keys/{id}`. Only the key's **label** is editable — `name` and `description`.
+ *
+ * Everything that gives a key its authority (`type`, `env`, `scopes`, `expires_at`) is fixed at mint: those are the isolation boundary the worker derives the read env and permissions from, so changing them would silently re-point a credential that is already deployed. Rotate instead — mint a replacement and revoke the old key.
+ *
+ * Omitted fields are left untouched; send `null` to clear one.
+ */
+export const zUpdateKeyRequest = z.object({
+    name: z.string().min(1).max(160).nullish(),
+    description: z.string().min(1).max(500).nullish()
+});
+
+export type UpdateKeyRequestInput = z.infer<typeof zUpdateKeyRequest>;
 
 /**
  * Confirms the key is revoked. Idempotent — revoking an already-revoked key returns the same shape.
@@ -3427,6 +4429,19 @@ export const zDeleteGatePath = z.object({
  */
 export const zDeleteGateResponse2 = zDeleteGateResponse;
 
+export const zGetGateHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zGetGatePath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Get one gate
+ */
+export const zGetGateResponse = zGateApiRow;
+
 export const zUpdateGateBody = zUpdateGateRequest;
 
 export const zUpdateGateHeaders = z.object({
@@ -3467,6 +4482,81 @@ export const zDisableGatePath = z.object({
  * Disable a gate
  */
 export const zDisableGateResponse2 = zDisableGateResponse;
+
+export const zListGateActivityHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListGateActivityPath = z.object({
+    id: zResourceId
+});
+
+export const zListGateActivityQuery = z.object({
+    limit: z.int().gte(1).lte(100).optional().default(20)
+});
+
+/**
+ * List gate activity
+ */
+export const zListGateActivityResponse2 = zListGateActivityResponse;
+
+export const zRemoveFromGateWhitelistBody = zRemoveFromGateWhitelistRequest;
+
+export const zRemoveFromGateWhitelistHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zRemoveFromGateWhitelistPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Remove entries from a gate's whitelist
+ */
+export const zRemoveFromGateWhitelistResponse = zGateWhitelist;
+
+export const zGetGateWhitelistHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zGetGateWhitelistPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Read a gate's whitelist
+ */
+export const zGetGateWhitelistResponse = zGateWhitelist;
+
+export const zAddToGateWhitelistBody = zAddToGateWhitelistRequest;
+
+export const zAddToGateWhitelistHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zAddToGateWhitelistPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Add entries to a gate's whitelist
+ */
+export const zAddToGateWhitelistResponse = zGateWhitelist;
+
+export const zSetGateWhitelistBody = zSetGateWhitelistRequest;
+
+export const zSetGateWhitelistHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zSetGateWhitelistPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Replace a gate's whitelist
+ */
+export const zSetGateWhitelistResponse = zGateWhitelist;
 
 export const zListExperimentsHeaders = z.object({
     'X-Project-Id': z.string().optional()
@@ -3519,7 +4609,7 @@ export const zGetExperimentPath = z.object({
 /**
  * Get one experiment
  */
-export const zGetExperimentResponse2 = zGetExperimentResponse;
+export const zGetExperimentResponse = zExperimentApiRow;
 
 export const zUpdateExperimentBody = zUpdateExperimentRequest;
 
@@ -3608,6 +4698,35 @@ export const zReanalyzeExperimentPath = z.object({
  * Re-queue analysis
  */
 export const zReanalyzeExperimentResponse2 = zReanalyzeExperimentResponse;
+
+export const zCreateExperimentReadoutBody = zCreateExperimentReadoutRequest;
+
+export const zCreateExperimentReadoutHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zCreateExperimentReadoutPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Mint a readout snapshot
+ */
+export const zCreateExperimentReadoutResponse2 = zCreateExperimentReadoutResponse;
+
+export const zGetExperimentReadoutHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zGetExperimentReadoutPath = z.object({
+    id: zResourceId,
+    readoutId: zResourceId
+});
+
+/**
+ * Get a readout snapshot
+ */
+export const zGetExperimentReadoutResponse = zExperimentReadoutApiRow;
 
 export const zListConfigsHeaders = z.object({
     'X-Project-Id': z.string().optional()
@@ -3753,6 +4872,23 @@ export const zUpdateConfigSchemaPath = z.object({
  */
 export const zUpdateConfigSchemaResponse2 = zUpdateConfigSchemaResponse;
 
+export const zListConfigVersionsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListConfigVersionsPath = z.object({
+    id: zResourceId
+});
+
+export const zListConfigVersionsQuery = z.object({
+    env: zEnv.optional()
+});
+
+/**
+ * List config version history
+ */
+export const zListConfigVersionsResponse2 = zListConfigVersionsResponse;
+
 export const zListKillswitchesHeaders = z.object({
     'X-Project-Id': z.string().optional()
 });
@@ -3864,6 +5000,21 @@ export const zSetKillswitchValuePath = z.object({
  * Set the flat value on one env
  */
 export const zSetKillswitchValueResponse2 = zSetKillswitchValueResponse;
+
+export const zToggleKillswitchBody = zToggleKillswitchRequest;
+
+export const zToggleKillswitchHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zToggleKillswitchPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Toggle a killswitch or one of its switches
+ */
+export const zToggleKillswitchResponse2 = zToggleKillswitchResponse;
 
 export const zListUniversesHeaders = z.object({
     'X-Project-Id': z.string().optional()
@@ -4115,6 +5266,47 @@ export const zUpdateMetricPath = z.object({
  */
 export const zUpdateMetricResponse = zGetMetricResponse;
 
+export const zListMetricExperimentsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListMetricExperimentsPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * List experiments using a metric
+ */
+export const zListMetricExperimentsResponse2 = zListMetricExperimentsResponse;
+
+export const zUnarchiveMetricHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zUnarchiveMetricPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Unarchive a metric
+ */
+export const zUnarchiveMetricResponse2 = zUnarchiveMetricResponse;
+
+export const zGetMetricSeriesBody = zGetMetricSeriesRequest;
+
+export const zGetMetricSeriesHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zGetMetricSeriesPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Get a metric's time series
+ */
+export const zGetMetricSeriesResponse2 = zGetMetricSeriesResponse;
+
 export const zListEventsHeaders = z.object({
     'X-Project-Id': z.string().optional()
 });
@@ -4205,15 +5397,17 @@ export const zListOpsItemsQuery = z.object({
             'bug',
             'feature_request',
             'error',
-            'alert'
+            'alert',
+            'measure_plan'
         ]),
         z.literal('all')
-    ]).optional(),
+    ]).optional().default('all'),
     status: z.union([
         zOpsItemStatus,
         z.literal('all')
-    ]).optional(),
-    limit: z.int().gte(1).lte(500).optional()
+    ]).optional().default('all'),
+    limit: z.int().gte(1).lte(500).optional().default(200),
+    owner: z.string().optional()
 });
 
 /**
@@ -4231,6 +5425,33 @@ export const zCreateOpsItemHeaders = z.object({
  * File a queue item
  */
 export const zCreateOpsItemResponse2 = zCreateOpsItemResponse;
+
+export const zCreatePublicBugBody = zCreatePublicBugRequest;
+
+/**
+ * An open ticket already tracks this report; nothing was filed
+ */
+export const zCreatePublicBugResponse = zCreatePublicTicketResponse;
+
+export const zCreatePublicFeatureRequestBody = zCreatePublicFeatureRequestRequest;
+
+/**
+ * An open ticket already tracks this report; nothing was filed
+ */
+export const zCreatePublicFeatureRequestResponse = zCreatePublicTicketResponse;
+
+export const zDeleteOpsItemHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zDeleteOpsItemPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * Delete a queue item
+ */
+export const zDeleteOpsItemResponse2 = zDeleteOpsItemResponse;
 
 export const zGetOpsItemHeaders = z.object({
     'X-Project-Id': z.string().optional()
@@ -4274,6 +5495,74 @@ export const zLinkPrToOpsItemPath = z.object({
  * Link a fixing PR
  */
 export const zLinkPrToOpsItemResponse2 = zLinkPrToOpsItemResponse;
+
+export const zAckOpsItemBody = zAckOpsItemRequest;
+
+export const zAckOpsItemHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zAckOpsItemPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * Ack an item (start a run)
+ */
+export const zAckOpsItemResponse2 = zAckOpsItemResponse;
+
+export const zListOpsInvestigationsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListOpsInvestigationsPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * List an item's investigation records
+ */
+export const zListOpsInvestigationsResponse2 = zListOpsInvestigationsResponse;
+
+export const zCreateOpsInvestigationBody = zCreateOpsInvestigationRequest;
+
+export const zCreateOpsInvestigationHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zCreateOpsInvestigationPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * Record an investigation
+ */
+export const zCreateOpsInvestigationResponse = zOpsInvestigation;
+
+export const zUpdateOpsInvestigationBody = zUpdateOpsInvestigationRequest;
+
+export const zUpdateOpsInvestigationHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zUpdateOpsInvestigationPath = z.object({
+    handle: zResourceId,
+    investigationId: zResourceId
+});
+
+/**
+ * The updated investigation record
+ */
+export const zUpdateOpsInvestigationResponse = zOpsInvestigation;
+
+export const zListOpsAgentsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+/**
+ * List connected AI agents
+ */
+export const zListOpsAgentsResponse2 = zListOpsAgentsResponse;
 
 export const zListOpsCommentsHeaders = z.object({
     'X-Project-Id': z.string().optional()
@@ -4375,6 +5664,39 @@ export const zUpdateAlertRulePath = z.object({
  */
 export const zUpdateAlertRuleResponse2 = zUpdateAlertRuleResponse;
 
+export const zListAlertsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListAlertsQuery = z.object({
+    status: z.enum([
+        'active',
+        'resolved',
+        'dismissed',
+        'all'
+    ]).optional().default('active')
+});
+
+/**
+ * List fired alerts
+ */
+export const zListAlertsResponse2 = zListAlertsResponse;
+
+export const zUpdateAlertBody = zUpdateAlertRequest;
+
+export const zUpdateAlertHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zUpdateAlertPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Update a fired alert
+ */
+export const zUpdateAlertResponse = zAlertApiRow;
+
 export const zGetCurrentProjectHeaders = z.object({
     'X-Project-Id': z.string().optional()
 });
@@ -4394,6 +5716,19 @@ export const zUpsertProjectHeaders = z.object({
  * Find-or-create a project by domain
  */
 export const zUpsertProjectResponse2 = zUpsertProjectResponse;
+
+export const zGetProjectHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zGetProjectPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Show a project by id
+ */
+export const zGetProjectResponse = zGetCurrentProjectResponse;
 
 export const zUpdateProjectBody = zUpdateProjectRequest;
 
@@ -4438,7 +5773,7 @@ export const zListI18nKeysQuery = z.object({
     profile_id: z.string().optional(),
     prefix: z.string().optional(),
     q: z.string().max(100).optional(),
-    limit: z.int().gte(1).lte(500).optional(),
+    limit: z.int().gte(1).lte(500).optional().default(200),
     offset: z.int().gte(0).optional().default(0)
 });
 
@@ -4454,9 +5789,33 @@ export const zPushI18nKeysHeaders = z.object({
 });
 
 /**
- * Push new i18n keys (insert-only)
+ * Push i18n keys (insert-only, or `force` to overwrite)
  */
 export const zPushI18nKeysResponse2 = zPushI18nKeysResponse;
+
+export const zUpsertI18nKeysBody = zUpsertI18nKeysRequest;
+
+export const zUpsertI18nKeysHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+/**
+ * Bulk upsert i18n keys (overwrite)
+ */
+export const zUpsertI18nKeysResponse2 = zUpsertI18nKeysResponse;
+
+export const zDeleteI18nKeyHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zDeleteI18nKeyPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Delete one i18n key
+ */
+export const zDeleteI18nKeyResponse = zOkResponse;
 
 export const zUpdateI18nKeyBody = zUpdateI18nKeyRequest;
 
@@ -4493,6 +5852,19 @@ export const zCreateI18nDraftHeaders = z.object({
  */
 export const zCreateI18nDraftResponse = zI18nDraft;
 
+export const zDeleteI18nDraftHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zDeleteI18nDraftPath = z.object({
+    draftId: zResourceId
+});
+
+/**
+ * Delete a translation draft
+ */
+export const zDeleteI18nDraftResponse = zOkResponse;
+
 export const zUpdateI18nDraftBody = zUpdateI18nDraftRequest;
 
 export const zUpdateI18nDraftHeaders = z.object({
@@ -4508,6 +5880,47 @@ export const zUpdateI18nDraftPath = z.object({
  */
 export const zUpdateI18nDraftResponse = zI18nDraft;
 
+export const zDeleteI18nProfileHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zDeleteI18nProfilePath = z.object({
+    profileId: zResourceId
+});
+
+/**
+ * Delete an i18n profile
+ */
+export const zDeleteI18nProfileResponse = zOkResponse;
+
+export const zListI18nDraftKeysHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListI18nDraftKeysPath = z.object({
+    draftId: zResourceId
+});
+
+/**
+ * List a draft's staged keys
+ */
+export const zListI18nDraftKeysResponse2 = zListI18nDraftKeysResponse;
+
+export const zUpsertI18nDraftKeyBody = zUpsertI18nDraftKeyRequest;
+
+export const zUpsertI18nDraftKeyHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zUpsertI18nDraftKeyPath = z.object({
+    draftId: zResourceId
+});
+
+/**
+ * Upsert one staged draft key
+ */
+export const zUpsertI18nDraftKeyResponse = zOkResponse;
+
 export const zPublishI18nProfileBody = zPublishI18nProfileRequest;
 
 export const zPublishI18nProfileHeaders = z.object({
@@ -4519,7 +5932,7 @@ export const zPublishI18nProfilePath = z.object({
 });
 
 /**
- * Publish a profile chunk
+ * Publish a profile
  */
 export const zPublishI18nProfileResponse2 = zPublishI18nProfileResponse;
 
@@ -4594,6 +6007,19 @@ export const zFileErrorTicketPath = z.object({
  * File a feedback ticket for an error
  */
 export const zFileErrorTicketResponse2 = zFileErrorTicketResponse;
+
+export const zResolveErrorHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zResolveErrorPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Resolve a tracked error
+ */
+export const zResolveErrorResponse = zErrorRecord;
 
 export const zGetErrorSeriesBody = zErrorSeriesRequest;
 
@@ -4754,6 +6180,21 @@ export const zCreateKeyHeaders = z.object({
  * Create an API key
  */
 export const zCreateKeyResponse2 = zCreateKeyResponse;
+
+export const zUpdateKeyBody = zUpdateKeyRequest;
+
+export const zUpdateKeyHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zUpdateKeyPath = z.object({
+    id: zResourceId
+});
+
+/**
+ * Update an API key's label
+ */
+export const zUpdateKeyResponse = zKeyRecord;
 
 export const zRevokeKeyHeaders = z.object({
     'X-Project-Id': z.string().optional()
