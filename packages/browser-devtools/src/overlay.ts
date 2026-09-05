@@ -1,4 +1,5 @@
 import { STYLES } from "./styles";
+import { isolateShadowEvents } from "./isolation";
 import { loadSession, saveSession, clearSession, startDeviceAuth } from "./auth";
 import { restoreOverrideSigningGrant } from "./override-cookie";
 import {
@@ -254,25 +255,11 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
   const root = document.createElement("div");
   shadow.appendChild(root);
 
-  // Isolate keyboard events from the host page. Events that originate inside
-  // this open shadow tree retarget to `#shipeasy-devtools` when they reach
-  // window/document listeners, so host-app hotkey guards that only check
-  // INPUT/TEXTAREA (e.g. "G _" navigation chords) miss them and fire while
-  // the user is typing into an overlay search field. Stop bubbling out of the
-  // shadow for ordinary keystrokes. Escape and ⌘/Ctrl+Enter still reach
-  // document-level overlay handlers (inline config editor, feedback modals,
-  // i18n popper) that listen in the bubble phase on `document`.
-  // Typed as `Event`, not `KeyboardEvent`: ShadowRoot only overloads
-  // addEventListener for "slotchange", so every other type falls through to the
-  // plain `EventListener` signature.
-  function isolateHostHotkeys(evt: Event): void {
-    const e = evt as KeyboardEvent;
-    if (e.key === "Escape") return;
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") return;
-    e.stopPropagation();
-  }
-  shadow.addEventListener("keydown", isolateHostHotkeys);
-  shadow.addEventListener("keyup", isolateHostHotkeys);
+  // Keep every interaction with the overlay inside the overlay: pointer,
+  // click, focus and (most) key events stop at the shadow root instead of
+  // retargeting onto `#shipeasy-devtools` and reading, to the embedding app,
+  // as a click/focus outside its open modal or popover. See ./isolation.ts.
+  const releaseIsolation = isolateShadowEvents(shadow);
 
   // Allow the embedding page to override the accent colour. Setting it as an
   // inline style on the shadow host overrides the :host { --accent } rule in
@@ -684,8 +671,8 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       };
       const up = () => {
         mk.classList.remove("dragging");
-        document.removeEventListener("mousemove", move);
-        document.removeEventListener("mouseup", up);
+        document.removeEventListener("mousemove", move, true);
+        document.removeEventListener("mouseup", up, true);
         saveOverlayState(state);
         // The rail-resize handle's width/height are inline styles set at
         // render time per edge. Re-render after a drag so the handle reorients
@@ -693,8 +680,8 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
         if (dragged) render();
         void lastEdge;
       };
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up);
+      document.addEventListener("mousemove", move, true);
+      document.addEventListener("mouseup", up, true);
     });
     mk.addEventListener("click", () => {
       if (dragged) return;
@@ -736,12 +723,12 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       };
       const up = () => {
         resize.classList.remove("dragging");
-        document.removeEventListener("mousemove", move);
-        document.removeEventListener("mouseup", up);
+        document.removeEventListener("mousemove", move, true);
+        document.removeEventListener("mouseup", up, true);
         saveOverlayState(state);
       };
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up);
+      document.addEventListener("mousemove", move, true);
+      document.addEventListener("mouseup", up, true);
     });
   }
 
@@ -809,12 +796,12 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       };
       const up = () => {
         headMk.classList.remove("dragging");
-        document.removeEventListener("mousemove", move);
-        document.removeEventListener("mouseup", up);
+        document.removeEventListener("mousemove", move, true);
+        document.removeEventListener("mouseup", up, true);
         saveOverlayState(state);
       };
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up);
+      document.addEventListener("mousemove", move, true);
+      document.addEventListener("mouseup", up, true);
     });
 
     panel.querySelector('[data-action="collapse"]')!.addEventListener("click", () => {
@@ -965,12 +952,12 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       };
       const up = () => {
         headMk.classList.remove("dragging");
-        document.removeEventListener("mousemove", move);
-        document.removeEventListener("mouseup", up);
+        document.removeEventListener("mousemove", move, true);
+        document.removeEventListener("mouseup", up, true);
         saveOverlayState(state);
       };
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up);
+      document.addEventListener("mousemove", move, true);
+      document.addEventListener("mouseup", up, true);
     });
 
     // Resize handle at the bottom-right corner — grows/shrinks the panel,
@@ -995,12 +982,12 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       };
       const up = () => {
         resizeH.classList.remove("dragging");
-        document.removeEventListener("mousemove", move);
-        document.removeEventListener("mouseup", up);
+        document.removeEventListener("mousemove", move, true);
+        document.removeEventListener("mouseup", up, true);
         saveOverlayState(state);
       };
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up);
+      document.addEventListener("mousemove", move, true);
+      document.addEventListener("mouseup", up, true);
     });
 
     // Labels-tab head extras (Edit-on-page toggle). Locale select is wired
@@ -1576,8 +1563,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
       window.removeEventListener("resize", onWinResize);
       window.removeEventListener("se:state:update", onStateUpdate);
       window.removeEventListener(DEVTOOLS_UNAUTHED_EVENT, onUnauthed);
-      shadow.removeEventListener("keydown", isolateHostHotkeys);
-      shadow.removeEventListener("keyup", isolateHostHotkeys);
+      releaseIsolation();
       unsubControls();
       mo.disconnect();
       host.remove();

@@ -1,6 +1,7 @@
 import { LABEL_MARKER_START } from "@shipeasy/devtools-core/types";
 import { see } from "@shipeasy/devtools-core/self-report";
 import { STYLES } from "../styles";
+import { isolateShadowEvents } from "../isolation";
 
 // Accept both the legacy 2-section marker (`￹key￺value￻`, SDK ≤ 2.1.10) and
 // the 3-section format with vars JSON (`￹key￺varsJson￺value￻`, SDK ≥ 2.1.11).
@@ -289,6 +290,11 @@ function ensurePopperShadow(): ShadowRoot {
   const styleEl = document.createElement("style");
   styleEl.textContent = STYLES;
   shadow.appendChild(styleEl);
+  // Same isolation as the main overlay: typing and clicking in the popper is
+  // devtools chrome, not a click on the page it floats over. Without this the
+  // host app sees a click on `#se-popper-host` — outside its open modal — and
+  // dismisses it out from under the label being edited.
+  isolateShadowEvents(shadow);
   return shadow;
 }
 
