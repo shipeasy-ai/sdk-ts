@@ -1,6 +1,6 @@
 {
   "name": "@shipeasy/devtools-core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Headless core for the Shipeasy devtools overlays \u2014 admin API client, PKCE device auth, public bug intake, form schemas.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://shipeasy.ai",

@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## devtools-core 1.1.0 (2026-10-26)
 
-### devtools-core: public reports carry `tags`
+### Public reports carry `tags`
 
 `submitPublicBug` / `submitPublicFeature` take an optional `tags: string[]`.
 Each name is matched case-insensitively against the project's existing tags —

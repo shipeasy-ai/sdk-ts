@@ -88,6 +88,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@shipeasy/devtools-core": "1.0.0"
+    "@shipeasy/devtools-core": "1.1.0"
   }
 }
