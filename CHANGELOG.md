@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### devtools-core: public reports carry `tags`
+
+`submitPublicBug` / `submitPublicFeature` take an optional `tags: string[]`.
+Each name is matched case-insensitively against the project's existing tags —
+reused when it matches, created when it doesn't — and attached to the filed
+ticket (at most 50 names, each up to 64 characters).
+
 ## browser-devtools (2026-08-03)
 
 Overlay-only fixes (`@shipeasy/browser-devtools` / hosted `se-devtools.js`);

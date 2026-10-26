@@ -34,6 +34,10 @@ export interface PublicBugInput {
   step?: string;
   /** System/env info (platform, os version, app version, …). */
   context?: Record<string, unknown>;
+  /** Tag names to label the ticket with (≤50, each ≤64 chars). Each is matched
+   *  case-insensitively against the project's existing tags — reused when it
+   *  matches, created when it doesn't. */
+  tags?: string[];
 }
 
 export interface PublicBugResult {
@@ -56,6 +60,10 @@ export interface PublicFeatureInput {
   step?: string;
   /** System/env info (platform, os version, app version, …). */
   context?: Record<string, unknown>;
+  /** Tag names to label the ticket with (≤50, each ≤64 chars). Each is matched
+   *  case-insensitively against the project's existing tags — reused when it
+   *  matches, created when it doesn't. */
+  tags?: string[];
 }
 
 export interface SubmitPublicBugOptions {
@@ -112,6 +120,7 @@ export async function submitPublicBug(
       ...(input.reporterEmail ? { reporter_email: input.reporterEmail } : {}),
       ...(input.step ? { step: input.step } : {}),
       ...(input.context ? { context: input.context } : {}),
+      ...(input.tags?.length ? { tags: input.tags } : {}),
     },
     opts,
     "Bug report",
@@ -133,6 +142,7 @@ export async function submitPublicFeature(
       ...(input.reporterEmail ? { reporter_email: input.reporterEmail } : {}),
       ...(input.step ? { step: input.step } : {}),
       ...(input.context ? { context: input.context } : {}),
+      ...(input.tags?.length ? { tags: input.tags } : {}),
     },
     opts,
     "Feature request",
