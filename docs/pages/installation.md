@@ -72,7 +72,7 @@ call wins (later calls are no-ops).
 | `baseUrl` | both | `https://cdn.shipeasy.ai` | override the CDN/edge base |
 | `env` | server | `prod` | which published env to read (`dev` / `staging` / `prod`) |
 | `disableTelemetry` | both | `false` | turn off per-evaluation usage beacons. On Cloudflare Workers each beacon is an outbound subrequest (cap 50 free / 1000 paid per invocation), so set `true` on hot paths that evaluate many flags per request. |
-| `privateAttributes` | both | `[]` | attribute names usable for targeting but stripped from every outbound `track()` payload (LD/Statsig `privateAttributes`). |
+| `privateAttributes` | both | `[]` | attribute names usable for targeting but stripped from every outbound `track()` payload (`privateAttributes`). |
 | `stickyStore` | server | — | a sticky-bucketing store so an enrolled unit stays in its first-assigned variant across requests even when allocation changes — see [Advanced → sticky bucketing](./advanced.md). |
 
 `configure()` is **first-config-wins**: the first call builds the process-wide

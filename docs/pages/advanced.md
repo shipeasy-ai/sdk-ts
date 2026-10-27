@@ -1,6 +1,6 @@
 # Advanced
 
-LaunchDarkly / Statsig parity features. All are set as options on `configure()`
+Advanced features. All are set as options on `configure()`
 (or on `shipeasy()` for SSR), or read through the bound `Client`.
 
 ## Exposure control
@@ -44,7 +44,7 @@ Either way the exposure is deduped per session and durably per
 ## Private attributes
 
 Attributes you mark private are used for **evaluation** but stripped from every
-outbound `track()` payload (LD/Statsig `privateAttributes`):
+outbound `track()` payload (`privateAttributes`):
 
 ```ts
 configure({
