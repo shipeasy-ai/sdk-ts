@@ -1362,14 +1362,15 @@ function fmtDuration(ms: number): string {
 // status]` line doubles as the form's submit/error status (setStatus targets
 // it), so each form embeds this block exactly once.
 export const ATTACHMENTS_FIELD_HTML = `
-      <div class="se-field">
+      <div class="se-field se-dropzone" data-attach-drop>
         <span class="se-label">Attachments</span>
         <div class="se-actions">
           <button type="button" class="ibtn" data-action="screenshot">${I.camera} Screenshot</button>
           <button type="button" class="ibtn" data-action="record">${I.record} Record screen</button>
           <button type="button" class="ibtn" data-action="upload">${I.upload} Upload file</button>
-          <input type="file" hidden data-action="file-input"/>
+          <input type="file" multiple hidden data-action="file-input"/>
         </div>
+        <div class="se-drop-hint">or drop screenshots and files here</div>
         <div class="se-attach-grid" data-attach-grid></div>
         <div class="se-status" data-status></div>
       </div>`;
@@ -1499,9 +1500,7 @@ export function wireAttachments(
   });
   const fileInput = modal.querySelector<HTMLInputElement>('[data-action="file-input"]')!;
   modal.querySelector('[data-action="upload"]')!.addEventListener("click", () => fileInput.click());
-  fileInput.addEventListener("change", () => {
-    const f = fileInput.files?.[0];
-    if (!f) return;
+  const addFile = (f: File) => {
     const isImage = f.type.startsWith("image/");
     const isVideo = f.type.startsWith("video/");
     addAttachment({
@@ -1510,8 +1509,42 @@ export function wireAttachments(
       filename: f.name,
       blob: f,
     });
+  };
+  fileInput.addEventListener("change", () => {
+    for (const f of Array.from(fileInput.files ?? [])) addFile(f);
     fileInput.value = "";
   });
+
+  // Dropzone: drag screenshots/files from the desktop straight onto the
+  // Attachments field. A depth counter keeps the highlight steady while the
+  // pointer crosses child elements (dragenter/leave fire per descendant).
+  const drop = modal.querySelector<HTMLElement>("[data-attach-drop]");
+  if (drop) {
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    drop.addEventListener("dragenter", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth++;
+      drop.classList.add("dropping");
+    });
+    drop.addEventListener("dragover", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    });
+    drop.addEventListener("dragleave", () => {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) drop.classList.remove("dropping");
+    });
+    drop.addEventListener("drop", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      drop.classList.remove("dropping");
+      for (const f of Array.from(e.dataTransfer?.files ?? [])) addFile(f);
+    });
+  }
 
   return { attachments, revokeAllPreviews };
 }

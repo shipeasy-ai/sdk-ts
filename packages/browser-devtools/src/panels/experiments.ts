@@ -37,24 +37,35 @@ function buildRow(e: ExperimentRecord): RenderRow {
   const ov = getExpOverride(e.name);
   const live = bridge()?.getExperiment(e.name);
   const liveGroup = live?.inExperiment ? live.group : null;
-  const groupNames = ["control", ...e.groups.map((g) => g.name)];
   const effective = ov ?? liveGroup ?? "control";
   return {
     name: e.name,
     status: e.status,
-    groups: [{ name: "control", weight: 0 }, ...e.groups]
-      .map((g, i) => ({
-        name: i === 0 ? "control" : g.name,
-        weight: g.weight,
-      }))
-      .filter((g, i, arr) => arr.findIndex((x) => x.name === g.name) === i),
+    groups: variantRows(e),
     override: ov,
     liveGroup,
     liveEnrolled: live?.inExperiment ?? false,
     effective,
     updatedAt: e.updatedAt,
   };
-  void groupNames;
+}
+
+/** Weights are stored in basis points (0–10000); 5000 = 50%. */
+export function fmtWeightPct(bp: number): string {
+  const pct = bp / 100;
+  return `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
+}
+
+/** The variant list with `control` first. A stored `control` group keeps its
+ *  own weight; otherwise control takes whatever the other variants leave. */
+export function variantRows(e: ExperimentRecord): Array<{ name: string; weight: number }> {
+  const own = e.groups.find((g) => g.name === "control");
+  const others = e.groups.filter((g) => g.name !== "control");
+  const rest = Math.max(0, 10000 - others.reduce((n, g) => n + g.weight, 0));
+  return [
+    { name: "control", weight: own ? own.weight : rest },
+    ...others.map((g) => ({ name: g.name, weight: g.weight })),
+  ];
 }
 
 function renderRow(r: RenderRow, expandedKey: string | null): string {
@@ -83,7 +94,7 @@ function renderRow(r: RenderRow, expandedKey: string | null): string {
       return `<div class="var-row${assigned ? " assigned" : ""}">
         <span class="sw" style="background:${swatch}"></span>
         <span>${escapeHtml(g.name)}</span>
-        <span class="pct">${g.weight}%</span>
+        <span class="pct">${fmtWeightPct(g.weight)}</span>
         <span style="font-size:9.5px;color:var(--fg-4)">${
           g.name === r.liveGroup ? "real" : g.name === r.override ? "forced" : ""
         }</span>

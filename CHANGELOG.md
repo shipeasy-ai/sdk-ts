@@ -1,5 +1,22 @@
 # Changelog
 
+## browser-devtools (2026-10-28)
+
+Overlay (`@shipeasy/browser-devtools` / hosted `se-devtools.js`) plus
+`devtools-core`; not yet released to npm. The client bridge gains an optional
+`getKillswitch`.
+
+- Added a **Killswitches** panel (force killed/live via `?se_ks_*`, live state
+  read from the page's SDK).
+- Fixed experiment variant weights rendering x100 (5000 basis points showed as
+  `5000%`); control now shows its real share.
+- The User panel states the project the overlay is bound to and flags a
+  differing `user.project_id` attribute; the header names the project on hover.
+- Flags that read `false` say why (disabled, targeting, whitelist, rollout
+  bucket, no identified user) via `explainGateFalse` in `devtools-core`.
+- The Attachments field in the bug and feature forms is a dropzone: drag
+  screenshots and files straight onto it.
+
 ## devtools-core 1.1.0 (2026-10-26)
 
 ### Public reports carry `tags`

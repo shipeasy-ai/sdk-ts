@@ -23,6 +23,7 @@ import type {
   FeatureRequestRecord,
   GateRecord,
   KeyRecord,
+  KillswitchRecord,
   OpsItemDetail,
   ProfileRecord,
   ProjectRecord,
@@ -57,6 +58,7 @@ import {
   listI18nDrafts,
   listI18nKeys,
   listI18nProfiles,
+  listKillswitches,
   listOpsItems,
   listUniverses,
   updateI18nKey,
@@ -320,6 +322,14 @@ export class DevtoolsClient {
       // widens to the overlay contract.
       this.drain<GateRecord>("/api/admin/gates", (query) =>
         listGates({ client: this.api, query }),
+      ),
+    );
+  }
+
+  killswitches(): Promise<KillswitchRecord[]> {
+    return this.memo("killswitches", () =>
+      this.drain<KillswitchRecord>("/api/admin/killswitches", (query) =>
+        listKillswitches({ client: this.api, query }),
       ),
     );
   }

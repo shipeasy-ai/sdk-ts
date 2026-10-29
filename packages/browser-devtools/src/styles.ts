@@ -1013,6 +1013,10 @@ button { font-family: inherit; }
 .se-textarea { resize:vertical; min-height:54px; font-family:var(--sans); }
 .se-actions { display:flex; gap:6px; flex-wrap:wrap; }
 .se-actions .ibtn { display:inline-flex; align-items:center; gap:5px; }
+.se-dropzone { border:1px dashed var(--line, rgba(128,128,128,.35)); border-radius:6px; padding:6px; }
+.se-dropzone.dropping { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, transparent); }
+.se-drop-hint { font-size:10.5px; color:var(--fg-4); }
+.se-dropzone.dropping .se-drop-hint { color:var(--accent); }
 .se-attach-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
   gap:8px; }
 .se-attach-card { position:relative; background:var(--bg-2);

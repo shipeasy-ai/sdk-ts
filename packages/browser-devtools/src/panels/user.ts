@@ -39,9 +39,10 @@ function avatarLetter(text: string): string {
 
 export function renderUserPanel(
   container: HTMLElement,
-  _api: DevtoolsApi,
+  api: DevtoolsApi,
   state: UserPanelState,
   reevaluate: () => void,
+  projectName = "",
 ): void {
   const u = readBridgeUser();
   if (!u && Object.keys(state.props).length === 0) {
@@ -94,6 +95,8 @@ export function renderUserPanel(
     </div>`,
   ).join("");
 
+  const bound = boundProjectHtml(api.projectId, projectName, merged);
+
   const dirtyCount = Object.values(state.dirty).filter(Boolean).length;
 
   container.innerHTML = `
@@ -105,6 +108,7 @@ export function renderUserPanel(
           <div class="id">${escapeHtml(idVal)}</div>
         </div>
       </div>
+      ${bound}
       <div class="dtf-group">User properties<span class="c">${isMock ? "mock data · edit to simulate" : "edit to simulate"}</span></div>
       <div style="flex:1; overflow-y:auto">
         ${propRows || `<div class="se-empty">No user properties yet.</div>`}
@@ -130,6 +134,38 @@ export function renderUserPanel(
     state.dirty = {};
     reevaluate();
   });
+}
+
+/** The attribute names an app commonly uses to carry its own project id. */
+const PROJECT_ATTRS = ["project_id", "projectId"];
+
+/**
+ * Which Shipeasy project this overlay reads, and whether the identified user's
+ * own `project_id` attribute agrees. The overlay is bound to the project its
+ * session was authorised for (the project whose SDK runs on the page); an app
+ * can still put a different project id on the user (e.g. the project open in a
+ * dashboard), which reads like a contradiction unless it is called out.
+ */
+export function boundProjectHtml(
+  boundId: string,
+  boundName: string,
+  userProps: Record<string, string>,
+): string {
+  const attr = PROJECT_ATTRS.find((k) => userProps[k]);
+  const userProject = attr ? userProps[attr]! : "";
+  const label = boundName ? `${boundName} (${boundId})` : boundId;
+  const mismatch = userProject && userProject !== boundId;
+  return `<div class="dtf-group">Devtools project<span class="c">read-only</span></div>
+      <div class="dtf-prop" title="The overlay reads flags, killswitches and feedback from this project">
+        <span class="k">devtools.project</span>
+        <span class="v" style="color:var(--accent)">${escapeHtml(label)}</span>
+        <span style="width:5px"></span>
+      </div>
+      ${
+        mismatch
+          ? `<div class="se-empty" data-project-mismatch style="text-align:left">user.${escapeHtml(attr!)} is ${escapeHtml(userProject)}, an attribute your app set. The overlay reads ${escapeHtml(boundName || boundId)}, the project whose SDK runs on this page</div>`
+          : ""
+      }`;
 }
 
 function escapeAttr(s: string): string {

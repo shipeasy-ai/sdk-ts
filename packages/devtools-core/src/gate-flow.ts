@@ -238,3 +238,49 @@ export function evalStepMatch(
   const ok = mode === "any" ? results.some(Boolean) : results.every(Boolean);
   return ok ? "pass" : "fail";
 }
+
+// ── "why is this flag false" ─────────────────────────────────────────────────
+
+/**
+ * One-line reason a flag serves `false` for the current user, or `null` when it
+ * is serving `true`. A flag at 100% rollout still reads false whenever it is
+ * disabled, a whitelist/condition step excludes the user, or there is no
+ * identified user to match against; the rollout % alone never says that. The
+ * attribute checks are exact, rollout bucketing is not reproduced.
+ */
+export function explainGateFalse(
+  gate: GateRecord,
+  served: boolean,
+  user: Record<string, unknown> | null,
+): string | null {
+  if (served) return null;
+  if (!gate.enabled) return "flag is disabled";
+  const all = buildGateFlow(gate);
+  const gating = all.filter(
+    (s) => !s.isPublicFloor && s.type === "condition" && (s.rules.length > 0 || s.whitelist),
+  );
+  const floorPct = all.find((s) => s.isPublicFloor)?.rolloutPct ?? 0;
+
+  const flat = !Array.isArray(gate.stack) || gate.stack.length === 0;
+  if (flat && gating.length > 0 && floorPct > 0) {
+    // Legacy flat gate: targeting rules AND the rollout %, so a 100% rollout
+    // still serves false to a user the rules exclude.
+    if (!user) return "no identified user, so targeting rules cannot match";
+    if (gating.every((s) => evalStepMatch(s, user) === "fail")) {
+      return `targeting: ${gating[0]!.title} needs ${ruleSummary(gating[0]!)}`;
+    }
+  }
+  if (floorPct >= 10000) return "evaluated false for this user, check the User panel attributes";
+  if (gating.length > 0 && floorPct === 0) {
+    if (!user) return "no identified user, so targeting and whitelist rules cannot match";
+    const lists = gating.filter((s) => s.whitelist);
+    const rules = gating.filter((s) => !s.whitelist);
+    if (rules.length > 0 && rules.every((s) => evalStepMatch(s, user) === "fail")) {
+      return `targeting: ${rules[0]!.title} needs ${ruleSummary(rules[0]!)}`;
+    }
+    if (lists.length > 0) return `stack: user is not on the ${lists[0]!.title.toLowerCase()}`;
+    return "stack: no condition matched this user";
+  }
+  if (floorPct > 0) return `rollout: user is outside the ${floorPct / 100}% bucket`;
+  return "rollout is 0%";
+}
