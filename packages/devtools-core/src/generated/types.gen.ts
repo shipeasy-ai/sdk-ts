@@ -3384,7 +3384,7 @@ export type OpsItemStatus = 'open' | 'pending_approval' | 'investigating_by_ai' 
 export type OpsItemPriority = 'nice_to_have' | 'medium' | 'high' | 'critical';
 
 /**
- * Where automation has taken an item in the investigation lifecycle — the signal the ops cockpit renders as "what AI did" plus the one action expected of the user. It is **written as a side-effect of the actions that already happen**, never authored on its own: linking a PR sets `pr_ready`, moving to `in_progress` sets `working`, `ready_for_qa` sets `ready_for_qa`, a system/assistant reply sets `question`, resolving clears it, and creation seeds `backlog` or `investigated`/`detected` for auto-filed error/alert tickets. `backlog` is the single "nothing has happened yet" state — how urgent that is reads off `priority`, not off a separate state, and its one action is to hand the item to an agent. `pr_merged` and `pr_closed` are written by the GitHub `pull_request` webhook when the linked PR reaches a terminal outcome — merged (the fix shipped, resolve the item) or closed without merging (the fix was rejected, decide what happens next). Absent on rows filed before the field existed — consumers should treat a missing value as "derive from the other fields".
+ * Where automation has taken an item in the investigation lifecycle — the signal the ops cockpit renders as "what AI did" plus the one action expected of the user. It is **written as a side-effect of the actions that already happen**, never authored on its own: linking a PR sets `pr_ready`, moving to `in_progress` sets `working`, `ready_for_qa` sets `ready_for_qa`, a system/assistant reply sets `question`, resolving clears it, and creation seeds `backlog` for every untouched item (bugs, features, and auto-filed error/alert tickets alike — type is not a signal). `backlog` is the single "nothing has happened yet" state — how urgent that is reads off `priority`, not off a separate state, and its one action is to hand the item to an agent. `investigated`/`detected` are set when a completed agent run leaves findings to review, not at filing time. `pr_merged` and `pr_closed` are written by the GitHub `pull_request` webhook when the linked PR reaches a terminal outcome — merged (the fix shipped, resolve the item) or closed without merging (the fix was rejected, decide what happens next). Absent on rows filed before the field existed — consumers should treat a missing value as "derive from the other fields".
  */
 export type OpsInvestigationState = 'pr_ready' | 'pr_merged' | 'pr_closed' | 'investigated' | 'detected' | 'question' | 'ready_for_qa' | 'pending_approval' | 'working' | 'backlog';
 
@@ -3735,7 +3735,7 @@ export type GithubPrLink = {
 };
 
 /**
- * GitHub connector trace — the issue it opened and, once linked, the pull request.
+ * GitHub connector trace — the issue it opened and, once linked, the pull requests.
  */
 export type GithubConnectorData = {
     /**
@@ -3764,7 +3764,14 @@ export type GithubConnectorData = {
         createdAt?: string;
         [key: string]: unknown;
     };
+    /**
+     * The item's PRIMARY linked pull request, derived from `prs`: the newest still-open one, else the newest merged one, else the newest closed one. Kept for readers that show one PR; `prs` is the full list.
+     */
     pr?: GithubPrLink;
+    /**
+     * Every pull request linked to the item, oldest link first — an item can legitimately take several PRs (a fix split across repos, a follow-up). Absent on items linked before multi-PR support; `pr` then is the only one.
+     */
+    prs?: Array<GithubPrLink>;
     [key: string]: unknown;
 };
 
@@ -4016,8 +4023,17 @@ export type ListOpsItemsResponse = Array<{
      * ISO-8601 last-update timestamp.
      */
     updatedAt: string;
+    /**
+     * ISO-8601 timestamp the item was closed (`resolved` or `wont_fix`), or `null` while it is open.
+     */
+    closedAt: string | null;
     [key: string]: unknown;
 }>;
+
+/**
+ * A tag name. Trimmed; matched case-insensitively against the project's existing tags.
+ */
+export type TagName = string;
 
 /**
  * Bug-kind fields for `POST /api/admin/ops` (sent with `type: bug`).
@@ -4056,13 +4072,17 @@ export type CreateBugRequest = {
      */
     assigneeId?: string | null;
     /**
+     * The agent connector the filer chose to delegate this item to at creation. When set, the server launches that one agent and skips any tag-rule auto-launch, so the filer's choice prevails and only one run starts.
+     */
+    delegateConnectorId?: string;
+    /**
      * Emails of teammates to subscribe to this item's Slack pings at creation.
      */
     subscribers?: Array<string>;
     /**
-     * Tag names to attach at creation (get-or-created by name, deduped case-insensitively).
+     * Tag names to label the item with, e.g. `["ios", "checkout"]`. Each name is matched case-insensitively against the project's existing tags and reuses that tag (keeping its stored casing) when one matches; a name with no match creates a new project tag.
      */
-    tags?: Array<string>;
+    tags?: Array<TagName>;
     /**
      * Email of the reporter, or `null`.
      */
@@ -4124,13 +4144,17 @@ export type CreateFeatureRequestRequest = {
      */
     assigneeId?: string | null;
     /**
+     * The agent connector the filer chose to delegate this item to at creation. When set, the server launches that one agent and skips any tag-rule auto-launch, so the filer's choice prevails and only one run starts.
+     */
+    delegateConnectorId?: string;
+    /**
      * Emails of teammates to subscribe to this item's Slack pings at creation.
      */
     subscribers?: Array<string>;
     /**
-     * Tag names to attach at creation (get-or-created by name, deduped case-insensitively).
+     * Tag names to label the item with, e.g. `["ios", "checkout"]`. Each name is matched case-insensitively against the project's existing tags and reuses that tag (keeping its stored casing) when one matches; a name with no match creates a new project tag.
      */
-    tags?: Array<string>;
+    tags?: Array<TagName>;
     /**
      * Email of the reporter, or `null`.
      */
@@ -4179,7 +4203,7 @@ export type CreateOpsItemResponse = {
 };
 
 /**
- * Body for `POST /ops/bug`. The same bug fields as `CreateBugRequest`, minus the `type` discriminator — the path already says what is being filed.
+ * Body for `POST /ops/bug`. The same bug fields as `CreateBugRequest`, minus the `type` discriminator — the path already says what is being filed, plus the public intake's own `dedupKey`.
  */
 export type CreatePublicBugRequest = {
     /**
@@ -4215,9 +4239,9 @@ export type CreatePublicBugRequest = {
      */
     subscribers?: Array<string>;
     /**
-     * Tag names to attach at creation (get-or-created by name, deduped case-insensitively).
+     * Tag names to label the item with, e.g. `["ios", "checkout"]`. Each name is matched case-insensitively against the project's existing tags and reuses that tag (keeping its stored casing) when one matches; a name with no match creates a new project tag. Here the tags only label the ticket: the project's tag rules (owner/status/agent routing) are not applied to a public report while it awaits approval.
      */
-    tags?: Array<string>;
+    tags?: Array<TagName>;
     /**
      * Email of the reporter, or `null`.
      */
@@ -4241,13 +4265,17 @@ export type CreatePublicBugRequest = {
         [key: string]: unknown;
     } | null;
     /**
+     * Caller-chosen dedupe identity for this report, stored on the ticket. A repeat submission carrying the same key does NOT file a second ticket: the open ticket already holding that key is refreshed from this payload (title and the report fields overwritten, a "re-triggered" comment appended) and returned with `deduped: true` and `updated: true`. Triage state a human owns — status, priority, assignee, tags — is left untouched, and a `resolved`/`wont_fix` ticket no longer holds the key, so a failure that comes back after being closed files a fresh ticket. Omit it to fall back to the derived (title + `context.step`) dedupe, whose repeats return the existing ticket unchanged.
+     */
+    dedupKey?: string;
+    /**
      * Where this bug's completion notification lands.
      */
     notify?: NotificationTarget | null;
 };
 
 /**
- * Response for the public ticket intake. A fresh file returns `201` with `id` + `number`; a repeat of a report already tracked by an open ticket returns `200` with that ticket's `number` and `deduped: true`.
+ * Response for the public ticket intake. A fresh file returns `201` with `id` + `number`; a repeat of a report already tracked by an open ticket returns `200` with that ticket's `number` and `deduped: true` — plus `updated: true` when a `dedupKey` re-triggered it and its fields were refreshed.
  */
 export type CreatePublicTicketResponse = {
     /**
@@ -4262,10 +4290,14 @@ export type CreatePublicTicketResponse = {
      * `true` when an open ticket already tracked this report and nothing was filed (HTTP 200). Absent on a fresh file (HTTP 201).
      */
     deduped?: boolean;
+    /**
+     * `true` when the deduped ticket was REFRESHED from this payload and got a "re-triggered" comment — only ever set alongside `deduped` on a submission that carried a `dedupKey`. Absent when the existing ticket was returned untouched.
+     */
+    updated?: boolean;
 };
 
 /**
- * Body for `POST /ops/feature-request`. The same feature-request fields as `CreateFeatureRequestRequest`, minus the `type` discriminator — the path already says what is being filed.
+ * Body for `POST /ops/feature-request`. The same feature-request fields as `CreateFeatureRequestRequest`, minus the `type` discriminator — the path already says what is being filed, plus the public intake's own `dedupKey`.
  */
 export type CreatePublicFeatureRequestRequest = {
     /**
@@ -4297,9 +4329,9 @@ export type CreatePublicFeatureRequestRequest = {
      */
     subscribers?: Array<string>;
     /**
-     * Tag names to attach at creation (get-or-created by name, deduped case-insensitively).
+     * Tag names to label the item with, e.g. `["ios", "checkout"]`. Each name is matched case-insensitively against the project's existing tags and reuses that tag (keeping its stored casing) when one matches; a name with no match creates a new project tag. Here the tags only label the ticket: the project's tag rules (owner/status/agent routing) are not applied to a public report while it awaits approval.
      */
-    tags?: Array<string>;
+    tags?: Array<TagName>;
     /**
      * Email of the reporter, or `null`.
      */
@@ -4318,6 +4350,10 @@ export type CreatePublicFeatureRequestRequest = {
     context?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Caller-chosen dedupe identity for this request, stored on the ticket. Behaves exactly as on `POST /ops/bug`: a repeat carrying the same key refreshes the open ticket already holding it (fields overwritten, a "re-triggered" comment appended) and returns `deduped: true` with `updated: true`, instead of filing a second one.
+     */
+    dedupKey?: string;
     /**
      * Where this request's completion notification lands.
      */
@@ -4383,6 +4419,144 @@ export type OpsItemRelated = {
      * HTML URL of the linked GitHub pull request, if any.
      */
     githubPr?: string;
+    [key: string]: unknown;
+};
+
+/**
+ * A compact reference to another queue item — enough to name it and tell whether it is still open.
+ */
+export type OpsItemRef = {
+    /**
+     * Stable opaque item id.
+     */
+    id: string;
+    /**
+     * Per-project item number (the `#7` handle), or `null` if unnumbered.
+     */
+    number: number | null;
+    /**
+     * Queue item type.
+     */
+    type: 'bug' | 'feature_request' | 'error' | 'alert' | 'measure_plan';
+    /**
+     * One-line item title.
+     */
+    title: string;
+    status: OpsItemStatus;
+};
+
+/**
+ * Where a QA question stands: `open` (waiting on QA) or `answered`.
+ */
+export type OpsQaQuestionStatus = 'open' | 'answered';
+
+/**
+ * A question put to QA on a queue item, with QA's answer once given.
+ */
+export type OpsQaQuestion = {
+    /**
+     * Question id.
+     */
+    id: string;
+    /**
+     * The queue item the question hangs off.
+     */
+    feedbackId: string;
+    /**
+     * The question for QA (markdown).
+     */
+    question: string;
+    status: OpsQaQuestionStatus;
+    /**
+     * Email of the person (or the key's actor) who asked, or `null` when an agent asked.
+     */
+    askedByEmail: string | null;
+    /**
+     * The agent type that asked, or `null` for a person.
+     */
+    askedByAgent: 'jarvis' | 'claude' | 'cursor' | 'copilot' | 'jules' | null;
+    /**
+     * QA's answer (markdown), or `null` while the question is open.
+     */
+    answer: string | null;
+    /**
+     * Email of the person who answered, or `null` while open or when an agent answered.
+     */
+    answeredByEmail: string | null;
+    /**
+     * The agent type (QA automation) that answered, or `null` for a person or while open.
+     */
+    answeredByAgent: 'jarvis' | 'claude' | 'cursor' | 'copilot' | 'jules' | null;
+    /**
+     * ISO-8601 answer timestamp, or `null` while open.
+     */
+    answeredAt: string | null;
+    /**
+     * ISO-8601 creation timestamp.
+     */
+    createdAt: string;
+};
+
+/**
+ * A link group: the items connected by blocked-by / blocking / duplicate-of links, which the dashboard shows and moves together. Its master is the one member agent runs work on — the first open member that is not a duplicate and has no open blocker, then the most urgent priority, then the oldest. Closed members only lead once every member is closed.
+ */
+export type OpsItemGroup = {
+    master: OpsItemRef;
+    /**
+     * Every member of the group, this item included, master first. The rest follow in the order the master is picked by.
+     */
+    items: Array<OpsItemRef>;
+};
+
+/**
+ * One linked item's content, inlined into `ops get` by `include=linked` so a run reads the whole group in one call. Its comments, attachments and runs are on its own `ops get`.
+ */
+export type OpsLinkedItem = {
+    /**
+     * Stable opaque item id.
+     */
+    id: string;
+    /**
+     * Per-project item number (the `#7` handle), or `null` if unnumbered.
+     */
+    number: number | null;
+    /**
+     * Queue item type.
+     */
+    type: 'bug' | 'feature_request' | 'error' | 'alert' | 'measure_plan';
+    /**
+     * One-line item title.
+     */
+    title: string;
+    status: OpsItemStatus;
+    /**
+     * Triage priority, or `null` if not yet set.
+     */
+    priority: OpsItemPriority | null;
+    /**
+     * Feature description (`feature_request`), empty string otherwise.
+     */
+    description?: string;
+    /**
+     * Bug repro steps (`bug`), empty string otherwise.
+     */
+    stepsToReproduce?: string;
+    /**
+     * What happened (`bug`), empty string otherwise.
+     */
+    actualResult?: string;
+    /**
+     * What was expected (`bug`), empty string otherwise.
+     */
+    expectedResult?: string;
+    /**
+     * Feature use case (`feature_request`), empty string otherwise.
+     */
+    useCase?: string;
+    /**
+     * ISO-8601 creation timestamp.
+     */
+    createdAt?: string;
     [key: string]: unknown;
 };
 
@@ -4456,6 +4630,34 @@ export type GetOpsItemResponse = {
      */
     attachments: Array<OpsItemAttachment>;
     related: OpsItemRelated;
+    /**
+     * Items that block this one. While any of them is not `resolved`/`wont_fix` the item is blocked — work its blockers first. Edit with `PATCH /api/admin/ops/{handle}/links`.
+     */
+    blockedBy?: Array<OpsItemRef>;
+    /**
+     * Items this one blocks — closing it unblocks them.
+     */
+    blocking?: Array<OpsItemRef>;
+    /**
+     * The canonical item this one duplicates, or `null`. Work happens on the canonical item.
+     */
+    duplicateOf?: OpsItemRef | null;
+    /**
+     * Items marked as duplicates of this one — their reports add context to this item.
+     */
+    duplicates?: Array<OpsItemRef>;
+    /**
+     * Questions put to QA on this item, newest first (max 100), each with QA's answer once given. List the project-wide backlog with `ops list --qa-questions open`; ask with `ops qa-questions ask`.
+     */
+    qaQuestions?: Array<OpsQaQuestion>;
+    /**
+     * The link group this item belongs to — every item tied to it, directly or through a chain, by a blocked-by / blocking / duplicate-of link — or `null` when it has no links. Agent runs only work a group through its `master`; read the other members before starting, and close them together with `PATCH /api/admin/ops/{handle}/group`.
+     */
+    group?: OpsItemGroup | null;
+    /**
+     * The full content of every OTHER member of the link group, master first. Present only when the request passes `include=linked`.
+     */
+    linkedItems?: Array<OpsLinkedItem>;
     /**
      * Per-connector linkage recorded for this item, keyed by connector provider. Populated as connectors act on the item (e.g. GitHub opens an issue, Slack posts a message); more than one provider can be present at once. `null` if no connector has touched the item.
      */
@@ -4591,13 +4793,17 @@ export type UpdateOpsItemResponse = {
  */
 export type LinkPrToOpsItemRequest = {
     /**
-     * PR number to record on the item. `null` unlinks the PR.
+     * PR number to ADD to the item's linked PRs (re-linking one already linked is a no-op). `null` unlinks EVERY PR on the item.
      */
     prNumber: number | null;
     /**
      * Explicit PR URL. Required for error/alert tickets (no GitHub issue to derive the URL from).
      */
     prUrl?: string;
+    /**
+     * Remove just this PR (`prNumber`, or `prUrl` when given) from the item instead of adding it.
+     */
+    unlink?: boolean;
 };
 
 /**
@@ -4609,23 +4815,119 @@ export type LinkPrToOpsItemResponse = {
      */
     id: string;
     /**
-     * The PR link now recorded on the item (`connectorData.github.pr`), or `null` after an unlink (`prNumber: null`).
+     * The item's primary PR link after the write (`connectorData.github.pr`), or `null` when no PR is linked any more.
      */
     pr: GithubPrLink | null;
+    /**
+     * Every PR now linked to the item (`connectorData.github.prs`), oldest first.
+     */
+    prs: Array<GithubPrLink>;
 };
 
 /**
- * Body for `POST /api/admin/ops/{handle}/ack`. With `agent` set this is an AI ack — the named agent type must have a connected trigger connector in the project, or the call fails with `AGENT_NOT_CONNECTED` and instructions to query the available agents (`ops agents list`). `gemini` is accepted as an alias for `jules`. Without `agent` it is a HUMAN ack by the authenticated caller.
+ * A queue item's per-project number (e.g. `12`, `#12` also accepted) or its full id.
+ */
+export type OpsItemHandle = string;
+
+/**
+ * Incremental edit of an item's relations — pass any mix of fields; omitted ones are left as is. A link that would make an item block (or duplicate) itself, directly or through a chain, is rejected with `409`.
+ */
+export type UpdateOpsLinksRequest = {
+    /**
+     * Items (number or id) to record as blocking this one. Already-linked items are a no-op.
+     */
+    addBlockedBy?: Array<OpsItemHandle>;
+    /**
+     * Items (number or id) to stop recording as blocking this one. Unlinked items are a no-op.
+     */
+    removeBlockedBy?: Array<OpsItemHandle>;
+    /**
+     * Items (number or id) this one blocks. Already-linked items are a no-op.
+     */
+    addBlocking?: Array<OpsItemHandle>;
+    /**
+     * Items (number or id) this one should stop blocking. Unlinked items are a no-op.
+     */
+    removeBlocking?: Array<OpsItemHandle>;
+    /**
+     * Mark this item as a duplicate of another (number or id), replacing any earlier canonical; `null` clears it. Omit to leave it unchanged. While the canonical is still open, the item closes as `wont_fix`; a canonical that is already `resolved`/`wont_fix` leaves the item's status alone.
+     */
+    duplicateOf?: OpsItemHandle | null;
+};
+
+/**
+ * Every relation of one queue item — "blocked by" / "blocking" and "duplicate of" / "duplicates" — in both directions.
+ */
+export type OpsItemLinksResponse = {
+    /**
+     * Id of the item the links were edited on.
+     */
+    id: string;
+    /**
+     * Items that block this one, oldest link first. While any of them is not `resolved`/`wont_fix` the item is blocked.
+     */
+    blockedBy: Array<OpsItemRef>;
+    /**
+     * Items this one blocks, oldest link first.
+     */
+    blocking: Array<OpsItemRef>;
+    /**
+     * The canonical item this one duplicates, or `null`.
+     */
+    duplicateOf: OpsItemRef | null;
+    /**
+     * Items marked as duplicates of this one, oldest link first.
+     */
+    duplicates: Array<OpsItemRef>;
+};
+
+/**
+ * Triage fields applied to EVERY member of the item's link group. Pass at least one field.
+ */
+export type UpdateOpsGroupRequest = {
+    status?: OpsItemStatus;
+    priority?: OpsItemPriorityOrNull;
+};
+
+/**
+ * The group after a group-wide update.
+ */
+export type OpsItemGroupResponse = {
+    /**
+     * Id of the item the call was made on.
+     */
+    id: string;
+    group: OpsItemGroup;
+    /**
+     * How many members actually changed — members already in the requested state are left alone.
+     */
+    updated: number;
+};
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/ack`. With `agent` set this is an AI ack — the named agent type must have a connected trigger connector in the project, or the call fails with `AGENT_NOT_CONNECTED` and instructions to query the available agents (`ops agents list`). `gemini` is accepted as an input value and is normalized to `jules`. Without `agent` it is a HUMAN ack by the authenticated caller.
  */
 export type AckOpsItemRequest = {
     /**
-     * The AI agent type acking on the item's behalf — pass your own type when you are a coding agent (Claude Code passes `claude`, Cursor `cursor`, Copilot `copilot`, Jules/Gemini `jules`). Omit entirely for a human ack by the authenticated caller.
+     * The AI agent type acking on the item's behalf — pass your own type when you are a coding agent (Claude Code passes `claude`, Cursor `cursor`, Copilot `copilot`, Jules `jules`, Gemini `gemini` → normalized to `jules`). Omit entirely for a human ack by the authenticated caller.
      */
     agent?: 'claude' | 'cursor' | 'copilot' | 'jules' | 'gemini' | 'jarvis';
     /**
      * The agent-run session id (e.g. Claude's `session_01…`), so the dashboard can deep-link to the exact run page. Omit when the harness has no session id.
      */
     sessionId?: string;
+    /**
+     * Whether an AI ack may FIRE the agent's connected trigger. Default `true`: an ack naming a connected agent, with no `sessionId`, starts a new provider run of that agent. Pass `false` to only record the ack — claim the item and open the run record — without starting anything, e.g. when you ARE that agent working the item yourself and have no session id to pass. Ignored on a human ack.
+     */
+    launch?: boolean;
+    /**
+     * The run you were handed — the investigation id a fired run's prompt names, or the `runId` an earlier ack returned. Proves the open run is yours, so the ack adopts it instead of answering `409` `ALREADY_EXISTS`.
+     */
+    runId?: string;
+    /**
+     * Replace another session's LIVE run on the item instead of being refused with `409` `ALREADY_EXISTS`. Only when you were asked to replace that session — two sessions on one item each open their own PR.
+     */
+    takeover?: boolean;
 };
 
 /**
@@ -4958,6 +5260,289 @@ export type UpdateOpsInvestigationRequest = {
 };
 
 /**
+ * Where a question stands — `open` (waiting on a person), `completed` (answered), or `cancelled` (withdrawn by the asker).
+ */
+export type OpsQuestionStatus = 'open' | 'completed' | 'cancelled';
+
+/**
+ * A person's answer to a question.
+ */
+export type OpsQuestionAnswer = {
+    /**
+     * The option labels the person picked (empty when they only answered "Other").
+     */
+    selected: Array<string>;
+    /**
+     * The free-text "Other" answer, or `null`.
+     */
+    other: string | null;
+};
+
+/**
+ * How the answer gets back to the asker — `resume` re-fires the asking run's trigger connector on the item once every question that run asked is answered; `poll` fires nothing and the asker reads `GET .../questions`.
+ */
+export type OpsQuestionDelivery = 'resume' | 'poll';
+
+/**
+ * One structured question on a queue item and, once answered, its answer.
+ */
+export type OpsQuestion = {
+    /**
+     * Question id.
+     */
+    id: string;
+    /**
+     * The queue item the question hangs off.
+     */
+    feedbackId: string;
+    /**
+     * Short chip label for the question.
+     */
+    header: string;
+    /**
+     * The full question (markdown).
+     */
+    question: string;
+    /**
+     * The offered choices, in order.
+     */
+    options: Array<{
+        /**
+         * The option's display text.
+         */
+        label: string;
+        /**
+         * What picking the option means, or `null`.
+         */
+        description: string | null;
+    }>;
+    /**
+     * Whether several options may be picked.
+     */
+    multiSelect: boolean;
+    status: OpsQuestionStatus;
+    /**
+     * The person's answer, or `null` while the question is open (or was withdrawn).
+     */
+    answer: OpsQuestionAnswer | null;
+    /**
+     * Email of the person who answered, or `null`.
+     */
+    answeredBy: string | null;
+    /**
+     * ISO-8601 timestamp of the answer, or `null`.
+     */
+    answeredAt: string | null;
+    /**
+     * The agent that asked, or `null` (asked by a person or an unattributed key).
+     */
+    agent: 'jarvis' | 'claude' | 'cursor' | 'copilot' | 'jules' | null;
+    /**
+     * Email of the person who asked, when a human asked, or `null`.
+     */
+    askedBy: string | null;
+    /**
+     * The run (investigation record id) the question was asked under, or `null`.
+     */
+    runId: string | null;
+    delivery: OpsQuestionDelivery;
+    /**
+     * ISO-8601 timestamp the answer was re-delivered to the asking run (`resume` only), or `null`.
+     */
+    deliveredAt: string | null;
+    /**
+     * Why a `resume` re-delivery failed, or `null`.
+     */
+    deliveryError: string | null;
+    /**
+     * ISO-8601 creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * ISO-8601 last-update timestamp.
+     */
+    updatedAt: string;
+};
+
+/**
+ * Response for `GET /api/admin/ops/{handle}/questions` — the item's questions, newest first (max 100).
+ */
+export type ListOpsQuestionsResponse = Array<OpsQuestion>;
+
+/**
+ * One choice offered by a question — rendered as a radio, or a checkbox when the question is `multiSelect`.
+ */
+export type OpsQuestionOption = {
+    /**
+     * The option's display text — short (1–5 words). Answers name options by this label.
+     */
+    label: string;
+    /**
+     * What picking this option means — its trade-off or consequence.
+     */
+    description?: string;
+};
+
+/**
+ * One question to ask — the `AskUserQuestion` shape.
+ */
+export type AskOpsQuestionInput = {
+    /**
+     * Very short chip label for the question (max 24 chars), e.g. `Auth method`.
+     */
+    header: string;
+    /**
+     * The complete question, ending with a question mark (markdown).
+     */
+    question: string;
+    /**
+     * 2–4 distinct choices. Do not add an "Other" option — a free-text answer is always offered.
+     */
+    options: Array<OpsQuestionOption>;
+    /**
+     * `true` lets the person pick several options (checkboxes); `false` (the default) exactly one (radios).
+     */
+    multiSelect?: boolean;
+};
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/questions`.
+ */
+export type AskOpsQuestionsRequest = {
+    /**
+     * 1–4 questions to ask at once.
+     */
+    questions: Array<AskOpsQuestionInput>;
+    /**
+     * The run (investigation record id) you are working the item under — the `runId` an ack or a launch handed you. Ties the questions to that run so a `resume` delivery continues it.
+     */
+    runId?: string;
+    /**
+     * The agent type asking — pass your own type when you are a coding agent. Defaults to the run's agent.
+     */
+    agent?: 'jarvis' | 'claude' | 'cursor' | 'copilot' | 'jules';
+    delivery?: OpsQuestionDelivery;
+};
+
+/**
+ * Response for `POST /api/admin/ops/{handle}/questions` — the created questions, in the order asked.
+ */
+export type AskOpsQuestionsResponse = Array<OpsQuestion>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/questions/{questionId}/answer` — pick option labels, write a free-text answer, or both (multi-select only).
+ */
+export type AnswerOpsQuestionRequest = {
+    /**
+     * The option labels picked — exactly one for a single-select question (unless answering only with `other`), one or more for `multiSelect`.
+     */
+    selected?: Array<string>;
+    /**
+     * A free-text "Other" answer.
+     */
+    other?: string;
+};
+
+/**
+ * What a QA note is — `narrowing` (only part of the bug still fails), `clarification` (changes what "fixed" means), `verification` (a pass/fail verdict on a fix) or `correction` (withdraws an earlier framing).
+ */
+export type OpsQaNoteKind = 'narrowing' | 'clarification' | 'verification' | 'correction';
+
+/**
+ * The outcome a `verification` note records.
+ */
+export type OpsQaNoteVerdict = 'pass' | 'fail';
+
+/**
+ * One typed, append-only QA note on a queue item.
+ */
+export type OpsQaNote = {
+    /**
+     * Note id.
+     */
+    id: string;
+    /**
+     * The queue item the note hangs off.
+     */
+    feedbackId: string;
+    kind: OpsQaNoteKind;
+    /**
+     * The pass/fail verdict of a `verification` note; `null` for every other kind.
+     */
+    verdict: OpsQaNoteVerdict | null;
+    /**
+     * The note (markdown) — for a `verification`, what was checked.
+     */
+    body: string;
+    /**
+     * Email of the person (or the key's actor) who wrote the note, or `null` when an agent wrote it.
+     */
+    authorEmail: string | null;
+    /**
+     * The agent type that wrote the note (QA automation), or `null` for a person.
+     */
+    authorAgent: 'jarvis' | 'claude' | 'cursor' | 'copilot' | 'jules' | null;
+    /**
+     * ISO-8601 creation timestamp.
+     */
+    createdAt: string;
+};
+
+/**
+ * Response for `GET /api/admin/ops/{handle}/qa-notes` — the item's QA notes, newest first (max 200).
+ */
+export type ListOpsQaNotesResponse = Array<OpsQaNote>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/qa-notes`. A `verification` note requires `verdict`; every other kind rejects it.
+ */
+export type CreateOpsQaNoteRequest = {
+    kind: OpsQaNoteKind;
+    /**
+     * The note (markdown).
+     */
+    body: string;
+    verdict?: OpsQaNoteVerdict;
+    /**
+     * The agent type writing the note — pass your own type when you are QA automation. Omitted, the note is attributed to the caller's identity.
+     */
+    agent?: 'jarvis' | 'claude' | 'cursor' | 'copilot' | 'jules';
+};
+
+/**
+ * Response for `GET /api/admin/ops/{handle}/qa-questions` — the item's QA questions, newest first (max 100).
+ */
+export type ListOpsQaQuestionsResponse = Array<OpsQaQuestion>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/qa-questions`.
+ */
+export type AskOpsQaQuestionRequest = {
+    /**
+     * What you need QA to answer (markdown). Include what you already tried.
+     */
+    question: string;
+    /**
+     * The agent type asking — pass your own type when you are a coding agent. Omitted, the question is attributed to the caller's identity.
+     */
+    agent?: 'jarvis' | 'claude' | 'cursor' | 'copilot' | 'jules';
+};
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/qa-questions/{questionId}/answer`.
+ */
+export type AnswerOpsQaQuestionRequest = {
+    /**
+     * QA's answer (markdown).
+     */
+    answer: string;
+    /**
+     * The agent type answering — pass your own type when you are QA automation. Omitted, the answer is attributed to the caller's identity.
+     */
+    agent?: 'jarvis' | 'claude' | 'cursor' | 'copilot' | 'jules';
+};
+
+/**
  * One connected, assignable AI agent (an authenticated trigger connector).
  */
 export type OpsAgentProfile = {
@@ -5056,6 +5641,269 @@ export type CreateOpsCommentResponse = {
 };
 
 /**
+ * Body for `POST /api/admin/ops/{handle}/attachments` and `POST /api/admin/ops/{handle}/comment-media`. Exactly one of `contentBase64` / `url` is required.
+ */
+export type CreateOpsAttachmentRequest = {
+    /**
+     * The file bytes, base64-encoded (a bare string or a `data:<mime>;base64,` URI). Pass this or `url`, not both.
+     */
+    contentBase64?: string;
+    /**
+     * A public https URL for the server to fetch the file from (no IP literals or internal hosts; max 25 MiB). Pass this or `contentBase64`, not both.
+     */
+    url?: string;
+    /**
+     * File name, e.g. `checkout-overflow.png`. Defaults to the last segment of `url`, else `file`.
+     */
+    filename?: string;
+    /**
+     * Media type, e.g. `image/png`. Defaults from the data URI, the fetched response, or the filename extension.
+     */
+    mimeType?: string;
+    /**
+     * Attachment kind. Defaults from the media type (image → screenshot, video → recording, else file). Ignored by the comment-media upload.
+     */
+    kind?: 'screenshot' | 'recording' | 'file';
+};
+
+/**
+ * Response for `POST /api/admin/ops/{handle}/attachments`.
+ */
+export type CreateOpsAttachmentResponse = {
+    /**
+     * Newly created attachment id.
+     */
+    id: string;
+    filename: string;
+    kind: 'screenshot' | 'recording' | 'file';
+    mimeType: string;
+    sizeBytes: number;
+};
+
+/**
+ * Response for `POST /api/admin/ops/{handle}/comment-media`.
+ */
+export type CreateOpsCommentMediaResponse = {
+    /**
+     * Newly created media id.
+     */
+    id: string;
+    /**
+     * Relative URL to embed in a comment body as a markdown image.
+     */
+    url: string;
+    mimeType: string;
+    sizeBytes: number;
+};
+
+/**
+ * Which kind of change an activity entry records. `pr` is a pull-request event (see `pr.event`); `comment` carries an excerpt in `to`; `edit` names the edited content fields in `added`.
+ */
+export type OpsActivityField = 'status' | 'priority' | 'owner' | 'tags' | 'ack' | 'pr' | 'comment' | 'edit';
+
+/**
+ * The pull request a `pr` activity entry is about.
+ */
+export type OpsActivityPr = {
+    /**
+     * What happened to the pull request. `closed` means closed WITHOUT merging.
+     */
+    event: 'linked' | 'unlinked' | 'merged' | 'closed';
+    /**
+     * PR number within its repository.
+     */
+    number: number;
+    /**
+     * The pull request's URL, when known.
+     */
+    url: string | null;
+    /**
+     * `owner/repo` the pull request lives in, when known.
+     */
+    repo: string | null;
+    /**
+     * The pull request's title, when GitHub was reachable.
+     */
+    title: string | null;
+    /**
+     * The pull request's GitHub author, when known.
+     */
+    author: string | null;
+};
+
+/**
+ * One change recorded against a queue item.
+ */
+export type OpsActivityEntry = {
+    /**
+     * Activity entry id.
+     */
+    id: string;
+    /**
+     * ISO-8601 timestamp of the change.
+     */
+    at: string;
+    /**
+     * The queue item the change belongs to.
+     */
+    itemId: string;
+    /**
+     * The item's per-project number.
+     */
+    itemNumber: number | null;
+    /**
+     * The item's title.
+     */
+    itemTitle: string;
+    /**
+     * Who made the change — a teammate email, a key's actor, or `github` for a PR outcome the webhook observed.
+     */
+    actor: string;
+    /**
+     * `user`, `cli` or `system`.
+     */
+    actorType: string;
+    /**
+     * The door the change came through (`dashboard`, `cli`, `mcp`, …).
+     */
+    via: string | null;
+    /**
+     * The AI agent that drove the change, when one did.
+     */
+    viaAgent: string | null;
+    field: OpsActivityField;
+    /**
+     * The previous value of a scalar field.
+     */
+    from: string | null;
+    /**
+     * The new value of a scalar field, or a comment excerpt.
+     */
+    to: string | null;
+    /**
+     * Tags added, or the content fields edited.
+     */
+    added: Array<string>;
+    /**
+     * Tags removed.
+     */
+    removed: Array<string>;
+    /**
+     * The pull-request event, for `pr` entries; `null` otherwise.
+     */
+    pr: OpsActivityPr | null;
+};
+
+/**
+ * Response for `GET /api/admin/ops/activity` — newest first.
+ */
+export type ListOpsActivityResponse = {
+    activity: Array<OpsActivityEntry>;
+};
+
+/**
+ * A ticket type a tag rule can also fire on. Error and alert tickets carry no tags, so a rule that should catch them matches on type.
+ */
+export type OpsRoutingRuleType = 'error' | 'alert' | 'bug' | 'feature_request';
+
+/**
+ * One tag automation rule. A rule fires on a newly filed queue item that carries ANY of its `tags` (or whose `type` is in `types`) and applies its actions — assign a person, hand the item to a connected coding agent (which launches a run), set a status or priority, and subscribe emails. Rules are evaluated in order; each action is optional but a rule needs at least one.
+ */
+export type OpsRoutingRule = {
+    /**
+     * Tag names the rule matches (case-insensitive). Tags are created on first use.
+     */
+    tags: Array<string>;
+    /**
+     * Ticket types the rule also fires on. A rule needs at least one tag or type.
+     */
+    types: Array<OpsRoutingRuleType>;
+    /**
+     * Whether the rule is live. Defaults to `true` on create.
+     */
+    enabled: boolean;
+    /**
+     * Person to assign — a user id. `null` leaves the owner alone.
+     */
+    user: string | null;
+    /**
+     * Connected coding agent to hand the item to — a connector id from `ops agents list`. Launches a run when the rule fires.
+     */
+    connector: string | null;
+    /**
+     * Steering prompt for the launched agent. Only kept alongside a `connector`.
+     */
+    agentPrompt: string | null;
+    /**
+     * Status to set on a matching item.
+     */
+    status: OpsItemStatus | null;
+    priority: OpsItemPriorityOrNull;
+    /**
+     * Emails notified about matching items.
+     */
+    subscribers: Array<string>;
+    /**
+     * A public-intake ticket this rule matches skips `pending_approval` and runs the rule on filing, instead of waiting for a human to approve it.
+     */
+    skipApproval: boolean;
+    /**
+     * While a matching public-intake ticket waits in `pending_approval`, the rule's agent safety-triages it and tags it from the central triage set. Needs a `connector`; always `false` alongside `skipApproval`.
+     */
+    triage: boolean;
+    /**
+     * Who does the triage — `null` means the rule's own `connector`, `jarvis` (Enterprise), or a connector id. Only meaningful with `triage`.
+     */
+    triageAgent: string | null;
+    /**
+     * With `triage`, approve the ticket automatically when the agent tags it safe and nothing else. Off means a human still approves.
+     */
+    triageAutoApprove: boolean;
+};
+
+export type ListOpsRoutingRulesResponse = Array<OpsRoutingRule>;
+
+/**
+ * Appends one tag automation rule after the existing ones; the existing rules are untouched. Needs at least one of `tags` / `types` and at least one action (`user`, `connector`, `status`, `priority` or `subscribers`).
+ */
+export type CreateOpsRoutingRuleRequest = {
+    /**
+     * Tag names the rule matches (case-insensitive). Tags are created on first use.
+     */
+    tags?: Array<string>;
+    /**
+     * Ticket types the rule also fires on.
+     */
+    types?: Array<OpsRoutingRuleType>;
+    /**
+     * Whether the rule is live. Defaults to `true`.
+     */
+    enabled?: boolean;
+    /**
+     * Person to assign — a user id.
+     */
+    user?: string;
+    /**
+     * Connected coding agent to hand the item to — a connector id from `ops agents list`.
+     */
+    connector?: string;
+    /**
+     * Steering prompt for the launched agent. Only kept alongside a `connector`.
+     */
+    agentPrompt?: string;
+    status?: OpsItemStatus;
+    priority?: OpsItemPriority;
+    /**
+     * Emails notified about matching items.
+     */
+    subscribers?: Array<string>;
+    /**
+     * Let a matching public-intake ticket skip `pending_approval`. Defaults to `false`.
+     */
+    skipApproval?: boolean;
+};
+
+/**
  * Body for `POST /api/admin/notifications`. In `title`, `summary`, and each step, reference admin entities inline with tokens — `#42` (feedback item), `@gate:<name>` (alias `@flag:`), `@experiment:<name>` (`@exp:`), `@config:<name>`, `@killswitch:<name>` (`@ks:`), `@metric:<name>`, `@universe:<name>`, `@alert:<name>` — where `<name>` is the entity's immutable name/slug (e.g. `features.checkout`). The dashboard renders each token as a live hover chip deep-linking to the entity; tokens degrade to plain text elsewhere, so they're always safe to use.
  */
 export type NotifyOpsRequest = {
@@ -5135,6 +5983,21 @@ export type AlertCompositeSpec = {
      */
     rules: Array<string>;
 };
+
+/**
+ * Delivery target for a rule's alert; `null` = use the project default. The `NotificationTarget` shape plus the in-app switch.
+ */
+export type AlertRuleNotify = {
+    slackChannel?: {
+        id: string;
+        name: string;
+    } | null;
+    email?: string | null;
+    /**
+     * Whether the in-app notification (the dashboard bell and Home) is recorded when the rule fires. Absent or `null` means on; `false` skips it for this rule.
+     */
+    inApp?: boolean | null;
+} | null;
 
 export type ListAlertRulesResponse = Array<{
     /**
@@ -5237,7 +6100,7 @@ export type ListAlertRulesResponse = Array<{
      * Whether the rule is evaluated by the cron.
      */
     enabled: boolean;
-    notify: NotificationTarget;
+    notify: AlertRuleNotify;
     /**
      * ISO-8601 timestamp of creation.
      */
@@ -5338,7 +6201,7 @@ export type CreateAlertRuleRequest = {
      * Whether the rule is evaluated by the cron.
      */
     enabled?: boolean;
-    notify?: NotificationTarget;
+    notify?: AlertRuleNotify;
 };
 
 export type CreateAlertRuleResponse = {
@@ -5417,7 +6280,7 @@ export type UpdateAlertRuleRequest = {
     requiredBuckets?: number | null;
     severity?: 'danger' | 'warn' | 'info';
     enabled?: boolean;
-    notify?: NotificationTarget;
+    notify?: AlertRuleNotify;
 };
 
 export type UpdateAlertRuleResponse = {
@@ -6013,6 +6876,14 @@ export type ListI18nKeysResponse = {
          */
         profileName: string | null;
         /**
+         * Id of the experiment this key's copy change is linked to, or `null` when it is not linked; absent from servers that predate the link. A data link only — it does not change what the key serves.
+         */
+        experimentId?: string | null;
+        /**
+         * Name of the linked experiment, or `null` when the key is not linked.
+         */
+        experimentName?: string | null;
+        /**
          * ISO-8601 timestamp of the last edit.
          */
         updatedAt: string;
@@ -6149,6 +7020,10 @@ export type UpdateI18nKeyRequest = {
      * Explicit `{{var}}` placeholder names in the value. Omit to auto-derive them from the value.
      */
     variables?: Array<string>;
+    /**
+     * Link this key's copy change to an experiment (id or name) so the change can be tracked against it. `null` removes the link; omit to leave the current link untouched. A data link only — it does not change what the key serves.
+     */
+    experimentId?: string | null;
 };
 
 /**
@@ -7255,6 +8130,10 @@ export type KeyRecord = {
      * Last 4 characters of the raw token, so the dashboard mask is matchable against the held key. `null` for keys minted before this column.
      */
     last4: string | null;
+    /**
+     * Where the key was minted. `cli` (a signed-in CLI session from device auth), `mobile` (a mobile app login), `dashboard` (the "New API key" dialog) or `api` (minted with another key — CLI, MCP, agents). Set at mint time; keys that predate the column were backfilled from their label, defaulting to `dashboard`.
+     */
+    origin: 'cli' | 'mobile' | 'dashboard' | 'api';
 };
 
 /**
@@ -7356,9 +8235,9 @@ export type RevokeKeyResponse = {
  */
 export type SearchHit = {
     /**
-     * Resource family — drives the result group + icon in the palette. (`member` hits are surfaced first.)
+     * Resource family — drives the result group + icon in the palette. (`member` hits are surfaced first.) `error` is a tracked error group, `change` an audit-log entry (Settings → Changes).
      */
-    type: 'member' | 'gate' | 'experiment' | 'config' | 'killswitch' | 'metric';
+    type: 'member' | 'gate' | 'experiment' | 'config' | 'killswitch' | 'metric' | 'ops' | 'error' | 'change';
     /**
      * Stable identifier used to deep-link into the row's detail pane. For `member` hits this is the teammate's email; for everything else it is the resource id.
      */
@@ -7382,6 +8261,60 @@ export type SearchHit = {
  */
 export type SearchResponse = {
     hits: Array<SearchHit>;
+};
+
+export type Tag = {
+    /**
+     * Stable opaque tag id.
+     */
+    id: string;
+    /**
+     * Display name — also the tag's identity, unique case-insensitively within the project.
+     */
+    name: string;
+};
+
+/**
+ * The project's tags, sorted by name.
+ */
+export type ListTagsResponse = Array<Tag>;
+
+/**
+ * The kind of item a tag set hangs off: `ops` (any queue item — bug, feature request, error/alert/measure-plan ticket), `flag` (feature gate), `config` (dynamic config), `killswitch`, `metric`, `error` (tracked error group), `alert_rule`, or `experiment`.
+ */
+export type TaggableEntityType = 'ops' | 'flag' | 'config' | 'killswitch' | 'metric' | 'error' | 'alert_rule' | 'experiment';
+
+export type EntityTagsResponse = {
+    entityType: TaggableEntityType;
+    /**
+     * The item's canonical id (the handle you passed, resolved).
+     */
+    entityId: string;
+    /**
+     * The tag names now attached to the item, sorted by name.
+     */
+    tags: Array<string>;
+};
+
+export type SetEntityTagsRequest = {
+    /**
+     * The complete tag set the item should carry — tags not listed are detached. Names are get-or-created (a new name mints a project tag), deduped case-insensitively; `[]` clears every tag.
+     */
+    tags: Array<TagName>;
+};
+
+/**
+ * Incremental tag edit — pass `add`, `remove`, or both. Every other tag on the item is left as is.
+ */
+export type UpdateEntityTagsRequest = {
+    /**
+     * Tag names to attach (get-or-created by name, case-insensitive). Already-attached names are a no-op.
+     */
+    add?: Array<TagName>;
+    /**
+     * Tag names to detach (case-insensitive). Names the item doesn't carry are a no-op. A name in both lists is removed.
+     */
+    remove?: Array<TagName>;
 };
 
 /**
@@ -7870,7 +8803,7 @@ export type RemoveFromGateWhitelistData = {
     };
     path: {
         /**
-         * Stable opaque gate id (`gate_…`) or the gate's `name`.
+         * Stable opaque gate id (`gat_…`) or the gate's `name`.
          */
         id: ResourceId;
     };
@@ -7926,7 +8859,7 @@ export type GetGateWhitelistData = {
     };
     path: {
         /**
-         * Stable opaque gate id (`gate_…`) or the gate's `name`.
+         * Stable opaque gate id (`gat_…`) or the gate's `name`.
          */
         id: ResourceId;
     };
@@ -7982,7 +8915,7 @@ export type AddToGateWhitelistData = {
     };
     path: {
         /**
-         * Stable opaque gate id (`gate_…`) or the gate's `name`.
+         * Stable opaque gate id (`gat_…`) or the gate's `name`.
          */
         id: ResourceId;
     };
@@ -8038,7 +8971,7 @@ export type SetGateWhitelistData = {
     };
     path: {
         /**
-         * Stable opaque gate id (`gate_…`) or the gate's `name`.
+         * Stable opaque gate id (`gat_…`) or the gate's `name`.
          */
         id: ResourceId;
     };
@@ -11460,17 +12393,41 @@ export type ListOpsItemsData = {
          */
         type?: 'bug' | 'feature_request' | 'error' | 'alert' | 'measure_plan' | 'all';
         /**
-         * Filter by lifecycle status, or `all` (the default). The human-gated holding state (`pending_approval`) is excluded from `all`/default and returned only when requested as the exact status.
+         * Filter by one lifecycle status, `unresolved` for every status that is not `resolved` or `wont_fix`, or `all` for every status. Defaults to `all` over HTTP; the CLI and MCP tool default to `unresolved`, so pass `all` there to include resolved and won't-fix items. The human-gated holding state (`pending_approval`) is excluded from `unresolved` and `all`, and returned only when requested as the exact status.
          */
-        status?: OpsItemStatus | 'all';
+        status?: OpsItemStatus | 'unresolved' | 'all';
         /**
-         * Max items to return (1–500). Defaults to 200.
+         * Filter by triage priority, or `all` (the default). Items with no priority set are returned only under `all`.
+         */
+        priority?: OpsItemPriority | 'all';
+        /**
+         * `ready` narrows to the items ready to be picked up right now: status `open`, no open run (nobody has acked it and is still working), and either unowned (no person and no agent) or reopened (sent back to `open` after an earlier run finished). Leave `status` unset with it. `all` (the default) applies no such narrowing.
+         */
+        scope?: 'all' | 'ready';
+        /**
+         * `open` narrows to the items with at least one unanswered QA question — the backlog QA answers first (read each with `ops get`, answer with `ops qa-questions answer`). `all` (the default) applies no such narrowing.
+         */
+        qaQuestions?: 'all' | 'open';
+        /**
+         * Page size — max items to return (1–500). A page shorter than `limit` is the last one.
          */
         limit?: number;
         /**
-         * Narrow to items owned by one person OR one agent. Matches a person by `users.id`, email, or display name, and an agent by connector id, display name, or kebab-case handle — e.g. `owner=Claude` or `owner=alice@acme.dev`. Case-insensitive exact match, applied over the returned page.
+         * Number of items to skip before the page starts. Defaults to 0. The order is stable, so `offset += limit` walks the queue page by page.
+         */
+        offset?: number;
+        /**
+         * Narrow to items owned by one person OR one agent. Matches a person by `users.id`, email, or display name, and an agent by connector id, display name, or kebab-case handle — e.g. `owner=Claude` or `owner=alice@acme.dev`. Case-insensitive exact match.
          */
         owner?: string;
+        /**
+         * Narrow to items filed by one reporter — an email, matched case-insensitive and exact against `reporterEmail`. Items with no reporter never match. While set, `status=all` also returns `pending_approval` items: public intake files every ticket as `pending_approval`, and a reporter must see the ticket they just filed.
+         */
+        reporter?: string;
+        /**
+         * ISO-8601 timestamp. Items still being worked are always returned; `resolved` and `wont_fix` items only when they closed at or after this time (see `closedAt`). Combines with `status` like any other filter.
+         */
+        closedSince?: string;
     };
     url: '/api/admin/ops';
 };
@@ -11736,7 +12693,12 @@ export type GetOpsItemData = {
          */
         handle: ResourceId;
     };
-    query?: never;
+    query?: {
+        /**
+         * `linked` inlines the content of every other member of the item's link group as `linkedItems`.
+         */
+        include?: 'linked';
+    };
     url: '/api/admin/ops/{handle}';
 };
 
@@ -11890,6 +12852,114 @@ export type LinkPrToOpsItemResponses = {
 
 export type LinkPrToOpsItemResponse2 = LinkPrToOpsItemResponses[keyof LinkPrToOpsItemResponses];
 
+export type UpdateOpsLinksData = {
+    body: UpdateOpsLinksRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/links';
+};
+
+export type UpdateOpsLinksErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type UpdateOpsLinksError = UpdateOpsLinksErrors[keyof UpdateOpsLinksErrors];
+
+export type UpdateOpsLinksResponses = {
+    /**
+     * Link related items
+     */
+    200: OpsItemLinksResponse;
+};
+
+export type UpdateOpsLinksResponse = UpdateOpsLinksResponses[keyof UpdateOpsLinksResponses];
+
+export type UpdateOpsGroupData = {
+    body: UpdateOpsGroupRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id — any member of the group.
+         */
+        handle: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/group';
+};
+
+export type UpdateOpsGroupErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type UpdateOpsGroupError = UpdateOpsGroupErrors[keyof UpdateOpsGroupErrors];
+
+export type UpdateOpsGroupResponses = {
+    /**
+     * Update a linked group
+     */
+    200: OpsItemGroupResponse;
+};
+
+export type UpdateOpsGroupResponse = UpdateOpsGroupResponses[keyof UpdateOpsGroupResponses];
+
 export type AckOpsItemData = {
     body?: AckOpsItemRequest;
     headers?: {
@@ -11925,6 +12995,10 @@ export type AckOpsItemErrors = {
      * The resource does not exist or is not visible to the caller.
      */
     404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
     /**
      * The request body failed validation.
      */
@@ -12106,6 +13180,509 @@ export type UpdateOpsInvestigationResponses = {
 
 export type UpdateOpsInvestigationResponse = UpdateOpsInvestigationResponses[keyof UpdateOpsInvestigationResponses];
 
+export type ListOpsQuestionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: {
+        /**
+         * Filter by question status, or `all` (the default).
+         */
+        status?: OpsQuestionStatus | 'all';
+    };
+    url: '/api/admin/ops/{handle}/questions';
+};
+
+export type ListOpsQuestionsErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type ListOpsQuestionsError = ListOpsQuestionsErrors[keyof ListOpsQuestionsErrors];
+
+export type ListOpsQuestionsResponses = {
+    /**
+     * List an item's questions
+     */
+    200: ListOpsQuestionsResponse;
+};
+
+export type ListOpsQuestionsResponse2 = ListOpsQuestionsResponses[keyof ListOpsQuestionsResponses];
+
+export type AskOpsQuestionsData = {
+    body: AskOpsQuestionsRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/questions';
+};
+
+export type AskOpsQuestionsErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type AskOpsQuestionsError = AskOpsQuestionsErrors[keyof AskOpsQuestionsErrors];
+
+export type AskOpsQuestionsResponses = {
+    /**
+     * The created questions, in the order asked
+     */
+    200: AskOpsQuestionsResponse;
+};
+
+export type AskOpsQuestionsResponse2 = AskOpsQuestionsResponses[keyof AskOpsQuestionsResponses];
+
+export type AnswerOpsQuestionData = {
+    body: AnswerOpsQuestionRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+        /**
+         * The question id (from `ask` or `list`).
+         */
+        questionId: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/questions/{questionId}/answer';
+};
+
+export type AnswerOpsQuestionErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type AnswerOpsQuestionError = AnswerOpsQuestionErrors[keyof AnswerOpsQuestionErrors];
+
+export type AnswerOpsQuestionResponses = {
+    /**
+     * The answered question
+     */
+    200: OpsQuestion;
+};
+
+export type AnswerOpsQuestionResponse = AnswerOpsQuestionResponses[keyof AnswerOpsQuestionResponses];
+
+export type CancelOpsQuestionData = {
+    body?: never;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+        /**
+         * The question id (from `ask` or `list`).
+         */
+        questionId: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/questions/{questionId}/cancel';
+};
+
+export type CancelOpsQuestionErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
+};
+
+export type CancelOpsQuestionError = CancelOpsQuestionErrors[keyof CancelOpsQuestionErrors];
+
+export type CancelOpsQuestionResponses = {
+    /**
+     * The withdrawn question
+     */
+    200: OpsQuestion;
+};
+
+export type CancelOpsQuestionResponse = CancelOpsQuestionResponses[keyof CancelOpsQuestionResponses];
+
+export type ListOpsQaNotesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: {
+        /**
+         * Only notes of this kind.
+         */
+        kind?: OpsQaNoteKind;
+    };
+    url: '/api/admin/ops/{handle}/qa-notes';
+};
+
+export type ListOpsQaNotesErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type ListOpsQaNotesError = ListOpsQaNotesErrors[keyof ListOpsQaNotesErrors];
+
+export type ListOpsQaNotesResponses = {
+    /**
+     * List an item's QA notes
+     */
+    200: ListOpsQaNotesResponse;
+};
+
+export type ListOpsQaNotesResponse2 = ListOpsQaNotesResponses[keyof ListOpsQaNotesResponses];
+
+export type CreateOpsQaNoteData = {
+    body: CreateOpsQaNoteRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/qa-notes';
+};
+
+export type CreateOpsQaNoteErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type CreateOpsQaNoteError = CreateOpsQaNoteErrors[keyof CreateOpsQaNoteErrors];
+
+export type CreateOpsQaNoteResponses = {
+    /**
+     * The created note
+     */
+    200: OpsQaNote;
+};
+
+export type CreateOpsQaNoteResponse = CreateOpsQaNoteResponses[keyof CreateOpsQaNoteResponses];
+
+export type ListOpsQaQuestionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: {
+        /**
+         * Only questions in this status.
+         */
+        status?: OpsQaQuestionStatus;
+    };
+    url: '/api/admin/ops/{handle}/qa-questions';
+};
+
+export type ListOpsQaQuestionsErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type ListOpsQaQuestionsError = ListOpsQaQuestionsErrors[keyof ListOpsQaQuestionsErrors];
+
+export type ListOpsQaQuestionsResponses = {
+    /**
+     * List an item's QA questions
+     */
+    200: ListOpsQaQuestionsResponse;
+};
+
+export type ListOpsQaQuestionsResponse2 = ListOpsQaQuestionsResponses[keyof ListOpsQaQuestionsResponses];
+
+export type AskOpsQaQuestionData = {
+    body: AskOpsQaQuestionRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/qa-questions';
+};
+
+export type AskOpsQaQuestionErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type AskOpsQaQuestionError = AskOpsQaQuestionErrors[keyof AskOpsQaQuestionErrors];
+
+export type AskOpsQaQuestionResponses = {
+    /**
+     * The created question
+     */
+    200: OpsQaQuestion;
+};
+
+export type AskOpsQaQuestionResponse = AskOpsQaQuestionResponses[keyof AskOpsQaQuestionResponses];
+
+export type AnswerOpsQaQuestionData = {
+    body: AnswerOpsQaQuestionRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+        /**
+         * The question id (from `ask`, `list` or `ops get`).
+         */
+        questionId: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/qa-questions/{questionId}/answer';
+};
+
+export type AnswerOpsQaQuestionErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type AnswerOpsQaQuestionError = AnswerOpsQaQuestionErrors[keyof AnswerOpsQaQuestionErrors];
+
+export type AnswerOpsQaQuestionResponses = {
+    /**
+     * The answered question
+     */
+    200: OpsQaQuestion;
+};
+
+export type AnswerOpsQaQuestionResponse = AnswerOpsQaQuestionResponses[keyof AnswerOpsQaQuestionResponses];
+
 export type ListOpsAgentsData = {
     body?: never;
     headers?: {
@@ -12244,6 +13821,264 @@ export type CreateOpsCommentResponses = {
 };
 
 export type CreateOpsCommentResponse2 = CreateOpsCommentResponses[keyof CreateOpsCommentResponses];
+
+export type CreateOpsAttachmentData = {
+    body: CreateOpsAttachmentRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/attachments';
+};
+
+export type CreateOpsAttachmentErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body exceeded the intake's fixed size cap (16 KB).
+     */
+    413: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type CreateOpsAttachmentError = CreateOpsAttachmentErrors[keyof CreateOpsAttachmentErrors];
+
+export type CreateOpsAttachmentResponses = {
+    /**
+     * Attach a screenshot to an item
+     */
+    201: CreateOpsAttachmentResponse;
+};
+
+export type CreateOpsAttachmentResponse2 = CreateOpsAttachmentResponses[keyof CreateOpsAttachmentResponses];
+
+export type CreateOpsCommentMediaData = {
+    body: CreateOpsAttachmentRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * Per-project item number (e.g. `7`) or the full ops item id.
+         */
+        handle: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/ops/{handle}/comment-media';
+};
+
+export type CreateOpsCommentMediaErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The request body exceeded the intake's fixed size cap (16 KB).
+     */
+    413: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type CreateOpsCommentMediaError = CreateOpsCommentMediaErrors[keyof CreateOpsCommentMediaErrors];
+
+export type CreateOpsCommentMediaResponses = {
+    /**
+     * Upload an image to embed in a comment
+     */
+    201: CreateOpsCommentMediaResponse;
+};
+
+export type CreateOpsCommentMediaResponse2 = CreateOpsCommentMediaResponses[keyof CreateOpsCommentMediaResponses];
+
+export type ListOpsActivityData = {
+    body?: never;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Narrow to one item — its per-project number (e.g. `7`) or full id. Omit for the whole project.
+         */
+        item?: string;
+        /**
+         * Narrow to one kind of change.
+         */
+        field?: OpsActivityField;
+        /**
+         * Only entries strictly after this ISO-8601 instant.
+         */
+        since?: string;
+        /**
+         * Only entries strictly before this ISO-8601 instant.
+         */
+        until?: string;
+        /**
+         * Maximum entries to return (1-200). Defaults to 100.
+         */
+        limit?: number;
+    };
+    url: '/api/admin/ops/activity';
+};
+
+export type ListOpsActivityErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type ListOpsActivityError = ListOpsActivityErrors[keyof ListOpsActivityErrors];
+
+export type ListOpsActivityResponses = {
+    /**
+     * List queue activity
+     */
+    200: ListOpsActivityResponse;
+};
+
+export type ListOpsActivityResponse2 = ListOpsActivityResponses[keyof ListOpsActivityResponses];
+
+export type ListOpsRoutingRulesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/admin/ops/routing-rules';
+};
+
+export type ListOpsRoutingRulesErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+};
+
+export type ListOpsRoutingRulesError = ListOpsRoutingRulesErrors[keyof ListOpsRoutingRulesErrors];
+
+export type ListOpsRoutingRulesResponses = {
+    /**
+     * List tag automation rules
+     */
+    200: ListOpsRoutingRulesResponse;
+};
+
+export type ListOpsRoutingRulesResponse2 = ListOpsRoutingRulesResponses[keyof ListOpsRoutingRulesResponses];
+
+export type CreateOpsRoutingRuleData = {
+    body: CreateOpsRoutingRuleRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/admin/ops/routing-rules';
+};
+
+export type CreateOpsRoutingRuleErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type CreateOpsRoutingRuleError = CreateOpsRoutingRuleErrors[keyof CreateOpsRoutingRuleErrors];
+
+export type CreateOpsRoutingRuleResponses = {
+    /**
+     * The rules after the append
+     */
+    200: ListOpsRoutingRulesResponse;
+};
+
+export type CreateOpsRoutingRuleResponse = CreateOpsRoutingRuleResponses[keyof CreateOpsRoutingRuleResponses];
 
 export type NotifyOpsData = {
     body: NotifyOpsRequest;
@@ -14895,3 +16730,239 @@ export type SearchResourcesResponses = {
 };
 
 export type SearchResourcesResponse = SearchResourcesResponses[keyof SearchResourcesResponses];
+
+export type ListTagsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Case-insensitive substring filter on the tag name. Omit to return every tag.
+         */
+        q?: string;
+    };
+    url: '/api/admin/tags';
+};
+
+export type ListTagsErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type ListTagsError = ListTagsErrors[keyof ListTagsErrors];
+
+export type ListTagsResponses = {
+    /**
+     * List the project's tags
+     */
+    200: ListTagsResponse;
+};
+
+export type ListTagsResponse2 = ListTagsResponses[keyof ListTagsResponses];
+
+export type GetEntityTagsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * The kind of item — `ops`, `flag`, `config`, `killswitch`, `metric`, `error`, `alert_rule`, or `experiment`.
+         */
+        entityType: TaggableEntityType;
+        /**
+         * The item's handle — an ops item's number (e.g. `7`) or id; a flag/config/killswitch/metric/alert rule/experiment's name or id; a tracked error's id.
+         */
+        entityId: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/tags/{entityType}/{entityId}';
+};
+
+export type GetEntityTagsErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type GetEntityTagsError = GetEntityTagsErrors[keyof GetEntityTagsErrors];
+
+export type GetEntityTagsResponses = {
+    /**
+     * Read an item's tags
+     */
+    200: EntityTagsResponse;
+};
+
+export type GetEntityTagsResponse = GetEntityTagsResponses[keyof GetEntityTagsResponses];
+
+export type UpdateEntityTagsData = {
+    body: UpdateEntityTagsRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * The kind of item — `ops`, `flag`, `config`, `killswitch`, `metric`, `error`, `alert_rule`, or `experiment`.
+         */
+        entityType: TaggableEntityType;
+        /**
+         * The item's handle — an ops item's number (e.g. `7`) or id; a flag/config/killswitch/metric/alert rule/experiment's name or id; a tracked error's id.
+         */
+        entityId: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/tags/{entityType}/{entityId}';
+};
+
+export type UpdateEntityTagsErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type UpdateEntityTagsError = UpdateEntityTagsErrors[keyof UpdateEntityTagsErrors];
+
+export type UpdateEntityTagsResponses = {
+    /**
+     * Add or remove tags on an item
+     */
+    200: EntityTagsResponse;
+};
+
+export type UpdateEntityTagsResponse = UpdateEntityTagsResponses[keyof UpdateEntityTagsResponses];
+
+export type SetEntityTagsData = {
+    body: SetEntityTagsRequest;
+    headers?: {
+        /**
+         * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
+         */
+        'X-Project-Id'?: string;
+    };
+    path: {
+        /**
+         * The kind of item — `ops`, `flag`, `config`, `killswitch`, `metric`, `error`, `alert_rule`, or `experiment`.
+         */
+        entityType: TaggableEntityType;
+        /**
+         * The item's handle — an ops item's number (e.g. `7`) or id; a flag/config/killswitch/metric/alert rule/experiment's name or id; a tracked error's id.
+         */
+        entityId: ResourceId;
+    };
+    query?: never;
+    url: '/api/admin/tags/{entityType}/{entityId}';
+};
+
+export type SetEntityTagsErrors = {
+    /**
+     * The request was malformed (bad JSON or missing project scope).
+     */
+    400: Error;
+    /**
+     * Missing or invalid admin SDK key.
+     */
+    401: Error;
+    /**
+     * The key is valid but not allowed to perform this action.
+     */
+    403: Error;
+    /**
+     * The resource does not exist or is not visible to the caller.
+     */
+    404: Error;
+    /**
+     * The mutation conflicts with current state.
+     */
+    409: Error;
+    /**
+     * The request body failed validation.
+     */
+    422: Error;
+};
+
+export type SetEntityTagsError = SetEntityTagsErrors[keyof SetEntityTagsErrors];
+
+export type SetEntityTagsResponses = {
+    /**
+     * Replace an item's tags
+     */
+    200: EntityTagsResponse;
+};
+
+export type SetEntityTagsResponse = SetEntityTagsResponses[keyof SetEntityTagsResponses];
