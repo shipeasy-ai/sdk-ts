@@ -2114,7 +2114,7 @@ export const zOpsItemPriority = z.enum([
 export type OpsItemPriorityInput = z.infer<typeof zOpsItemPriority>;
 
 /**
- * Where automation has taken an item in the investigation lifecycle — the signal the ops cockpit renders as "what AI did" plus the one action expected of the user. It is **written as a side-effect of the actions that already happen**, never authored on its own: linking a PR sets `pr_ready`, moving to `in_progress` sets `working`, `ready_for_qa` sets `ready_for_qa`, a system/assistant reply sets `question`, resolving clears it, and creation seeds `backlog` or `investigated`/`detected` for auto-filed error/alert tickets. `backlog` is the single "nothing has happened yet" state — how urgent that is reads off `priority`, not off a separate state, and its one action is to hand the item to an agent. `pr_merged` and `pr_closed` are written by the GitHub `pull_request` webhook when the linked PR reaches a terminal outcome — merged (the fix shipped, resolve the item) or closed without merging (the fix was rejected, decide what happens next). Absent on rows filed before the field existed — consumers should treat a missing value as "derive from the other fields".
+ * Where automation has taken an item in the investigation lifecycle — the signal the ops cockpit renders as "what AI did" plus the one action expected of the user. It is **written as a side-effect of the actions that already happen**, never authored on its own: linking a PR sets `pr_ready`, moving to `in_progress` sets `working`, `ready_for_qa` sets `ready_for_qa`, a system/assistant reply sets `question`, resolving clears it, and creation seeds `backlog` for every untouched item (bugs, features, and auto-filed error/alert tickets alike — type is not a signal). `backlog` is the single "nothing has happened yet" state — how urgent that is reads off `priority`, not off a separate state, and its one action is to hand the item to an agent. `investigated`/`detected` are set when a completed agent run leaves findings to review, not at filing time. `pr_merged` and `pr_closed` are written by the GitHub `pull_request` webhook when the linked PR reaches a terminal outcome — merged (the fix shipped, resolve the item) or closed without merging (the fix was rejected, decide what happens next). Absent on rows filed before the field existed — consumers should treat a missing value as "derive from the other fields".
  */
 export const zOpsInvestigationState = z.enum([
     'pr_ready',
@@ -2313,7 +2313,7 @@ export const zGithubPrLink = z.object({
 export type GithubPrLinkInput = z.infer<typeof zGithubPrLink>;
 
 /**
- * GitHub connector trace — the issue it opened and, once linked, the pull request.
+ * GitHub connector trace — the issue it opened and, once linked, the pull requests.
  */
 export const zGithubConnectorData = z.object({
     issue: z.object({
@@ -2323,7 +2323,8 @@ export const zGithubConnectorData = z.object({
         repo: z.string(),
         createdAt: z.string().optional()
     }).optional(),
-    pr: zGithubPrLink.optional()
+    pr: zGithubPrLink.optional(),
+    prs: z.array(zGithubPrLink).optional()
 });
 
 export type GithubConnectorDataInput = z.infer<typeof zGithubConnectorData>;
@@ -2462,10 +2463,18 @@ export const zListOpsItemsResponse = z.array(z.object({
     run: zOpsRun.nullable(),
     lastRun: zOpsRun.nullable(),
     createdAt: z.string(),
-    updatedAt: z.string()
+    updatedAt: z.string(),
+    closedAt: z.string().nullable()
 }));
 
 export type ListOpsItemsResponseInput = z.infer<typeof zListOpsItemsResponse>;
+
+/**
+ * A tag name. Trimmed; matched case-insensitively against the project's existing tags.
+ */
+export const zTagName = z.string().min(1).max(64);
+
+export type TagNameInput = z.infer<typeof zTagName>;
 
 /**
  * Bug-kind fields for `POST /api/admin/ops` (sent with `type: bug`).
@@ -2479,8 +2488,9 @@ export const zCreateBugRequest = z.object({
     priority: zOpsItemPriority.nullish(),
     status: zOpsItemStatus.optional(),
     assigneeId: z.string().nullish(),
+    delegateConnectorId: z.string().optional(),
     subscribers: z.array(z.email()).optional().default([]),
-    tags: z.array(z.string()).optional().default([]),
+    tags: z.array(zTagName).max(50).optional().default([]),
     reporterEmail: z.email().nullish(),
     pageUrl: z.url().nullish(),
     userAgent: z.string().max(500).nullish(),
@@ -2502,8 +2512,9 @@ export const zCreateFeatureRequestRequest = z.object({
     priority: zOpsItemPriority.nullish(),
     status: zOpsItemStatus.optional(),
     assigneeId: z.string().nullish(),
+    delegateConnectorId: z.string().optional(),
     subscribers: z.array(z.email()).optional().default([]),
-    tags: z.array(z.string()).optional().default([]),
+    tags: z.array(zTagName).max(50).optional().default([]),
     reporterEmail: z.email().nullish(),
     pageUrl: z.url().nullish(),
     userAgent: z.string().max(500).nullish(),
@@ -2534,7 +2545,7 @@ export const zCreateOpsItemResponse = z.object({
 export type CreateOpsItemResponseInput = z.infer<typeof zCreateOpsItemResponse>;
 
 /**
- * Body for `POST /ops/bug`. The same bug fields as `CreateBugRequest`, minus the `type` discriminator — the path already says what is being filed.
+ * Body for `POST /ops/bug`. The same bug fields as `CreateBugRequest`, minus the `type` discriminator — the path already says what is being filed, plus the public intake's own `dedupKey`.
  */
 export const zCreatePublicBugRequest = z.object({
     title: z.string().min(1).max(200).regex(/^\S(.*\S)?$/),
@@ -2545,30 +2556,32 @@ export const zCreatePublicBugRequest = z.object({
     status: zOpsItemStatus.optional(),
     assigneeId: z.string().nullish(),
     subscribers: z.array(z.email()).optional().default([]),
-    tags: z.array(z.string()).optional().default([]),
+    tags: z.array(zTagName).max(50).optional().default([]),
     reporterEmail: z.email().nullish(),
     pageUrl: z.url().nullish(),
     userAgent: z.string().max(500).nullish(),
     viewport: z.string().max(40).nullish(),
     context: z.record(z.string(), z.unknown()).nullish(),
+    dedupKey: z.string().max(200).optional(),
     notify: zNotificationTarget.nullish()
 });
 
 export type CreatePublicBugRequestInput = z.infer<typeof zCreatePublicBugRequest>;
 
 /**
- * Response for the public ticket intake. A fresh file returns `201` with `id` + `number`; a repeat of a report already tracked by an open ticket returns `200` with that ticket's `number` and `deduped: true`.
+ * Response for the public ticket intake. A fresh file returns `201` with `id` + `number`; a repeat of a report already tracked by an open ticket returns `200` with that ticket's `number` and `deduped: true` — plus `updated: true` when a `dedupKey` re-triggered it and its fields were refreshed.
  */
 export const zCreatePublicTicketResponse = z.object({
     id: z.string().optional(),
     number: z.int(),
-    deduped: z.boolean().optional()
+    deduped: z.boolean().optional(),
+    updated: z.boolean().optional()
 });
 
 export type CreatePublicTicketResponseInput = z.infer<typeof zCreatePublicTicketResponse>;
 
 /**
- * Body for `POST /ops/feature-request`. The same feature-request fields as `CreateFeatureRequestRequest`, minus the `type` discriminator — the path already says what is being filed.
+ * Body for `POST /ops/feature-request`. The same feature-request fields as `CreateFeatureRequestRequest`, minus the `type` discriminator — the path already says what is being filed, plus the public intake's own `dedupKey`.
  */
 export const zCreatePublicFeatureRequestRequest = z.object({
     title: z.string().min(1).max(200).regex(/^\S(.*\S)?$/),
@@ -2578,11 +2591,12 @@ export const zCreatePublicFeatureRequestRequest = z.object({
     status: zOpsItemStatus.optional(),
     assigneeId: z.string().nullish(),
     subscribers: z.array(z.email()).optional().default([]),
-    tags: z.array(z.string()).optional().default([]),
+    tags: z.array(zTagName).max(50).optional().default([]),
     reporterEmail: z.email().nullish(),
     pageUrl: z.url().nullish(),
     userAgent: z.string().max(500).nullish(),
     context: z.record(z.string(), z.unknown()).nullish(),
+    dedupKey: z.string().max(200).optional(),
     notify: zNotificationTarget.nullish()
 });
 
@@ -2617,6 +2631,99 @@ export const zOpsItemRelated = z.object({
 export type OpsItemRelatedInput = z.infer<typeof zOpsItemRelated>;
 
 /**
+ * A compact reference to another queue item — enough to name it and tell whether it is still open.
+ */
+export const zOpsItemRef = z.object({
+    id: z.string(),
+    number: z.number().nullable(),
+    type: z.enum([
+        'bug',
+        'feature_request',
+        'error',
+        'alert',
+        'measure_plan'
+    ]),
+    title: z.string(),
+    status: zOpsItemStatus
+});
+
+export type OpsItemRefInput = z.infer<typeof zOpsItemRef>;
+
+/**
+ * Where a QA question stands: `open` (waiting on QA) or `answered`.
+ */
+export const zOpsQaQuestionStatus = z.enum(['open', 'answered']);
+
+export type OpsQaQuestionStatusInput = z.infer<typeof zOpsQaQuestionStatus>;
+
+/**
+ * A question put to QA on a queue item, with QA's answer once given.
+ */
+export const zOpsQaQuestion = z.object({
+    id: z.string(),
+    feedbackId: z.string(),
+    question: z.string(),
+    status: zOpsQaQuestionStatus,
+    askedByEmail: z.string().nullable(),
+    askedByAgent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).nullable(),
+    answer: z.string().nullable(),
+    answeredByEmail: z.string().nullable(),
+    answeredByAgent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).nullable(),
+    answeredAt: z.string().nullable(),
+    createdAt: z.string()
+});
+
+export type OpsQaQuestionInput = z.infer<typeof zOpsQaQuestion>;
+
+/**
+ * A link group: the items connected by blocked-by / blocking / duplicate-of links, which the dashboard shows and moves together. Its master is the one member agent runs work on — the first open member that is not a duplicate and has no open blocker, then the most urgent priority, then the oldest. Closed members only lead once every member is closed.
+ */
+export const zOpsItemGroup = z.object({
+    master: zOpsItemRef,
+    items: z.array(zOpsItemRef)
+});
+
+export type OpsItemGroupInput = z.infer<typeof zOpsItemGroup>;
+
+/**
+ * One linked item's content, inlined into `ops get` by `include=linked` so a run reads the whole group in one call. Its comments, attachments and runs are on its own `ops get`.
+ */
+export const zOpsLinkedItem = z.object({
+    id: z.string(),
+    number: z.number().nullable(),
+    type: z.enum([
+        'bug',
+        'feature_request',
+        'error',
+        'alert',
+        'measure_plan'
+    ]),
+    title: z.string(),
+    status: zOpsItemStatus,
+    priority: zOpsItemPriority.nullable(),
+    description: z.string().optional(),
+    stepsToReproduce: z.string().optional(),
+    actualResult: z.string().optional(),
+    expectedResult: z.string().optional(),
+    useCase: z.string().optional(),
+    createdAt: z.string().optional()
+});
+
+export type OpsLinkedItemInput = z.infer<typeof zOpsLinkedItem>;
+
+/**
  * One queue item, any of the five types. Shared fields apply to all; `stepsToReproduce`/`actualResult`/`expectedResult` are bug-specific, `description`/`useCase` feature-specific. The auto-collected browser fields (page URL, user-agent, viewport) live under `context.browser` for bug/feature. `context` also carries the hydrated per-type payload for auto-filed `error`/`alert`/`measure_plan` tickets, `attachments` lists any uploaded files, and `related` gives deep links to the underlying resources.
  */
 export const zGetOpsItemResponse = z.object({
@@ -2644,6 +2751,13 @@ export const zGetOpsItemResponse = z.object({
     context: zOpsItemContext.nullable(),
     attachments: z.array(zOpsItemAttachment),
     related: zOpsItemRelated,
+    blockedBy: z.array(zOpsItemRef).optional(),
+    blocking: z.array(zOpsItemRef).optional(),
+    duplicateOf: zOpsItemRef.nullish(),
+    duplicates: z.array(zOpsItemRef).optional(),
+    qaQuestions: z.array(zOpsQaQuestion).optional(),
+    group: zOpsItemGroup.nullish(),
+    linkedItems: z.array(zOpsLinkedItem).optional(),
     connectorData: zConnectorData.nullish(),
     notify: zNotificationTarget.nullish(),
     assigneeId: z.string().nullish(),
@@ -2746,7 +2860,8 @@ export type UpdateOpsItemResponseInput = z.infer<typeof zUpdateOpsItemResponse>;
  */
 export const zLinkPrToOpsItemRequest = z.object({
     prNumber: z.int().gt(0).lte(9007199254740991).nullable(),
-    prUrl: z.url().optional()
+    prUrl: z.url().optional(),
+    unlink: z.boolean().optional().default(false)
 });
 
 export type LinkPrToOpsItemRequestInput = z.infer<typeof zLinkPrToOpsItemRequest>;
@@ -2756,13 +2871,68 @@ export type LinkPrToOpsItemRequestInput = z.infer<typeof zLinkPrToOpsItemRequest
  */
 export const zLinkPrToOpsItemResponse = z.object({
     id: z.string(),
-    pr: zGithubPrLink.nullable()
+    pr: zGithubPrLink.nullable(),
+    prs: z.array(zGithubPrLink)
 });
 
 export type LinkPrToOpsItemResponseInput = z.infer<typeof zLinkPrToOpsItemResponse>;
 
 /**
- * Body for `POST /api/admin/ops/{handle}/ack`. With `agent` set this is an AI ack — the named agent type must have a connected trigger connector in the project, or the call fails with `AGENT_NOT_CONNECTED` and instructions to query the available agents (`ops agents list`). `gemini` is accepted as an alias for `jules`. Without `agent` it is a HUMAN ack by the authenticated caller.
+ * A queue item's per-project number (e.g. `12`, `#12` also accepted) or its full id.
+ */
+export const zOpsItemHandle = z.string().min(1).max(64);
+
+export type OpsItemHandleInput = z.infer<typeof zOpsItemHandle>;
+
+/**
+ * Incremental edit of an item's relations — pass any mix of fields; omitted ones are left as is. A link that would make an item block (or duplicate) itself, directly or through a chain, is rejected with `409`.
+ */
+export const zUpdateOpsLinksRequest = z.object({
+    addBlockedBy: z.array(zOpsItemHandle).max(50).optional().default([]),
+    removeBlockedBy: z.array(zOpsItemHandle).max(50).optional().default([]),
+    addBlocking: z.array(zOpsItemHandle).max(50).optional().default([]),
+    removeBlocking: z.array(zOpsItemHandle).max(50).optional().default([]),
+    duplicateOf: zOpsItemHandle.nullish()
+});
+
+export type UpdateOpsLinksRequestInput = z.infer<typeof zUpdateOpsLinksRequest>;
+
+/**
+ * Every relation of one queue item — "blocked by" / "blocking" and "duplicate of" / "duplicates" — in both directions.
+ */
+export const zOpsItemLinksResponse = z.object({
+    id: z.string(),
+    blockedBy: z.array(zOpsItemRef),
+    blocking: z.array(zOpsItemRef),
+    duplicateOf: zOpsItemRef.nullable(),
+    duplicates: z.array(zOpsItemRef)
+});
+
+export type OpsItemLinksResponseInput = z.infer<typeof zOpsItemLinksResponse>;
+
+/**
+ * Triage fields applied to EVERY member of the item's link group. Pass at least one field.
+ */
+export const zUpdateOpsGroupRequest = z.object({
+    status: zOpsItemStatus.optional(),
+    priority: zOpsItemPriorityOrNull.optional()
+});
+
+export type UpdateOpsGroupRequestInput = z.infer<typeof zUpdateOpsGroupRequest>;
+
+/**
+ * The group after a group-wide update.
+ */
+export const zOpsItemGroupResponse = z.object({
+    id: z.string(),
+    group: zOpsItemGroup,
+    updated: z.number()
+});
+
+export type OpsItemGroupResponseInput = z.infer<typeof zOpsItemGroupResponse>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/ack`. With `agent` set this is an AI ack — the named agent type must have a connected trigger connector in the project, or the call fails with `AGENT_NOT_CONNECTED` and instructions to query the available agents (`ops agents list`). `gemini` is accepted as an input value and is normalized to `jules`. Without `agent` it is a HUMAN ack by the authenticated caller.
  */
 export const zAckOpsItemRequest = z.object({
     agent: z.enum([
@@ -2773,7 +2943,10 @@ export const zAckOpsItemRequest = z.object({
         'gemini',
         'jarvis'
     ]).optional(),
-    sessionId: z.string().max(300).optional()
+    sessionId: z.string().max(300).optional(),
+    launch: z.boolean().optional().default(true),
+    runId: z.string().max(100).optional(),
+    takeover: z.boolean().optional().default(false)
 });
 
 export type AckOpsItemRequestInput = z.infer<typeof zAckOpsItemRequest>;
@@ -2941,6 +3114,238 @@ export const zUpdateOpsInvestigationRequest = z.object({
 export type UpdateOpsInvestigationRequestInput = z.infer<typeof zUpdateOpsInvestigationRequest>;
 
 /**
+ * Where a question stands — `open` (waiting on a person), `completed` (answered), or `cancelled` (withdrawn by the asker).
+ */
+export const zOpsQuestionStatus = z.enum([
+    'open',
+    'completed',
+    'cancelled'
+]);
+
+export type OpsQuestionStatusInput = z.infer<typeof zOpsQuestionStatus>;
+
+/**
+ * A person's answer to a question.
+ */
+export const zOpsQuestionAnswer = z.object({
+    selected: z.array(z.string()),
+    other: z.string().nullable()
+});
+
+export type OpsQuestionAnswerInput = z.infer<typeof zOpsQuestionAnswer>;
+
+/**
+ * How the answer gets back to the asker — `resume` re-fires the asking run's trigger connector on the item once every question that run asked is answered; `poll` fires nothing and the asker reads `GET .../questions`.
+ */
+export const zOpsQuestionDelivery = z.enum(['resume', 'poll']);
+
+export type OpsQuestionDeliveryInput = z.infer<typeof zOpsQuestionDelivery>;
+
+/**
+ * One structured question on a queue item and, once answered, its answer.
+ */
+export const zOpsQuestion = z.object({
+    id: z.string(),
+    feedbackId: z.string(),
+    header: z.string(),
+    question: z.string(),
+    options: z.array(z.object({
+        label: z.string(),
+        description: z.string().nullable()
+    })),
+    multiSelect: z.boolean(),
+    status: zOpsQuestionStatus,
+    answer: zOpsQuestionAnswer.nullable(),
+    answeredBy: z.string().nullable(),
+    answeredAt: z.string().nullable(),
+    agent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).nullable(),
+    askedBy: z.string().nullable(),
+    runId: z.string().nullable(),
+    delivery: zOpsQuestionDelivery,
+    deliveredAt: z.string().nullable(),
+    deliveryError: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string()
+});
+
+export type OpsQuestionInput = z.infer<typeof zOpsQuestion>;
+
+/**
+ * Response for `GET /api/admin/ops/{handle}/questions` — the item's questions, newest first (max 100).
+ */
+export const zListOpsQuestionsResponse = z.array(zOpsQuestion);
+
+export type ListOpsQuestionsResponseInput = z.infer<typeof zListOpsQuestionsResponse>;
+
+/**
+ * One choice offered by a question — rendered as a radio, or a checkbox when the question is `multiSelect`.
+ */
+export const zOpsQuestionOption = z.object({
+    label: z.string().min(1).max(120),
+    description: z.string().max(500).optional()
+});
+
+export type OpsQuestionOptionInput = z.infer<typeof zOpsQuestionOption>;
+
+/**
+ * One question to ask — the `AskUserQuestion` shape.
+ */
+export const zAskOpsQuestionInput = z.object({
+    header: z.string().min(1).max(24),
+    question: z.string().min(1).max(2000),
+    options: z.array(zOpsQuestionOption).min(2).max(4),
+    multiSelect: z.boolean().optional().default(false)
+});
+
+export type AskOpsQuestionInputInput = z.infer<typeof zAskOpsQuestionInput>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/questions`.
+ */
+export const zAskOpsQuestionsRequest = z.object({
+    questions: z.array(zAskOpsQuestionInput).min(1).max(4),
+    runId: z.string().max(200).optional(),
+    agent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).optional(),
+    delivery: zOpsQuestionDelivery.optional()
+});
+
+export type AskOpsQuestionsRequestInput = z.infer<typeof zAskOpsQuestionsRequest>;
+
+/**
+ * Response for `POST /api/admin/ops/{handle}/questions` — the created questions, in the order asked.
+ */
+export const zAskOpsQuestionsResponse = z.array(zOpsQuestion);
+
+export type AskOpsQuestionsResponseInput = z.infer<typeof zAskOpsQuestionsResponse>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/questions/{questionId}/answer` — pick option labels, write a free-text answer, or both (multi-select only).
+ */
+export const zAnswerOpsQuestionRequest = z.object({
+    selected: z.array(z.string().max(120)).max(4).optional(),
+    other: z.string().max(10000).optional()
+});
+
+export type AnswerOpsQuestionRequestInput = z.infer<typeof zAnswerOpsQuestionRequest>;
+
+/**
+ * What a QA note is — `narrowing` (only part of the bug still fails), `clarification` (changes what "fixed" means), `verification` (a pass/fail verdict on a fix) or `correction` (withdraws an earlier framing).
+ */
+export const zOpsQaNoteKind = z.enum([
+    'narrowing',
+    'clarification',
+    'verification',
+    'correction'
+]);
+
+export type OpsQaNoteKindInput = z.infer<typeof zOpsQaNoteKind>;
+
+/**
+ * The outcome a `verification` note records.
+ */
+export const zOpsQaNoteVerdict = z.enum(['pass', 'fail']);
+
+export type OpsQaNoteVerdictInput = z.infer<typeof zOpsQaNoteVerdict>;
+
+/**
+ * One typed, append-only QA note on a queue item.
+ */
+export const zOpsQaNote = z.object({
+    id: z.string(),
+    feedbackId: z.string(),
+    kind: zOpsQaNoteKind,
+    verdict: zOpsQaNoteVerdict.nullable(),
+    body: z.string(),
+    authorEmail: z.string().nullable(),
+    authorAgent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).nullable(),
+    createdAt: z.string()
+});
+
+export type OpsQaNoteInput = z.infer<typeof zOpsQaNote>;
+
+/**
+ * Response for `GET /api/admin/ops/{handle}/qa-notes` — the item's QA notes, newest first (max 200).
+ */
+export const zListOpsQaNotesResponse = z.array(zOpsQaNote);
+
+export type ListOpsQaNotesResponseInput = z.infer<typeof zListOpsQaNotesResponse>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/qa-notes`. A `verification` note requires `verdict`; every other kind rejects it.
+ */
+export const zCreateOpsQaNoteRequest = z.object({
+    kind: zOpsQaNoteKind,
+    body: z.string().min(1).max(10000),
+    verdict: zOpsQaNoteVerdict.optional(),
+    agent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).optional()
+});
+
+export type CreateOpsQaNoteRequestInput = z.infer<typeof zCreateOpsQaNoteRequest>;
+
+/**
+ * Response for `GET /api/admin/ops/{handle}/qa-questions` — the item's QA questions, newest first (max 100).
+ */
+export const zListOpsQaQuestionsResponse = z.array(zOpsQaQuestion);
+
+export type ListOpsQaQuestionsResponseInput = z.infer<typeof zListOpsQaQuestionsResponse>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/qa-questions`.
+ */
+export const zAskOpsQaQuestionRequest = z.object({
+    question: z.string().min(1).max(10000),
+    agent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).optional()
+});
+
+export type AskOpsQaQuestionRequestInput = z.infer<typeof zAskOpsQaQuestionRequest>;
+
+/**
+ * Body for `POST /api/admin/ops/{handle}/qa-questions/{questionId}/answer`.
+ */
+export const zAnswerOpsQaQuestionRequest = z.object({
+    answer: z.string().min(1).max(10000),
+    agent: z.enum([
+        'jarvis',
+        'claude',
+        'cursor',
+        'copilot',
+        'jules'
+    ]).optional()
+});
+
+export type AnswerOpsQaQuestionRequestInput = z.infer<typeof zAnswerOpsQaQuestionRequest>;
+
+/**
  * One connected, assignable AI agent (an authenticated trigger connector).
  */
 export const zOpsAgentProfile = z.object({
@@ -3016,6 +3421,174 @@ export const zCreateOpsCommentResponse = z.object({
 export type CreateOpsCommentResponseInput = z.infer<typeof zCreateOpsCommentResponse>;
 
 /**
+ * Body for `POST /api/admin/ops/{handle}/attachments` and `POST /api/admin/ops/{handle}/comment-media`. Exactly one of `contentBase64` / `url` is required.
+ */
+export const zCreateOpsAttachmentRequest = z.object({
+    contentBase64: z.string().optional(),
+    url: z.url().optional(),
+    filename: z.string().optional(),
+    mimeType: z.string().optional(),
+    kind: z.enum([
+        'screenshot',
+        'recording',
+        'file'
+    ]).optional()
+});
+
+export type CreateOpsAttachmentRequestInput = z.infer<typeof zCreateOpsAttachmentRequest>;
+
+/**
+ * Response for `POST /api/admin/ops/{handle}/attachments`.
+ */
+export const zCreateOpsAttachmentResponse = z.object({
+    id: z.string(),
+    filename: z.string(),
+    kind: z.enum([
+        'screenshot',
+        'recording',
+        'file'
+    ]),
+    mimeType: z.string(),
+    sizeBytes: z.int()
+});
+
+export type CreateOpsAttachmentResponseInput = z.infer<typeof zCreateOpsAttachmentResponse>;
+
+/**
+ * Response for `POST /api/admin/ops/{handle}/comment-media`.
+ */
+export const zCreateOpsCommentMediaResponse = z.object({
+    id: z.string(),
+    url: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.int()
+});
+
+export type CreateOpsCommentMediaResponseInput = z.infer<typeof zCreateOpsCommentMediaResponse>;
+
+/**
+ * Which kind of change an activity entry records. `pr` is a pull-request event (see `pr.event`); `comment` carries an excerpt in `to`; `edit` names the edited content fields in `added`.
+ */
+export const zOpsActivityField = z.enum([
+    'status',
+    'priority',
+    'owner',
+    'tags',
+    'ack',
+    'pr',
+    'comment',
+    'edit'
+]);
+
+export type OpsActivityFieldInput = z.infer<typeof zOpsActivityField>;
+
+/**
+ * The pull request a `pr` activity entry is about.
+ */
+export const zOpsActivityPr = z.object({
+    event: z.enum([
+        'linked',
+        'unlinked',
+        'merged',
+        'closed'
+    ]),
+    number: z.int(),
+    url: z.string().nullable(),
+    repo: z.string().nullable(),
+    title: z.string().nullable(),
+    author: z.string().nullable()
+});
+
+export type OpsActivityPrInput = z.infer<typeof zOpsActivityPr>;
+
+/**
+ * One change recorded against a queue item.
+ */
+export const zOpsActivityEntry = z.object({
+    id: z.string(),
+    at: z.string(),
+    itemId: z.string(),
+    itemNumber: z.int().nullable(),
+    itemTitle: z.string(),
+    actor: z.string(),
+    actorType: z.string(),
+    via: z.string().nullable(),
+    viaAgent: z.string().nullable(),
+    field: zOpsActivityField,
+    from: z.string().nullable(),
+    to: z.string().nullable(),
+    added: z.array(z.string()),
+    removed: z.array(z.string()),
+    pr: zOpsActivityPr.nullable()
+});
+
+export type OpsActivityEntryInput = z.infer<typeof zOpsActivityEntry>;
+
+/**
+ * Response for `GET /api/admin/ops/activity` — newest first.
+ */
+export const zListOpsActivityResponse = z.object({
+    activity: z.array(zOpsActivityEntry)
+});
+
+export type ListOpsActivityResponseInput = z.infer<typeof zListOpsActivityResponse>;
+
+/**
+ * A ticket type a tag rule can also fire on. Error and alert tickets carry no tags, so a rule that should catch them matches on type.
+ */
+export const zOpsRoutingRuleType = z.enum([
+    'error',
+    'alert',
+    'bug',
+    'feature_request'
+]);
+
+export type OpsRoutingRuleTypeInput = z.infer<typeof zOpsRoutingRuleType>;
+
+/**
+ * One tag automation rule. A rule fires on a newly filed queue item that carries ANY of its `tags` (or whose `type` is in `types`) and applies its actions — assign a person, hand the item to a connected coding agent (which launches a run), set a status or priority, and subscribe emails. Rules are evaluated in order; each action is optional but a rule needs at least one.
+ */
+export const zOpsRoutingRule = z.object({
+    tags: z.array(z.string().min(1).max(64)).max(20),
+    types: z.array(zOpsRoutingRuleType).max(4),
+    enabled: z.boolean(),
+    user: z.string().min(1).max(128).nullable(),
+    connector: z.string().min(1).max(128).nullable(),
+    agentPrompt: z.string().max(4000).nullable(),
+    status: zOpsItemStatus.nullable(),
+    priority: zOpsItemPriorityOrNull,
+    subscribers: z.array(z.email()).max(20),
+    skipApproval: z.boolean(),
+    triage: z.boolean(),
+    triageAgent: z.string().nullable(),
+    triageAutoApprove: z.boolean()
+});
+
+export type OpsRoutingRuleInput = z.infer<typeof zOpsRoutingRule>;
+
+export const zListOpsRoutingRulesResponse = z.array(zOpsRoutingRule);
+
+export type ListOpsRoutingRulesResponseInput = z.infer<typeof zListOpsRoutingRulesResponse>;
+
+/**
+ * Appends one tag automation rule after the existing ones; the existing rules are untouched. Needs at least one of `tags` / `types` and at least one action (`user`, `connector`, `status`, `priority` or `subscribers`).
+ */
+export const zCreateOpsRoutingRuleRequest = z.object({
+    tags: z.array(z.string().min(1).max(64)).max(20).optional(),
+    types: z.array(zOpsRoutingRuleType).max(4).optional(),
+    enabled: z.boolean().optional(),
+    user: z.string().min(1).max(128).optional(),
+    connector: z.string().min(1).max(128).optional(),
+    agentPrompt: z.string().max(4000).optional(),
+    status: zOpsItemStatus.optional(),
+    priority: zOpsItemPriority.optional(),
+    subscribers: z.array(z.email()).max(20).optional(),
+    skipApproval: z.boolean().optional()
+});
+
+export type CreateOpsRoutingRuleRequestInput = z.infer<typeof zCreateOpsRoutingRuleRequest>;
+
+/**
  * Body for `POST /api/admin/notifications`. In `title`, `summary`, and each step, reference admin entities inline with tokens — `#42` (feedback item), `@gate:<name>` (alias `@flag:`), `@experiment:<name>` (`@exp:`), `@config:<name>`, `@killswitch:<name>` (`@ks:`), `@metric:<name>`, `@universe:<name>`, `@alert:<name>` — where `<name>` is the entity's immutable name/slug (e.g. `features.checkout`). The dashboard renders each token as a live hover chip deep-linking to the entity; tokens degrade to plain text elsewhere, so they're always safe to use.
  */
 export const zNotifyOpsRequest = z.object({
@@ -3062,6 +3635,20 @@ export const zAlertCompositeSpec = z.object({
 
 export type AlertCompositeSpecInput = z.infer<typeof zAlertCompositeSpec>;
 
+/**
+ * Delivery target for a rule's alert; `null` = use the project default. The `NotificationTarget` shape plus the in-app switch.
+ */
+export const zAlertRuleNotify = z.object({
+    slackChannel: z.object({
+        id: z.string().min(1),
+        name: z.string().min(1)
+    }).nullish(),
+    email: z.email().nullish(),
+    inApp: z.boolean().nullish()
+}).nullable();
+
+export type AlertRuleNotifyInput = z.infer<typeof zAlertRuleNotify>;
+
 export const zListAlertRulesResponse = z.array(z.object({
     id: z.string(),
     name: z.string(),
@@ -3107,7 +3694,7 @@ export const zListAlertRulesResponse = z.array(z.object({
         'info'
     ]),
     enabled: z.boolean(),
-    notify: zNotificationTarget,
+    notify: zAlertRuleNotify,
     createdAt: z.string(),
     updatedAt: z.string()
 }));
@@ -3157,7 +3744,7 @@ export const zCreateAlertRuleRequest = z.object({
         'info'
     ]).optional().default('warn'),
     enabled: z.boolean().optional().default(true),
-    notify: zNotificationTarget.optional()
+    notify: zAlertRuleNotify.optional()
 });
 
 export type CreateAlertRuleRequestInput = z.infer<typeof zCreateAlertRuleRequest>;
@@ -3216,7 +3803,7 @@ export const zUpdateAlertRuleRequest = z.object({
         'info'
     ]).optional(),
     enabled: z.boolean().optional(),
-    notify: zNotificationTarget.optional()
+    notify: zAlertRuleNotify.optional()
 });
 
 export type UpdateAlertRuleRequestInput = z.infer<typeof zUpdateAlertRuleRequest>;
@@ -3519,6 +4106,8 @@ export const zListI18nKeysResponse = z.object({
         variables: z.array(z.string()).nullable(),
         profileId: z.string(),
         profileName: z.string().nullable(),
+        experimentId: z.string().nullish(),
+        experimentName: z.string().nullish(),
         updatedAt: z.string(),
         updatedBy: z.string()
     })),
@@ -3587,7 +4176,8 @@ export type PushI18nKeysResponseInput = z.infer<typeof zPushI18nKeysResponse>;
 export const zUpdateI18nKeyRequest = z.object({
     value: z.string(),
     description: z.string().optional(),
-    variables: z.array(z.string().min(1).max(64)).max(32).optional()
+    variables: z.array(z.string().min(1).max(64)).max(32).optional(),
+    experimentId: z.string().min(1).max(128).nullish()
 });
 
 export type UpdateI18nKeyRequestInput = z.infer<typeof zUpdateI18nKeyRequest>;
@@ -4241,7 +4831,13 @@ export const zKeyRecord = z.object({
     name: z.string().nullable(),
     description: z.string().nullable(),
     scopes: z.array(z.string()).nullable(),
-    last4: z.string().nullable()
+    last4: z.string().nullable(),
+    origin: z.enum([
+        'cli',
+        'mobile',
+        'dashboard',
+        'api'
+    ])
 });
 
 export type KeyRecordInput = z.infer<typeof zKeyRecord>;
@@ -4343,7 +4939,10 @@ export const zSearchHit = z.object({
         'experiment',
         'config',
         'killswitch',
-        'metric'
+        'metric',
+        'ops',
+        'error',
+        'change'
     ]),
     id: z.string(),
     name: z.string(),
@@ -4361,6 +4960,60 @@ export const zSearchResponse = z.object({
 });
 
 export type SearchResponseInput = z.infer<typeof zSearchResponse>;
+
+export const zTag = z.object({
+    id: z.string(),
+    name: z.string()
+});
+
+export type TagInput = z.infer<typeof zTag>;
+
+/**
+ * The project's tags, sorted by name.
+ */
+export const zListTagsResponse = z.array(zTag);
+
+export type ListTagsResponseInput = z.infer<typeof zListTagsResponse>;
+
+/**
+ * The kind of item a tag set hangs off: `ops` (any queue item — bug, feature request, error/alert/measure-plan ticket), `flag` (feature gate), `config` (dynamic config), `killswitch`, `metric`, `error` (tracked error group), `alert_rule`, or `experiment`.
+ */
+export const zTaggableEntityType = z.enum([
+    'ops',
+    'flag',
+    'config',
+    'killswitch',
+    'metric',
+    'error',
+    'alert_rule',
+    'experiment'
+]);
+
+export type TaggableEntityTypeInput = z.infer<typeof zTaggableEntityType>;
+
+export const zEntityTagsResponse = z.object({
+    entityType: zTaggableEntityType,
+    entityId: z.string(),
+    tags: z.array(z.string())
+});
+
+export type EntityTagsResponseInput = z.infer<typeof zEntityTagsResponse>;
+
+export const zSetEntityTagsRequest = z.object({
+    tags: z.array(zTagName).max(50)
+});
+
+export type SetEntityTagsRequestInput = z.infer<typeof zSetEntityTagsRequest>;
+
+/**
+ * Incremental tag edit — pass `add`, `remove`, or both. Every other tag on the item is left as is.
+ */
+export const zUpdateEntityTagsRequest = z.object({
+    add: z.array(zTagName).max(50).optional().default([]),
+    remove: z.array(zTagName).max(50).optional().default([])
+});
+
+export type UpdateEntityTagsRequestInput = z.infer<typeof zUpdateEntityTagsRequest>;
 
 /**
  * Project the request operates on. Optional — defaults to the project the SDK key belongs to; pass it only to scope a multi-project key (the generated client sets it once from its configuration, so per-call callers never thread it).
@@ -5404,10 +6057,20 @@ export const zListOpsItemsQuery = z.object({
     ]).optional().default('all'),
     status: z.union([
         zOpsItemStatus,
+        z.literal('unresolved'),
         z.literal('all')
     ]).optional().default('all'),
+    priority: z.union([
+        zOpsItemPriority,
+        z.literal('all')
+    ]).optional().default('all'),
+    scope: z.enum(['all', 'ready']).optional().default('all'),
+    qaQuestions: z.enum(['all', 'open']).optional().default('all'),
     limit: z.int().gte(1).lte(500).optional().default(200),
-    owner: z.string().optional()
+    offset: z.int().gte(0).lte(100000).optional().default(0),
+    owner: z.string().optional(),
+    reporter: z.string().optional(),
+    closedSince: z.iso.datetime().optional()
 });
 
 /**
@@ -5461,6 +6124,10 @@ export const zGetOpsItemPath = z.object({
     handle: zResourceId
 });
 
+export const zGetOpsItemQuery = z.object({
+    include: z.enum(['linked']).optional()
+});
+
 /**
  * Get one queue item
  */
@@ -5495,6 +6162,36 @@ export const zLinkPrToOpsItemPath = z.object({
  * Link a fixing PR
  */
 export const zLinkPrToOpsItemResponse2 = zLinkPrToOpsItemResponse;
+
+export const zUpdateOpsLinksBody = zUpdateOpsLinksRequest;
+
+export const zUpdateOpsLinksHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zUpdateOpsLinksPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * Link related items
+ */
+export const zUpdateOpsLinksResponse = zOpsItemLinksResponse;
+
+export const zUpdateOpsGroupBody = zUpdateOpsGroupRequest;
+
+export const zUpdateOpsGroupHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zUpdateOpsGroupPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * Update a linked group
+ */
+export const zUpdateOpsGroupResponse = zOpsItemGroupResponse;
 
 export const zAckOpsItemBody = zAckOpsItemRequest;
 
@@ -5555,6 +6252,151 @@ export const zUpdateOpsInvestigationPath = z.object({
  */
 export const zUpdateOpsInvestigationResponse = zOpsInvestigation;
 
+export const zListOpsQuestionsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListOpsQuestionsPath = z.object({
+    handle: zResourceId
+});
+
+export const zListOpsQuestionsQuery = z.object({
+    status: z.union([
+        zOpsQuestionStatus,
+        z.literal('all')
+    ]).optional().default('all')
+});
+
+/**
+ * List an item's questions
+ */
+export const zListOpsQuestionsResponse2 = zListOpsQuestionsResponse;
+
+export const zAskOpsQuestionsBody = zAskOpsQuestionsRequest;
+
+export const zAskOpsQuestionsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zAskOpsQuestionsPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * The created questions, in the order asked
+ */
+export const zAskOpsQuestionsResponse2 = zAskOpsQuestionsResponse;
+
+export const zAnswerOpsQuestionBody = zAnswerOpsQuestionRequest;
+
+export const zAnswerOpsQuestionHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zAnswerOpsQuestionPath = z.object({
+    handle: zResourceId,
+    questionId: zResourceId
+});
+
+/**
+ * The answered question
+ */
+export const zAnswerOpsQuestionResponse = zOpsQuestion;
+
+export const zCancelOpsQuestionHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zCancelOpsQuestionPath = z.object({
+    handle: zResourceId,
+    questionId: zResourceId
+});
+
+/**
+ * The withdrawn question
+ */
+export const zCancelOpsQuestionResponse = zOpsQuestion;
+
+export const zListOpsQaNotesHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListOpsQaNotesPath = z.object({
+    handle: zResourceId
+});
+
+export const zListOpsQaNotesQuery = z.object({
+    kind: zOpsQaNoteKind.optional()
+});
+
+/**
+ * List an item's QA notes
+ */
+export const zListOpsQaNotesResponse2 = zListOpsQaNotesResponse;
+
+export const zCreateOpsQaNoteBody = zCreateOpsQaNoteRequest;
+
+export const zCreateOpsQaNoteHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zCreateOpsQaNotePath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * The created note
+ */
+export const zCreateOpsQaNoteResponse = zOpsQaNote;
+
+export const zListOpsQaQuestionsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListOpsQaQuestionsPath = z.object({
+    handle: zResourceId
+});
+
+export const zListOpsQaQuestionsQuery = z.object({
+    status: zOpsQaQuestionStatus.optional()
+});
+
+/**
+ * List an item's QA questions
+ */
+export const zListOpsQaQuestionsResponse2 = zListOpsQaQuestionsResponse;
+
+export const zAskOpsQaQuestionBody = zAskOpsQaQuestionRequest;
+
+export const zAskOpsQaQuestionHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zAskOpsQaQuestionPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * The created question
+ */
+export const zAskOpsQaQuestionResponse = zOpsQaQuestion;
+
+export const zAnswerOpsQaQuestionBody = zAnswerOpsQaQuestionRequest;
+
+export const zAnswerOpsQaQuestionHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zAnswerOpsQaQuestionPath = z.object({
+    handle: zResourceId,
+    questionId: zResourceId
+});
+
+/**
+ * The answered question
+ */
+export const zAnswerOpsQaQuestionResponse = zOpsQaQuestion;
+
 export const zListOpsAgentsHeaders = z.object({
     'X-Project-Id': z.string().optional()
 });
@@ -5591,6 +6433,73 @@ export const zCreateOpsCommentPath = z.object({
  * Comment on an item
  */
 export const zCreateOpsCommentResponse2 = zCreateOpsCommentResponse;
+
+export const zCreateOpsAttachmentBody = zCreateOpsAttachmentRequest;
+
+export const zCreateOpsAttachmentHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zCreateOpsAttachmentPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * Attach a screenshot to an item
+ */
+export const zCreateOpsAttachmentResponse2 = zCreateOpsAttachmentResponse;
+
+export const zCreateOpsCommentMediaBody = zCreateOpsAttachmentRequest;
+
+export const zCreateOpsCommentMediaHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zCreateOpsCommentMediaPath = z.object({
+    handle: zResourceId
+});
+
+/**
+ * Upload an image to embed in a comment
+ */
+export const zCreateOpsCommentMediaResponse2 = zCreateOpsCommentMediaResponse;
+
+export const zListOpsActivityHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListOpsActivityQuery = z.object({
+    item: z.string().min(1).max(128).optional(),
+    field: zOpsActivityField.optional(),
+    since: z.iso.datetime().optional(),
+    until: z.iso.datetime().optional(),
+    limit: z.int().gte(1).lte(200).optional()
+});
+
+/**
+ * List queue activity
+ */
+export const zListOpsActivityResponse2 = zListOpsActivityResponse;
+
+export const zListOpsRoutingRulesHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+/**
+ * List tag automation rules
+ */
+export const zListOpsRoutingRulesResponse2 = zListOpsRoutingRulesResponse;
+
+export const zCreateOpsRoutingRuleBody = zCreateOpsRoutingRuleRequest;
+
+export const zCreateOpsRoutingRuleHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+/**
+ * The rules after the append
+ */
+export const zCreateOpsRoutingRuleResponse = zListOpsRoutingRulesResponse;
 
 export const zNotifyOpsBody = zNotifyOpsRequest;
 
@@ -6221,3 +7130,62 @@ export const zSearchResourcesQuery = z.object({
  * Search project resources
  */
 export const zSearchResourcesResponse = zSearchResponse;
+
+export const zListTagsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zListTagsQuery = z.object({
+    q: z.string().max(64).optional()
+});
+
+/**
+ * List the project's tags
+ */
+export const zListTagsResponse2 = zListTagsResponse;
+
+export const zGetEntityTagsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zGetEntityTagsPath = z.object({
+    entityType: zTaggableEntityType,
+    entityId: zResourceId
+});
+
+/**
+ * Read an item's tags
+ */
+export const zGetEntityTagsResponse = zEntityTagsResponse;
+
+export const zUpdateEntityTagsBody = zUpdateEntityTagsRequest;
+
+export const zUpdateEntityTagsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zUpdateEntityTagsPath = z.object({
+    entityType: zTaggableEntityType,
+    entityId: zResourceId
+});
+
+/**
+ * Add or remove tags on an item
+ */
+export const zUpdateEntityTagsResponse = zEntityTagsResponse;
+
+export const zSetEntityTagsBody = zSetEntityTagsRequest;
+
+export const zSetEntityTagsHeaders = z.object({
+    'X-Project-Id': z.string().optional()
+});
+
+export const zSetEntityTagsPath = z.object({
+    entityType: zTaggableEntityType,
+    entityId: zResourceId
+});
+
+/**
+ * Replace an item's tags
+ */
+export const zSetEntityTagsResponse = zEntityTagsResponse;

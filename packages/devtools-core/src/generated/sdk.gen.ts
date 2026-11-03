@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AckOpsItemData, AckOpsItemErrors, AckOpsItemResponses, AddToGateWhitelistData, AddToGateWhitelistErrors, AddToGateWhitelistResponses, ApproveEventData, ApproveEventErrors, ApproveEventResponses, CreateAlertRuleData, CreateAlertRuleErrors, CreateAlertRuleResponses, CreateAttributeData, CreateAttributeErrors, CreateAttributeResponses, CreateConfigData, CreateConfigErrors, CreateConfigResponses, CreateConnectorData, CreateConnectorErrors, CreateConnectorResponses, CreateEventData, CreateEventErrors, CreateEventResponses, CreateExperimentData, CreateExperimentErrors, CreateExperimentReadoutData, CreateExperimentReadoutErrors, CreateExperimentReadoutResponses, CreateExperimentResponses, CreateGateData, CreateGateErrors, CreateGateResponses, CreateGateTemplateData, CreateGateTemplateErrors, CreateGateTemplateResponses, CreateI18nDraftData, CreateI18nDraftErrors, CreateI18nDraftResponses, CreateI18nProfileData, CreateI18nProfileErrors, CreateI18nProfileResponses, CreateKeyData, CreateKeyErrors, CreateKeyResponses, CreateKillswitchData, CreateKillswitchErrors, CreateKillswitchResponses, CreateMetricData, CreateMetricErrors, CreateMetricResponses, CreateOpsCommentData, CreateOpsCommentErrors, CreateOpsCommentResponses, CreateOpsInvestigationData, CreateOpsInvestigationErrors, CreateOpsInvestigationResponses, CreateOpsItemData, CreateOpsItemErrors, CreateOpsItemResponses, CreatePublicBugData, CreatePublicBugErrors, CreatePublicBugResponses, CreatePublicFeatureRequestData, CreatePublicFeatureRequestErrors, CreatePublicFeatureRequestResponses, CreateTriggerConnectorData, CreateTriggerConnectorErrors, CreateTriggerConnectorResponses, CreateUniverseData, CreateUniverseErrors, CreateUniverseResponses, DeleteAlertRuleData, DeleteAlertRuleErrors, DeleteAlertRuleResponses, DeleteAttributeData, DeleteAttributeErrors, DeleteAttributeResponses, DeleteConfigData, DeleteConfigErrors, DeleteConfigResponses, DeleteConnectorData, DeleteConnectorErrors, DeleteConnectorResponses, DeleteEventData, DeleteEventErrors, DeleteEventResponses, DeleteExperimentData, DeleteExperimentErrors, DeleteExperimentResponses, DeleteGateData, DeleteGateErrors, DeleteGateResponses, DeleteGateTemplateData, DeleteGateTemplateErrors, DeleteGateTemplateResponses, DeleteI18nDraftData, DeleteI18nDraftErrors, DeleteI18nDraftResponses, DeleteI18nKeyData, DeleteI18nKeyErrors, DeleteI18nKeyResponses, DeleteI18nProfileData, DeleteI18nProfileErrors, DeleteI18nProfileResponses, DeleteKillswitchData, DeleteKillswitchErrors, DeleteKillswitchResponses, DeleteMetricData, DeleteMetricErrors, DeleteMetricResponses, DeleteOpsItemData, DeleteOpsItemErrors, DeleteOpsItemResponses, DeleteUniverseData, DeleteUniverseErrors, DeleteUniverseResponses, DisableGateData, DisableGateErrors, DisableGateResponses, DiscardConfigDraftData, DiscardConfigDraftErrors, DiscardConfigDraftResponses, EnableGateData, EnableGateErrors, EnableGateResponses, FileErrorTicketData, FileErrorTicketErrors, FileErrorTicketResponses, FireConnectorData, FireConnectorErrors, FireConnectorResponses, GetAttributeData, GetAttributeErrors, GetAttributeResponses, GetConfigData, GetConfigErrors, GetConfigResponses, GetConnectorData, GetConnectorErrors, GetConnectorResponses, GetCurrentProjectData, GetCurrentProjectErrors, GetCurrentProjectResponses, GetErrorData, GetErrorErrors, GetErrorResponses, GetErrorSeriesData, GetErrorSeriesErrors, GetErrorSeriesResponses, GetEventData, GetEventErrors, GetEventResponses, GetExperimentData, GetExperimentErrors, GetExperimentReadoutData, GetExperimentReadoutErrors, GetExperimentReadoutResponses, GetExperimentResponses, GetExperimentResultsData, GetExperimentResultsErrors, GetExperimentResultsResponses, GetExperimentTimeseriesData, GetExperimentTimeseriesErrors, GetExperimentTimeseriesResponses, GetGateData, GetGateErrors, GetGateResponses, GetGateTemplateData, GetGateTemplateErrors, GetGateTemplateResponses, GetGateWhitelistData, GetGateWhitelistErrors, GetGateWhitelistResponses, GetKillswitchData, GetKillswitchErrors, GetKillswitchResponses, GetMetricData, GetMetricErrors, GetMetricResponses, GetMetricSeriesData, GetMetricSeriesErrors, GetMetricSeriesResponses, GetOpsItemData, GetOpsItemErrors, GetOpsItemResponses, GetProjectData, GetProjectErrors, GetProjectResponses, LinkPrToOpsItemData, LinkPrToOpsItemErrors, LinkPrToOpsItemResponses, ListAlertRulesData, ListAlertRulesErrors, ListAlertRulesResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAttributesData, ListAttributesErrors, ListAttributesResponses, ListConfigActivityData, ListConfigActivityErrors, ListConfigActivityResponses, ListConfigsData, ListConfigsErrors, ListConfigsResponses, ListConfigVersionsData, ListConfigVersionsErrors, ListConfigVersionsResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListErrorsData, ListErrorsErrors, ListErrorsResponses, ListEventsData, ListEventsErrors, ListEventsResponses, ListExperimentsData, ListExperimentsErrors, ListExperimentsResponses, ListGateActivityData, ListGateActivityErrors, ListGateActivityResponses, ListGatesData, ListGatesErrors, ListGatesResponses, ListGateTemplatesData, ListGateTemplatesErrors, ListGateTemplatesResponses, ListI18nDraftKeysData, ListI18nDraftKeysErrors, ListI18nDraftKeysResponses, ListI18nDraftsData, ListI18nDraftsErrors, ListI18nDraftsResponses, ListI18nKeysData, ListI18nKeysErrors, ListI18nKeysResponses, ListI18nProfilesData, ListI18nProfilesErrors, ListI18nProfilesResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListKillswitchesData, ListKillswitchesErrors, ListKillswitchesResponses, ListMetricExperimentsData, ListMetricExperimentsErrors, ListMetricExperimentsResponses, ListMetricsData, ListMetricsErrors, ListMetricsResponses, ListOpsAgentsData, ListOpsAgentsErrors, ListOpsAgentsResponses, ListOpsCommentsData, ListOpsCommentsErrors, ListOpsCommentsResponses, ListOpsInvestigationsData, ListOpsInvestigationsErrors, ListOpsInvestigationsResponses, ListOpsItemsData, ListOpsItemsErrors, ListOpsItemsResponses, ListSlackChannelsData, ListSlackChannelsErrors, ListSlackChannelsResponses, ListUniversesData, ListUniversesErrors, ListUniversesResponses, NotifyOpsData, NotifyOpsErrors, NotifyOpsResponses, PublishConfigDraftData, PublishConfigDraftErrors, PublishConfigDraftResponses, PublishI18nProfileData, PublishI18nProfileErrors, PublishI18nProfileResponses, PushI18nKeysData, PushI18nKeysErrors, PushI18nKeysResponses, ReanalyzeExperimentData, ReanalyzeExperimentErrors, ReanalyzeExperimentResponses, RemoveFromGateWhitelistData, RemoveFromGateWhitelistErrors, RemoveFromGateWhitelistResponses, ResolveErrorData, ResolveErrorErrors, ResolveErrorResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, SaveConfigDraftData, SaveConfigDraftErrors, SaveConfigDraftResponses, SearchResourcesData, SearchResourcesErrors, SearchResourcesResponses, SetExperimentMetricsData, SetExperimentMetricsErrors, SetExperimentMetricsResponses, SetExperimentStatusData, SetExperimentStatusErrors, SetExperimentStatusResponses, SetGateWhitelistData, SetGateWhitelistErrors, SetGateWhitelistResponses, SetI18nLabelData, SetI18nLabelErrors, SetI18nLabelResponses, SetKillswitchSwitchData, SetKillswitchSwitchErrors, SetKillswitchSwitchResponses, SetKillswitchValueData, SetKillswitchValueErrors, SetKillswitchValueResponses, TestConnectorData, TestConnectorErrors, TestConnectorResponses, ToggleKillswitchData, ToggleKillswitchErrors, ToggleKillswitchResponses, UnarchiveMetricData, UnarchiveMetricErrors, UnarchiveMetricResponses, UnsetKillswitchSwitchData, UnsetKillswitchSwitchErrors, UnsetKillswitchSwitchResponses, UpdateAlertData, UpdateAlertErrors, UpdateAlertResponses, UpdateAlertRuleData, UpdateAlertRuleErrors, UpdateAlertRuleResponses, UpdateAttributeData, UpdateAttributeErrors, UpdateAttributeResponses, UpdateConfigData, UpdateConfigErrors, UpdateConfigResponses, UpdateConfigSchemaData, UpdateConfigSchemaErrors, UpdateConfigSchemaResponses, UpdateConnectorData, UpdateConnectorErrors, UpdateConnectorResponses, UpdateErrorStatusData, UpdateErrorStatusErrors, UpdateErrorStatusResponses, UpdateEventData, UpdateEventErrors, UpdateEventResponses, UpdateExperimentData, UpdateExperimentErrors, UpdateExperimentResponses, UpdateGateData, UpdateGateErrors, UpdateGateResponses, UpdateGateTemplateData, UpdateGateTemplateErrors, UpdateGateTemplateResponses, UpdateI18nDraftData, UpdateI18nDraftErrors, UpdateI18nDraftResponses, UpdateI18nKeyData, UpdateI18nKeyErrors, UpdateI18nKeyResponses, UpdateKeyData, UpdateKeyErrors, UpdateKeyResponses, UpdateKillswitchData, UpdateKillswitchErrors, UpdateKillswitchResponses, UpdateMetricData, UpdateMetricErrors, UpdateMetricResponses, UpdateOpsInvestigationData, UpdateOpsInvestigationErrors, UpdateOpsInvestigationResponses, UpdateOpsItemData, UpdateOpsItemErrors, UpdateOpsItemResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTriggerConnectorData, UpdateTriggerConnectorErrors, UpdateTriggerConnectorResponses, UpdateUniverseData, UpdateUniverseErrors, UpdateUniverseResponses, UpsertI18nDraftKeyData, UpsertI18nDraftKeyErrors, UpsertI18nDraftKeyResponses, UpsertI18nKeysData, UpsertI18nKeysErrors, UpsertI18nKeysResponses, UpsertProjectData, UpsertProjectErrors, UpsertProjectResponses } from './types.gen';
+import type { AckOpsItemData, AckOpsItemErrors, AckOpsItemResponses, AddToGateWhitelistData, AddToGateWhitelistErrors, AddToGateWhitelistResponses, AnswerOpsQaQuestionData, AnswerOpsQaQuestionErrors, AnswerOpsQaQuestionResponses, AnswerOpsQuestionData, AnswerOpsQuestionErrors, AnswerOpsQuestionResponses, ApproveEventData, ApproveEventErrors, ApproveEventResponses, AskOpsQaQuestionData, AskOpsQaQuestionErrors, AskOpsQaQuestionResponses, AskOpsQuestionsData, AskOpsQuestionsErrors, AskOpsQuestionsResponses, CancelOpsQuestionData, CancelOpsQuestionErrors, CancelOpsQuestionResponses, CreateAlertRuleData, CreateAlertRuleErrors, CreateAlertRuleResponses, CreateAttributeData, CreateAttributeErrors, CreateAttributeResponses, CreateConfigData, CreateConfigErrors, CreateConfigResponses, CreateConnectorData, CreateConnectorErrors, CreateConnectorResponses, CreateEventData, CreateEventErrors, CreateEventResponses, CreateExperimentData, CreateExperimentErrors, CreateExperimentReadoutData, CreateExperimentReadoutErrors, CreateExperimentReadoutResponses, CreateExperimentResponses, CreateGateData, CreateGateErrors, CreateGateResponses, CreateGateTemplateData, CreateGateTemplateErrors, CreateGateTemplateResponses, CreateI18nDraftData, CreateI18nDraftErrors, CreateI18nDraftResponses, CreateI18nProfileData, CreateI18nProfileErrors, CreateI18nProfileResponses, CreateKeyData, CreateKeyErrors, CreateKeyResponses, CreateKillswitchData, CreateKillswitchErrors, CreateKillswitchResponses, CreateMetricData, CreateMetricErrors, CreateMetricResponses, CreateOpsAttachmentData, CreateOpsAttachmentErrors, CreateOpsAttachmentResponses, CreateOpsCommentData, CreateOpsCommentErrors, CreateOpsCommentMediaData, CreateOpsCommentMediaErrors, CreateOpsCommentMediaResponses, CreateOpsCommentResponses, CreateOpsInvestigationData, CreateOpsInvestigationErrors, CreateOpsInvestigationResponses, CreateOpsItemData, CreateOpsItemErrors, CreateOpsItemResponses, CreateOpsQaNoteData, CreateOpsQaNoteErrors, CreateOpsQaNoteResponses, CreateOpsRoutingRuleData, CreateOpsRoutingRuleErrors, CreateOpsRoutingRuleResponses, CreatePublicBugData, CreatePublicBugErrors, CreatePublicBugResponses, CreatePublicFeatureRequestData, CreatePublicFeatureRequestErrors, CreatePublicFeatureRequestResponses, CreateTriggerConnectorData, CreateTriggerConnectorErrors, CreateTriggerConnectorResponses, CreateUniverseData, CreateUniverseErrors, CreateUniverseResponses, DeleteAlertRuleData, DeleteAlertRuleErrors, DeleteAlertRuleResponses, DeleteAttributeData, DeleteAttributeErrors, DeleteAttributeResponses, DeleteConfigData, DeleteConfigErrors, DeleteConfigResponses, DeleteConnectorData, DeleteConnectorErrors, DeleteConnectorResponses, DeleteEventData, DeleteEventErrors, DeleteEventResponses, DeleteExperimentData, DeleteExperimentErrors, DeleteExperimentResponses, DeleteGateData, DeleteGateErrors, DeleteGateResponses, DeleteGateTemplateData, DeleteGateTemplateErrors, DeleteGateTemplateResponses, DeleteI18nDraftData, DeleteI18nDraftErrors, DeleteI18nDraftResponses, DeleteI18nKeyData, DeleteI18nKeyErrors, DeleteI18nKeyResponses, DeleteI18nProfileData, DeleteI18nProfileErrors, DeleteI18nProfileResponses, DeleteKillswitchData, DeleteKillswitchErrors, DeleteKillswitchResponses, DeleteMetricData, DeleteMetricErrors, DeleteMetricResponses, DeleteOpsItemData, DeleteOpsItemErrors, DeleteOpsItemResponses, DeleteUniverseData, DeleteUniverseErrors, DeleteUniverseResponses, DisableGateData, DisableGateErrors, DisableGateResponses, DiscardConfigDraftData, DiscardConfigDraftErrors, DiscardConfigDraftResponses, EnableGateData, EnableGateErrors, EnableGateResponses, FileErrorTicketData, FileErrorTicketErrors, FileErrorTicketResponses, FireConnectorData, FireConnectorErrors, FireConnectorResponses, GetAttributeData, GetAttributeErrors, GetAttributeResponses, GetConfigData, GetConfigErrors, GetConfigResponses, GetConnectorData, GetConnectorErrors, GetConnectorResponses, GetCurrentProjectData, GetCurrentProjectErrors, GetCurrentProjectResponses, GetEntityTagsData, GetEntityTagsErrors, GetEntityTagsResponses, GetErrorData, GetErrorErrors, GetErrorResponses, GetErrorSeriesData, GetErrorSeriesErrors, GetErrorSeriesResponses, GetEventData, GetEventErrors, GetEventResponses, GetExperimentData, GetExperimentErrors, GetExperimentReadoutData, GetExperimentReadoutErrors, GetExperimentReadoutResponses, GetExperimentResponses, GetExperimentResultsData, GetExperimentResultsErrors, GetExperimentResultsResponses, GetExperimentTimeseriesData, GetExperimentTimeseriesErrors, GetExperimentTimeseriesResponses, GetGateData, GetGateErrors, GetGateResponses, GetGateTemplateData, GetGateTemplateErrors, GetGateTemplateResponses, GetGateWhitelistData, GetGateWhitelistErrors, GetGateWhitelistResponses, GetKillswitchData, GetKillswitchErrors, GetKillswitchResponses, GetMetricData, GetMetricErrors, GetMetricResponses, GetMetricSeriesData, GetMetricSeriesErrors, GetMetricSeriesResponses, GetOpsItemData, GetOpsItemErrors, GetOpsItemResponses, GetProjectData, GetProjectErrors, GetProjectResponses, LinkPrToOpsItemData, LinkPrToOpsItemErrors, LinkPrToOpsItemResponses, ListAlertRulesData, ListAlertRulesErrors, ListAlertRulesResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAttributesData, ListAttributesErrors, ListAttributesResponses, ListConfigActivityData, ListConfigActivityErrors, ListConfigActivityResponses, ListConfigsData, ListConfigsErrors, ListConfigsResponses, ListConfigVersionsData, ListConfigVersionsErrors, ListConfigVersionsResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListErrorsData, ListErrorsErrors, ListErrorsResponses, ListEventsData, ListEventsErrors, ListEventsResponses, ListExperimentsData, ListExperimentsErrors, ListExperimentsResponses, ListGateActivityData, ListGateActivityErrors, ListGateActivityResponses, ListGatesData, ListGatesErrors, ListGatesResponses, ListGateTemplatesData, ListGateTemplatesErrors, ListGateTemplatesResponses, ListI18nDraftKeysData, ListI18nDraftKeysErrors, ListI18nDraftKeysResponses, ListI18nDraftsData, ListI18nDraftsErrors, ListI18nDraftsResponses, ListI18nKeysData, ListI18nKeysErrors, ListI18nKeysResponses, ListI18nProfilesData, ListI18nProfilesErrors, ListI18nProfilesResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListKillswitchesData, ListKillswitchesErrors, ListKillswitchesResponses, ListMetricExperimentsData, ListMetricExperimentsErrors, ListMetricExperimentsResponses, ListMetricsData, ListMetricsErrors, ListMetricsResponses, ListOpsActivityData, ListOpsActivityErrors, ListOpsActivityResponses, ListOpsAgentsData, ListOpsAgentsErrors, ListOpsAgentsResponses, ListOpsCommentsData, ListOpsCommentsErrors, ListOpsCommentsResponses, ListOpsInvestigationsData, ListOpsInvestigationsErrors, ListOpsInvestigationsResponses, ListOpsItemsData, ListOpsItemsErrors, ListOpsItemsResponses, ListOpsQaNotesData, ListOpsQaNotesErrors, ListOpsQaNotesResponses, ListOpsQaQuestionsData, ListOpsQaQuestionsErrors, ListOpsQaQuestionsResponses, ListOpsQuestionsData, ListOpsQuestionsErrors, ListOpsQuestionsResponses, ListOpsRoutingRulesData, ListOpsRoutingRulesErrors, ListOpsRoutingRulesResponses, ListSlackChannelsData, ListSlackChannelsErrors, ListSlackChannelsResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListUniversesData, ListUniversesErrors, ListUniversesResponses, NotifyOpsData, NotifyOpsErrors, NotifyOpsResponses, PublishConfigDraftData, PublishConfigDraftErrors, PublishConfigDraftResponses, PublishI18nProfileData, PublishI18nProfileErrors, PublishI18nProfileResponses, PushI18nKeysData, PushI18nKeysErrors, PushI18nKeysResponses, ReanalyzeExperimentData, ReanalyzeExperimentErrors, ReanalyzeExperimentResponses, RemoveFromGateWhitelistData, RemoveFromGateWhitelistErrors, RemoveFromGateWhitelistResponses, ResolveErrorData, ResolveErrorErrors, ResolveErrorResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, SaveConfigDraftData, SaveConfigDraftErrors, SaveConfigDraftResponses, SearchResourcesData, SearchResourcesErrors, SearchResourcesResponses, SetEntityTagsData, SetEntityTagsErrors, SetEntityTagsResponses, SetExperimentMetricsData, SetExperimentMetricsErrors, SetExperimentMetricsResponses, SetExperimentStatusData, SetExperimentStatusErrors, SetExperimentStatusResponses, SetGateWhitelistData, SetGateWhitelistErrors, SetGateWhitelistResponses, SetI18nLabelData, SetI18nLabelErrors, SetI18nLabelResponses, SetKillswitchSwitchData, SetKillswitchSwitchErrors, SetKillswitchSwitchResponses, SetKillswitchValueData, SetKillswitchValueErrors, SetKillswitchValueResponses, TestConnectorData, TestConnectorErrors, TestConnectorResponses, ToggleKillswitchData, ToggleKillswitchErrors, ToggleKillswitchResponses, UnarchiveMetricData, UnarchiveMetricErrors, UnarchiveMetricResponses, UnsetKillswitchSwitchData, UnsetKillswitchSwitchErrors, UnsetKillswitchSwitchResponses, UpdateAlertData, UpdateAlertErrors, UpdateAlertResponses, UpdateAlertRuleData, UpdateAlertRuleErrors, UpdateAlertRuleResponses, UpdateAttributeData, UpdateAttributeErrors, UpdateAttributeResponses, UpdateConfigData, UpdateConfigErrors, UpdateConfigResponses, UpdateConfigSchemaData, UpdateConfigSchemaErrors, UpdateConfigSchemaResponses, UpdateConnectorData, UpdateConnectorErrors, UpdateConnectorResponses, UpdateEntityTagsData, UpdateEntityTagsErrors, UpdateEntityTagsResponses, UpdateErrorStatusData, UpdateErrorStatusErrors, UpdateErrorStatusResponses, UpdateEventData, UpdateEventErrors, UpdateEventResponses, UpdateExperimentData, UpdateExperimentErrors, UpdateExperimentResponses, UpdateGateData, UpdateGateErrors, UpdateGateResponses, UpdateGateTemplateData, UpdateGateTemplateErrors, UpdateGateTemplateResponses, UpdateI18nDraftData, UpdateI18nDraftErrors, UpdateI18nDraftResponses, UpdateI18nKeyData, UpdateI18nKeyErrors, UpdateI18nKeyResponses, UpdateKeyData, UpdateKeyErrors, UpdateKeyResponses, UpdateKillswitchData, UpdateKillswitchErrors, UpdateKillswitchResponses, UpdateMetricData, UpdateMetricErrors, UpdateMetricResponses, UpdateOpsGroupData, UpdateOpsGroupErrors, UpdateOpsGroupResponses, UpdateOpsInvestigationData, UpdateOpsInvestigationErrors, UpdateOpsInvestigationResponses, UpdateOpsItemData, UpdateOpsItemErrors, UpdateOpsItemResponses, UpdateOpsLinksData, UpdateOpsLinksErrors, UpdateOpsLinksResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTriggerConnectorData, UpdateTriggerConnectorErrors, UpdateTriggerConnectorResponses, UpdateUniverseData, UpdateUniverseErrors, UpdateUniverseResponses, UpsertI18nDraftKeyData, UpsertI18nDraftKeyErrors, UpsertI18nDraftKeyResponses, UpsertI18nKeysData, UpsertI18nKeysErrors, UpsertI18nKeysResponses, UpsertProjectData, UpsertProjectErrors, UpsertProjectResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -293,7 +293,7 @@ export const getExperiment = <ThrowOnError extends boolean = false>(options: Opt
  *
  * Partial update. `allocation_pct`, `groups`, `salt`, `universe`, `params` are **immutable while running** — returns `409` if you try. Stop the experiment first.
  *
- * Editing `groups` while in `draft` is fine; weights must still sum to 10000.
+ * Editing `groups` while in `draft` is fine; weights must sum to `10000 − reserved_headroom`.
  *
  * **Use cases**
  *
@@ -1230,7 +1230,11 @@ export const approveEvent = <ThrowOnError extends boolean = false>(options: Opti
 /**
  * List the operational queue
  *
- * Returns the unified ops queue (bugs, feature requests, errors, alerts, measurement plans) in work order — highest priority first, oldest first within a priority — so consumers work it top-down. Filter by `type` and/or `status`, and cap with `limit`. Human-gated holding states (items awaiting human sign-off in the dashboard) are never returned by `all`/default status.
+ * Returns the unified ops queue (bugs, feature requests, errors, alerts, measurement plans) in work order — highest priority first, oldest first within a priority — so consumers work it top-down. Every filter is applied in SQL before paging, and filters combine with AND. Human-gated holding states (items awaiting human sign-off in the dashboard) are never returned by `all`/default status.
+ *
+ * **Filters:** `type` (one item type), `status` (one lifecycle status, or `unresolved` — everything not yet `resolved`/`wont_fix`), `priority` (one triage priority), `owner` (one person or agent), `reporter` (one filer's email), `closedSince` (drop items closed before a time), and `scope=ready` — the items ready to be picked up right now: `open`, with nobody working them (no open run), and either unowned or reopened (sent back to `open` after an earlier run finished).
+ *
+ * **Paging:** `limit` is the page size and `offset` the number of items to skip. The order is stable, so walk the queue with `offset += limit`; a page shorter than `limit` is the last one.
  *
  * **Use case:** Pull the open queue to triage — e.g. every `bug` still `open` — before working items down one by one.
  */
@@ -1273,6 +1277,8 @@ export const createOpsItem = <ThrowOnError extends boolean = false>(options: Opt
  *
  * The project is the key's own project; there is no `X-Project-Id` to pass and no way to file into someone else's queue. Repeat submissions of the same title dedupe against the open ticket already tracking it, which returns `200` with `deduped: true` instead of filing again.
  *
+ * Send a `dedupKey` to own that grain yourself — the same key from a monitor, a job, or a retried install re-triggers its open ticket: the ticket's fields are refreshed from the new payload and a "re-triggered" comment is appended (`200` with `deduped: true, updated: true`), so one recurring failure stays one ticket with its history intact.
+ *
  * This endpoint is served by the Shipeasy **edge worker** (`api.shipeasy.ai`), not the admin API — see `servers` below.
  *
  * **Use case:** `shipeasy setup` fails on a customer's machine and self-reports the failure with the user's consent — `{ "title": "Setup failed at Feature installs", "stepsToReproduce": "…", "actualResult": "…" }`.
@@ -1292,7 +1298,7 @@ export const createPublicBug = <ThrowOnError extends boolean = false>(options: O
  *
  * Files one feature request onto a project's queue, awaiting human approval. The feature-request counterpart to `POST /ops/bug`, with the same three gates: a `client` key carrying `tickets:public_create`, a project that has opted in, and a `pending_approval` state forced server-side.
  *
- * The project is the key's own project; there is no `X-Project-Id` to pass. Repeat submissions of the same title dedupe against the open ticket already tracking it, which returns `200` with `deduped: true` instead of filing again.
+ * The project is the key's own project; there is no `X-Project-Id` to pass. Repeat submissions of the same title dedupe against the open ticket already tracking it, which returns `200` with `deduped: true` instead of filing again. A `dedupKey` works exactly as on `POST /ops/bug`: a repeat carrying the same key refreshes the open ticket and comments that it was re-triggered.
  *
  * This endpoint is served by the Shipeasy **edge worker** (`api.shipeasy.ai`), not the admin API — see `servers` below.
  *
@@ -1326,7 +1332,12 @@ export const deleteOpsItem = <ThrowOnError extends boolean = false>(options: Opt
  *
  * Fetch a single queue item by its per-project `number` or full id.
  *
- * **Use case:** Inspect one item's full detail before updating its status or linking a PR.
+ * An item linked to others (blocked by / blocking / duplicate of) carries its `group`: every connected item, and the `master` agent runs work through. Pass `include=linked` to inline the other members' content as `linkedItems`, so one call reads the whole group.
+ *
+ * **Use cases**
+ *
+ * - **Inspect one item** before updating its status or linking a PR.
+ * - **Pick up linked work** — `include=linked` reads the master and everything tied to it before a run starts.
  */
 export const getOpsItem = <ThrowOnError extends boolean = false>(options: Options<GetOpsItemData, ThrowOnError>): RequestResult<GetOpsItemResponses, GetOpsItemErrors, ThrowOnError> => (options.client ?? client).get<GetOpsItemResponses, GetOpsItemErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -1360,13 +1371,61 @@ export const updateOpsItem = <ThrowOnError extends boolean = false>(options: Opt
 /**
  * Link a fixing PR
  *
- * Record the pull request that fixes a queue item (and clears the link with `prNumber: null`).
+ * Record a pull request that fixes a queue item. An item can carry several
+ * PRs: each call ADDS one (re-linking a linked PR is a no-op), `unlink: true`
+ * removes one, and `prNumber: null` clears them all. `connectorData.github.prs`
+ * lists them; `github.pr` is the primary one (newest open, else newest merged).
  *
  * **Use case:** Tie the fixing PR to the item so closing the PR can flip it to ready_for_qa.
  */
 export const linkPrToOpsItem = <ThrowOnError extends boolean = false>(options: Options<LinkPrToOpsItemData, ThrowOnError>): RequestResult<LinkPrToOpsItemResponses, LinkPrToOpsItemErrors, ThrowOnError> => (options.client ?? client).post<LinkPrToOpsItemResponses, LinkPrToOpsItemErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/ops/{handle}/link-pr',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Link related items
+ *
+ * Edits how this queue item relates to others: which items block it ("blocked by"), which items it blocks ("blocking"), and which item it duplicates ("duplicate of"). The blocker lists are incremental — already-linked or never-linked items are no-ops and every other relation is left as is; `duplicateOf` sets or (with `null`) clears the one canonical item. An item with a blocker that is not `resolved`/`wont_fix` sits in the dashboard's Blocked lane. The relations show on `ops get` as `blockedBy` / `blocking` / `duplicateOf` / `duplicates`.
+ *
+ * A link that would make an item block or duplicate itself — directly or through a chain — is rejected with `409`; an item from another project doesn't resolve (`404`). Marking an item a duplicate of a still-open item closes it as `wont_fix`; if the canonical is already `resolved`/`wont_fix` (or the item itself is already closed) its status is left alone.
+ *
+ * **Use cases**
+ *
+ * - **This item can't move until #12 lands** — `{ "addBlockedBy": ["12"] }`.
+ * - **Split work: this item gates #20 and #21** — `{ "addBlocking": ["20", "21"] }`.
+ * - **The dependency turned out not to be one** — `{ "removeBlockedBy": ["12"] }`.
+ * - **Same bug was filed twice** — `{ "duplicateOf": "8" }` on the newer item — it closes as `wont_fix` while #8 is open.
+ */
+export const updateOpsLinks = <ThrowOnError extends boolean = false>(options: Options<UpdateOpsLinksData, ThrowOnError>): RequestResult<UpdateOpsLinksResponses, UpdateOpsLinksErrors, ThrowOnError> => (options.client ?? client).patch<UpdateOpsLinksResponses, UpdateOpsLinksErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/links',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update a linked group
+ *
+ * Applies `status` and/or `priority` to every item in this item's link group — the items tied to it, directly or through a chain, by blocked-by / blocking / duplicate-of links (see `group` on `ops get`). Each member goes through the normal item update, so activity, audit, run close-out and the error sync happen exactly as for a one-item edit. Members already in the requested state are left alone. An item with no links is a group of one.
+ *
+ * **Use cases**
+ *
+ * - **The fix landed for the whole group** — `{ "status": "resolved" }` on any member.
+ * - **Drop the group** — `{ "status": "wont_fix" }`.
+ * - **Escalate it together** — `{ "priority": "critical" }`.
+ */
+export const updateOpsGroup = <ThrowOnError extends boolean = false>(options: Options<UpdateOpsGroupData, ThrowOnError>): RequestResult<UpdateOpsGroupResponses, UpdateOpsGroupErrors, ThrowOnError> => (options.client ?? client).patch<UpdateOpsGroupResponses, UpdateOpsGroupErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/group',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -1385,18 +1444,34 @@ export const linkPrToOpsItem = <ThrowOnError extends boolean = false>(options: O
  * time since the run started).
  *
  * **AI ack.** Pass `agent` with your own agent type (`claude`, `cursor`,
- * `copilot`, `jules`; `gemini` aliases `jules`) and, when you have one, the
+ * `copilot`, `jules`; `gemini` is also accepted and is normalized to `jules` on receipt) and, when you have one, the
  * run's `sessionId` so the dashboard can deep-link to the session. If the
  * project has no connected trigger connector of that type the call fails
  * with `AGENT_NOT_CONNECTED` — list the available agents with `ops agents
  * list` and use one of those (or connect the agent under Settings →
  * Triggers).
  *
+ * **Launching.** When the named agent has a connected trigger and you pass
+ * no `sessionId`, the ack also fires that trigger — a new provider run
+ * starts working the item. Pass `launch: false` to only claim the item and
+ * record the run (you are doing the work yourself), without starting one.
+ * A launch on an item linked to others (see `group` on `ops get`) is only
+ * allowed on the group's master — any other member answers `409`
+ * `INVALID_TRANSITION`, naming the master to ack instead.
+ *
  * **Completion.** The run closes automatically on the loop's final actions —
  * linking the fixing PR (`link-pr`), an ops-notify escalation, or a
  * completion status change (`ready_for_qa`/`resolved`) — and the dashboard
  * then shows the run result (final action, PR, duration, session link).
- * A repeat ack supersedes the previous open run.
+ *
+ * **One session per item.** An AI ack on an item whose open run belongs to
+ * another live agent session answers `409` `ALREADY_EXISTS`, naming that
+ * run — skip the item, the other session is working it. Your own run is
+ * adopted, not refused: re-ack with its `runId` (a fired run's prompt names
+ * it; a previous ack returned it) or the same `sessionId`. A run a trigger
+ * fire claimed is adopted by the FIRST session to ack it. A run silent past
+ * the stuck-run threshold (6h), or `takeover: true`, is superseded instead.
+ * A human ack never replaces an open agent run.
  *
  * **Use case:** Call this first when picking an item up, so the team sees
  * who/what is working on it in real time.
@@ -1436,7 +1511,9 @@ export const listOpsInvestigations = <ThrowOnError extends boolean = false>(opti
  * (`kind: investigated`), a blocking question for the team (`kind:
  * question`), or how to verify the fix (`kind: ready_for_qa` with
  * `qaNotes`). Append-only and create-only, so it is safe for restricted ops
- * keys.
+ * keys. For a decision between options you can name, ask a structured
+ * question instead (`ops questions ask`) — it is answerable in one tap and
+ * the answer comes back to your run.
  *
  * **Use case:** After working an item, leave a findings write-up (summary,
  * markdown findings, sources inspected, confidence) so the team — and the
@@ -1469,6 +1546,196 @@ export const createOpsInvestigation = <ThrowOnError extends boolean = false>(opt
 export const updateOpsInvestigation = <ThrowOnError extends boolean = false>(options: Options<UpdateOpsInvestigationData, ThrowOnError>): RequestResult<UpdateOpsInvestigationResponses, UpdateOpsInvestigationErrors, ThrowOnError> => (options.client ?? client).patch<UpdateOpsInvestigationResponses, UpdateOpsInvestigationErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/ops/{handle}/investigation/{investigationId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List an item's questions
+ *
+ * The structured questions asked on a queue item, with their answers —
+ * newest first (max 100). Pull this to read the answers to questions you
+ * asked: an answered question reads `status: completed` and carries
+ * `answer.selected` (the option labels picked) and `answer.other` (the
+ * free-text "Other" reply, or `null`).
+ *
+ * **Use case:** You asked with `delivery: poll` from a live session — poll
+ * this until your questions read `completed`, then continue with the answers.
+ */
+export const listOpsQuestions = <ThrowOnError extends boolean = false>(options: Options<ListOpsQuestionsData, ThrowOnError>): RequestResult<ListOpsQuestionsResponses, ListOpsQuestionsErrors, ThrowOnError> => (options.client ?? client).get<ListOpsQuestionsResponses, ListOpsQuestionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/questions',
+    ...options
+});
+
+/**
+ * Ask the team questions about an item
+ *
+ * Ask 1–4 structured questions about a queue item — the way to get a
+ * decision from a person when the implementation needs one. Each question
+ * is the `AskUserQuestion` shape: a short `header` chip, the full
+ * `question`, 2–4 `options` (`label` + `description`), and `multiSelect`
+ * (checkboxes instead of radios). The person can always answer "Other" in
+ * free text, so never add an "Other" option yourself. The questions render
+ * at the very top of the item's detail panel and mark the row in the queue.
+ *
+ * **Delivery.** `resume` re-fires your trigger-connector run on the item
+ * once every question it asked is answered, continuing the same run record
+ * with the answers in the prompt — stop after asking. `poll` fires nothing;
+ * poll `GET .../questions` instead. Omitted, it is `resume` when `runId`
+ * names a run launched through a trigger connector, else `poll`.
+ *
+ * **Use case:** Blocked on a product decision (which behaviour to keep,
+ * which of two fixes to ship) — ask instead of guessing, then wait for the
+ * answer.
+ */
+export const askOpsQuestions = <ThrowOnError extends boolean = false>(options: Options<AskOpsQuestionsData, ThrowOnError>): RequestResult<AskOpsQuestionsResponses, AskOpsQuestionsErrors, ThrowOnError> => (options.client ?? client).post<AskOpsQuestionsResponses, AskOpsQuestionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/questions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Answer a question
+ *
+ * Answer one open question on a queue item — pick option labels in
+ * `selected` (exactly one unless the question is `multiSelect`) and/or
+ * write a free-text `other`. The question moves to `completed`. When it was
+ * the last open question of a `resume` run, that agent is re-fired on the
+ * item with every answer. A person's action: never allow-listed for
+ * restricted ops keys.
+ *
+ * **Use case:** Unblock an agent from the CLI instead of the dashboard.
+ */
+export const answerOpsQuestion = <ThrowOnError extends boolean = false>(options: Options<AnswerOpsQuestionData, ThrowOnError>): RequestResult<AnswerOpsQuestionResponses, AnswerOpsQuestionErrors, ThrowOnError> => (options.client ?? client).post<AnswerOpsQuestionResponses, AnswerOpsQuestionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/questions/{questionId}/answer',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Withdraw a question
+ *
+ * Withdraw one open question you asked — it no longer needs an answer
+ * (you found it out yourself, or the item moved on). The question moves to
+ * `cancelled` and leaves the detail panel. Withdrawing the last open
+ * question of a run delivers nothing.
+ *
+ * **Use case:** You asked, then answered it yourself from the code — take
+ * it off the person's plate.
+ */
+export const cancelOpsQuestion = <ThrowOnError extends boolean = false>(options: Options<CancelOpsQuestionData, ThrowOnError>): RequestResult<CancelOpsQuestionResponses, CancelOpsQuestionErrors, ThrowOnError> => (options.client ?? client).post<CancelOpsQuestionResponses, CancelOpsQuestionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/questions/{questionId}/cancel',
+    ...options
+});
+
+/**
+ * List an item's QA notes
+ *
+ * The typed QA notes on a queue item, newest first (max 200) — narrowing,
+ * clarification, verification and correction notes, each with its author and
+ * time. They are separate from the comment thread: read these to learn the
+ * CURRENT QA state of a ticket (what remains failing, what "fixed" now means,
+ * the last verification verdict) without parsing prose comments.
+ *
+ * **Use case:** A coding agent picks an item up and checks the latest
+ * `verification` verdict and any `narrowing` note before touching the code.
+ */
+export const listOpsQaNotes = <ThrowOnError extends boolean = false>(options: Options<ListOpsQaNotesData, ThrowOnError>): RequestResult<ListOpsQaNotesResponses, ListOpsQaNotesErrors, ThrowOnError> => (options.client ?? client).get<ListOpsQaNotesResponses, ListOpsQaNotesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/qa-notes',
+    ...options
+});
+
+/**
+ * Add a QA note to an item
+ *
+ * Append one typed QA note to a queue item. `kind` is `narrowing` (what now
+ * passes vs what still fails), `clarification` (what "fixed" now means),
+ * `verification` (requires a `verdict` of `pass` or `fail`, and `body` says
+ * what was checked) or `correction` (withdraws an earlier framing). Notes
+ * are append-only and appear in the item's QA notes section, not in the
+ * comment thread. The author is the caller's identity; pass `agent` to
+ * record the note as written by that agent type's QA automation. A `fail` verdict never changes the item's
+ * status by itself: the dashboard offers an explicit "Reopen item" action,
+ * and `ops update --status open` does the same from the CLI.
+ *
+ * **Use case:** QA automation records "verified on production: FAIL, the
+ * second facet still errors" as data an agent can read back.
+ */
+export const createOpsQaNote = <ThrowOnError extends boolean = false>(options: Options<CreateOpsQaNoteData, ThrowOnError>): RequestResult<CreateOpsQaNoteResponses, CreateOpsQaNoteErrors, ThrowOnError> => (options.client ?? client).post<CreateOpsQaNoteResponses, CreateOpsQaNoteErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/qa-notes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List an item's QA questions
+ *
+ * The questions put to QA on a queue item, newest first (max 100), each with
+ * QA's answer once given. `ops get` returns the same list as `qaQuestions`.
+ *
+ * **Use case:** After asking QA, poll this until the question reads `answered`.
+ */
+export const listOpsQaQuestions = <ThrowOnError extends boolean = false>(options: Options<ListOpsQaQuestionsData, ThrowOnError>): RequestResult<ListOpsQaQuestionsResponses, ListOpsQaQuestionsErrors, ThrowOnError> => (options.client ?? client).get<ListOpsQaQuestionsResponses, ListOpsQaQuestionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/qa-questions',
+    ...options
+});
+
+/**
+ * Ask QA a question about an item
+ *
+ * Put a question to QA on a queue item — use it when you do not know the
+ * answer yourself and QA's decision unblocks the work. The question is open
+ * until QA answers it; it surfaces on the item (`ops get` → `qaQuestions`)
+ * and in the project-wide QA backlog (`ops list --qa-questions open`). The
+ * asker is the caller's identity; pass `agent` to record it as asked by that
+ * agent type.
+ *
+ * **Use case:** A coding agent cannot tell whether an empty state is a bug or
+ * intended; it asks QA and carries on with the rest of the item.
+ */
+export const askOpsQaQuestion = <ThrowOnError extends boolean = false>(options: Options<AskOpsQaQuestionData, ThrowOnError>): RequestResult<AskOpsQaQuestionResponses, AskOpsQaQuestionErrors, ThrowOnError> => (options.client ?? client).post<AskOpsQaQuestionResponses, AskOpsQaQuestionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/qa-questions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Answer a QA question
+ *
+ * Answer one open QA question. The question moves to `answered` and the
+ * answer shows on the item. An answered question cannot be answered again
+ * (409); ask a new one to follow up. The answerer is the caller's identity;
+ * pass `agent` to record it as answered by that agent type's QA automation.
+ *
+ * **Use case:** QA reads the backlog, checks the build, and replies "hide it —
+ * archived metrics never show on readouts".
+ */
+export const answerOpsQaQuestion = <ThrowOnError extends boolean = false>(options: Options<AnswerOpsQaQuestionData, ThrowOnError>): RequestResult<AnswerOpsQaQuestionResponses, AnswerOpsQaQuestionErrors, ThrowOnError> => (options.client ?? client).post<AnswerOpsQaQuestionResponses, AnswerOpsQaQuestionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/qa-questions/{questionId}/answer',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -1522,6 +1789,112 @@ export const listOpsComments = <ThrowOnError extends boolean = false>(options: O
 export const createOpsComment = <ThrowOnError extends boolean = false>(options: Options<CreateOpsCommentData, ThrowOnError>): RequestResult<CreateOpsCommentResponses, CreateOpsCommentErrors, ThrowOnError> => (options.client ?? client).post<CreateOpsCommentResponses, CreateOpsCommentErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/ops/{handle}/comments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Attach a screenshot to an item
+ *
+ * Attach a screenshot, screen recording, or file to a bug or feature request, so the fixer sees what QA saw instead of reconstructing it from measurements. Send the bytes as `contentBase64` (a bare base64 string or a `data:` URI) or give a public https `url` for the server to fetch — exactly one of the two. The `kind` (`screenshot` | `recording` | `file`) defaults from the media type. Up to 25 MiB.
+ *
+ * Error and alert tickets cannot carry attachments (`422`). Append-only: there is no replace or delete, so it is safe for restricted ops keys.
+ *
+ * **Use case:** A QA lane captures a screenshot at verification time and the filing agent attaches it to the bug or feature request it just filed.
+ */
+export const createOpsAttachment = <ThrowOnError extends boolean = false>(options: Options<CreateOpsAttachmentData, ThrowOnError>): RequestResult<CreateOpsAttachmentResponses, CreateOpsAttachmentErrors, ThrowOnError> => (options.client ?? client).post<CreateOpsAttachmentResponses, CreateOpsAttachmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/attachments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Upload an image to embed in a comment
+ *
+ * Upload an image to embed in a comment on a queue item. Takes the same body as the attachment upload (`contentBase64` or `url`). The response carries a relative `url` — reference it from the comment body as a markdown image (`![caption](url)`) in `ops comments create`, so an evidence comment shows the screenshot inline.
+ *
+ * Append-only, safe for restricted ops keys.
+ *
+ * **Use case:** Put a screenshot inside an evidence comment rather than on the item itself.
+ */
+export const createOpsCommentMedia = <ThrowOnError extends boolean = false>(options: Options<CreateOpsCommentMediaData, ThrowOnError>): RequestResult<CreateOpsCommentMediaResponses, CreateOpsCommentMediaErrors, ThrowOnError> => (options.client ?? client).post<CreateOpsCommentMediaResponses, CreateOpsCommentMediaErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/{handle}/comment-media',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List queue activity
+ *
+ * The activity feed of the project's queue items, newest first: every status,
+ * priority, owner, tag and content change, every comment, every alert
+ * acknowledgement, and every pull-request event (`linked`, `unlinked`,
+ * `merged`, `closed` unmerged). Each entry names the item it belongs to, who
+ * made the change (or `github` for a merge/close the webhook observed) and
+ * when.
+ *
+ * Filter to one item with `item`, to one kind of change with `field`, and to a
+ * time window with `since` / `until` (ISO-8601, exclusive). Pass
+ * `field=pr` and `since` to learn which PRs were added to an item since you
+ * last looked, instead of diffing status lists.
+ *
+ * **Use case:** A QA agent polling for "what PRs were linked to item 7 since T?"
+ * or "what changed on this project since T?".
+ */
+export const listOpsActivity = <ThrowOnError extends boolean = false>(options?: Options<ListOpsActivityData, ThrowOnError>): RequestResult<ListOpsActivityResponses, ListOpsActivityErrors, ThrowOnError> => (options?.client ?? client).get<ListOpsActivityResponses, ListOpsActivityErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/activity',
+    ...options
+});
+
+/**
+ * List tag automation rules
+ *
+ * The project's tag automation rules in evaluation order. Each rule matches
+ * newly filed queue items by tag (or ticket type) and applies its actions —
+ * assign a person, launch a connected coding agent, set status or priority,
+ * subscribe emails.
+ *
+ * **Use case:** Check what automation already exists before adding a rule, so a new one doesn't duplicate or shadow it.
+ */
+export const listOpsRoutingRules = <ThrowOnError extends boolean = false>(options?: Options<ListOpsRoutingRulesData, ThrowOnError>): RequestResult<ListOpsRoutingRulesResponses, ListOpsRoutingRulesErrors, ThrowOnError> => (options?.client ?? client).get<ListOpsRoutingRulesResponses, ListOpsRoutingRulesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/routing-rules',
+    ...options
+});
+
+/**
+ * Create a tag automation rule
+ *
+ * Appends one rule after the existing ones; existing rules are untouched.
+ * The rule fires on a newly filed item carrying any of `tags` (or whose type
+ * is in `types`) and applies its actions: `user` assigns a person,
+ * `connector` hands the item to a connected coding agent (launching a run,
+ * steered by `agentPrompt`), `status` / `priority` set triage fields, and
+ * `subscribers` emails people. Tags are created on first use.
+ *
+ * Returns `400` when the rule has no tag or type, or no action. Returns the
+ * full rule list after the append.
+ *
+ * **Use cases**
+ *
+ * - **Auto-fix** — tag `ai-fix` hands the item to a connected agent with a steering prompt.
+ * - **Triage** — every `error` ticket goes to `high` priority and an on-call email.
+ */
+export const createOpsRoutingRule = <ThrowOnError extends boolean = false>(options: Options<CreateOpsRoutingRuleData, ThrowOnError>): RequestResult<CreateOpsRoutingRuleResponses, CreateOpsRoutingRuleErrors, ThrowOnError> => (options.client ?? client).post<CreateOpsRoutingRuleResponses, CreateOpsRoutingRuleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/ops/routing-rules',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -2336,4 +2709,72 @@ export const searchResources = <ThrowOnError extends boolean = false>(options?: 
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/search',
     ...options
+});
+
+/**
+ * List the project's tags
+ *
+ * Returns every tag in the project — the shared roster any item (queue items, flags, configs, kill switches, metrics, tracked errors, alert rules, experiments) can carry. Sorted by name.
+ *
+ * **Use case:** See which tags already exist before tagging an item, so you reuse `ios` instead of minting `iOS-app`.
+ */
+export const listTags = <ThrowOnError extends boolean = false>(options?: Options<ListTagsData, ThrowOnError>): RequestResult<ListTagsResponses, ListTagsErrors, ThrowOnError> => (options?.client ?? client).get<ListTagsResponses, ListTagsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/tags',
+    ...options
+});
+
+/**
+ * Read an item's tags
+ *
+ * Returns the tags attached to one item. The item is addressed by kind (`entityType`) plus its handle, so the same call reads tags off a queue item, a flag, a config, a kill switch, a metric, a tracked error, an alert rule, or an experiment.
+ *
+ * **Use case:** Check an item's current tags before editing them.
+ */
+export const getEntityTags = <ThrowOnError extends boolean = false>(options: Options<GetEntityTagsData, ThrowOnError>): RequestResult<GetEntityTagsResponses, GetEntityTagsErrors, ThrowOnError> => (options.client ?? client).get<GetEntityTagsResponses, GetEntityTagsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/tags/{entityType}/{entityId}',
+    ...options
+});
+
+/**
+ * Add or remove tags on an item
+ *
+ * Edits an item's tags incrementally: attaches every name in `add` (creating project tags as needed) and detaches every name in `remove`, leaving the item's other tags untouched. Matching is case-insensitive; a name in both lists ends up removed.
+ *
+ * **Use cases**
+ *
+ * - **Add a tag** — `{ "add": ["regression"] }`.
+ * - **Swap a tag** — `{ "add": ["p1"], "remove": ["p2"] }`.
+ */
+export const updateEntityTags = <ThrowOnError extends boolean = false>(options: Options<UpdateEntityTagsData, ThrowOnError>): RequestResult<UpdateEntityTagsResponses, UpdateEntityTagsErrors, ThrowOnError> => (options.client ?? client).patch<UpdateEntityTagsResponses, UpdateEntityTagsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/tags/{entityType}/{entityId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Replace an item's tags
+ *
+ * Replaces the item's whole tag set with `tags`: names not yet in the project are created, attached names not in the list are detached, and `[]` clears every tag. Names are deduped case-insensitively, reusing an existing tag's casing (sending `iOS` when `ios` exists attaches `ios`).
+ *
+ * **Use cases**
+ *
+ * - **Tag an item** — `{ "tags": ["checkout", "ios"] }`.
+ * - **Clear tags** — `{ "tags": [] }`.
+ *
+ * To add or remove a few tags without restating the rest, use the incremental `PATCH` instead.
+ */
+export const setEntityTags = <ThrowOnError extends boolean = false>(options: Options<SetEntityTagsData, ThrowOnError>): RequestResult<SetEntityTagsResponses, SetEntityTagsErrors, ThrowOnError> => (options.client ?? client).put<SetEntityTagsResponses, SetEntityTagsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/tags/{entityType}/{entityId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
