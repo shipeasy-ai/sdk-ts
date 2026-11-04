@@ -797,6 +797,28 @@ describe("server shipeasy() — single server key, no client key", () => {
     expect(i18nCall?.key).toBe("srv_key_123");
   });
 
+  it("no `env` option → /sdk/flags sends no ?env=, so the key's bound env wins (#551)", async () => {
+    vi.resetModules();
+    const calls = stubFetchOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { shipeasy } = await import("../server");
+    await shipeasy({ serverKey: "srv_staging_key" });
+    const flagsCall = calls.find((c) => c.url.includes("/sdk/flags"));
+    expect(flagsCall).toBeTruthy();
+    expect(flagsCall?.url).not.toContain("env=");
+  });
+
+  it("explicit `env` option → /sdk/flags sends that ?env= override", async () => {
+    vi.resetModules();
+    const calls = stubFetchOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { Engine: FreshEngine } = await import("../server");
+    const engine = new FreshEngine({ apiKey: "srv_key_123", env: "staging", isNetworkEnabled: true });
+    await engine.initOnce().catch(() => {}); // the stub has no headers; we only assert the URL
+    const flagsCall = calls.find((c) => c.url.includes("/sdk/flags"));
+    expect(flagsCall?.url).toContain("/sdk/flags?env=staging");
+  });
+
   it("bootstrap tags embed no SDK key (server key must never reach the browser)", async () => {
     vi.resetModules();
     stubFetchOk();

@@ -89,6 +89,17 @@ Trailing full stops dropped from overlay copy (house style), the duplicate form
 heading removed (the sheet header already names the screen), and the grab handle
 is a real drag target.
 
+## 9.0.3 (2026-11-04)
+
+### Fixed: a staging/dev server key no longer reads prod by default
+
+The server `Engine` sent `/sdk/flags?env=prod` whenever `configure()` had no
+`env` option, and the edge honours a valid `?env=` from a server key — so a
+`staging` or `dev` server key silently read **prod** flags and configs. The SDK
+now sends `?env=` only when you set `env`; otherwise the edge reads the env the
+key is bound to. This matches the Go and Python SDKs. Setting `env` explicitly
+still overrides the key's binding, as before.
+
 ## 9.0.2 (2026-08-09)
 
 ### Fixed: bundling the server entry no longer tries to resolve `next/headers`
