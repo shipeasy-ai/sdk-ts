@@ -1,10 +1,18 @@
 # Changelog
 
+## 9.1.0 — devtools-core 1.2.0, react-native-devtools 1.1.1 (2026-11-04)
+
+- `@shipeasy/sdk`: the client devtools bridge gains an optional
+  `getKillswitch(name)`, which the overlays' Killswitches panel reads.
+- `@shipeasy/devtools-core`: `explainGateFalse` (why a flag reads `false`) and
+  the admin client refreshed against the current spec (ops list
+  `reporter` / `closedSince` / `closedAt`).
+- `@shipeasy/react-native-devtools`: pins `@shipeasy/devtools-core` 1.2.0.
+
 ## browser-devtools (2026-10-28)
 
 Overlay (`@shipeasy/browser-devtools` / hosted `se-devtools.js`) plus
-`devtools-core`; not yet released to npm. The client bridge gains an optional
-`getKillswitch`.
+`devtools-core`; released to npm in 9.1.0 above.
 
 - Added a **Killswitches** panel (force killed/live via `?se_ks_*`, live state
   read from the page's SDK).
