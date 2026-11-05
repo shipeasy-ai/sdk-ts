@@ -122,7 +122,9 @@ Production is inferred, in order:
 1. `SHIPEASY_ENV`, then `NODE_ENV` — a value of `production`/`prod` ⇒ production.
 2. When neither is set (e.g. a Cloudflare Worker, or the browser, where there is
    no native `NODE_ENV`), the SDK's own `env` option is used — and it defaults to
-   `"prod"`. So a real production deploy stays **on** by default; set `env: "dev"`
+   `"prod"` for this egress check. (The `env` option does not change which env
+   your flags are *read* from unless you set it: an unset `env` reads the server
+   key's bound env.) So a real production deploy stays **on** by default; set `env: "dev"`
    (or pass the switch explicitly) to keep a non-standard build quiet.
 
 Pass either option explicitly to override the environment default:

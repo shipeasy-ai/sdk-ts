@@ -48,6 +48,8 @@ production and OFF otherwise (prod is read from `SHIPEASY_ENV`/`NODE_ENV`, else
 the `env` option, default `"prod"`), so the SDK never phones home from dev/CI.
 Override with `isNetworkEnabled: false` (fully offline) or `disableTelemetry: true`
 (keep fetching, no usage beacons).
+Flag values are read from the env the server key is bound to; set `env` only to
+override that binding (the SDK sends `?env=` only when `env` is set).
 Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/configuration.md> ·
 <https://shipeasy-ai.github.io/sdk-ts/pages/flags.md> ·
 snippets <https://shipeasy-ai.github.io/sdk-ts/snippets/release/flags.md> ·
