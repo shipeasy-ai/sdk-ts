@@ -849,9 +849,13 @@ function parseOverrides(rawUrl: string): {
   try {
     const url = new URL(rawUrl, "http://localhost");
     for (const [k, v] of url.searchParams) {
-      if (k.startsWith("se_ks_")) {
+      // `se_gate_` / `se-gate-` are the browser SDK's aliases for `se_ks_`
+      // (readGateOverride); without them a link that forces a gate client-side
+      // rendered the server's real value into the bootstrap instead.
+      const gatePrefix = ["se_ks_", "se_gate_", "se-gate-"].find((p) => k.startsWith(p));
+      if (gatePrefix) {
         const b = parseOverrideBool(v);
-        if (b !== null) gates[k.slice(6)] = b;
+        if (b !== null) gates[k.slice(gatePrefix.length)] = b;
       } else if (k.startsWith("se_cf_")) {
         configs[k.slice(6)] = decodeOverrideConfigValue(v);
       } else if (k.startsWith("se_config_")) {
@@ -2349,7 +2353,7 @@ export async function shipeasy(opts: ShipeasyServerConfig): Promise<ShipeasyServ
     // without any middleware injecting x-se-search.
     if (opts.cookies instanceof Request) {
       const q = opts.cookies.url.split("?")[1];
-      if (q && /(^|&)se_/.test(q)) resolvedUrlOverrides = q;
+      if (q && /(^|&)se[_-]/.test(q)) resolvedUrlOverrides = q;
     }
     if (!resolvedUrlOverrides && readCookie("se_edit_labels") === "1") {
       resolvedUrlOverrides = "se_edit_labels=1";
