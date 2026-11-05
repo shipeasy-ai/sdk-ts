@@ -1,5 +1,14 @@
 # Changelog
 
+## 9.1.1 (2026-11-05)
+
+- Browser `flags.get`: after hydration a programmatic, devtools or
+  `?se_gate_` / `?se_ks_` URL override now wins over the SSR bootstrap. Before,
+  a bootstrapped page answered from `__SE_BOOTSTRAP` first, so every override
+  was silently ignored there and only worked on keyless pages.
+- Server bootstrap: `?se_gate_…` / `?se-gate-…` are accepted as aliases for
+  `?se_ks_…`, matching the browser SDK and the devtools docs.
+
 ## 9.1.0 — devtools-core 1.2.0, react-native-devtools 1.1.1 (2026-11-04)
 
 - `@shipeasy/sdk`: the client devtools bridge gains an optional

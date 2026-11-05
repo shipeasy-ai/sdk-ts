@@ -1638,6 +1638,18 @@ export class Engine {
   }
 
   /**
+   * The value a gate is FORCED to, if anything forces it: a programmatic or
+   * devtools override first, then a `?se_gate_` / `?se_ks_` URL override.
+   * `undefined` when neither applies. Emits no telemetry.
+   * @internal — the precedence seam `flags.get` shares with {@link getFlagDetail}.
+   */
+  forcedFlag(name: string): boolean | undefined {
+    const pov = this.flagOverrides.get(name);
+    if (pov !== undefined) return pov;
+    return readGateOverride(name) ?? undefined;
+  }
+
+  /**
    * Evaluate a gate and report WHY (LaunchDarkly variationDetail parity). A
    * local override OR a ?se_gate_/?se_ks_ URL override short-circuits BEFORE
    * telemetry; otherwise exactly one "gate" beacon is emitted. The server
@@ -1646,12 +1658,9 @@ export class Engine {
    * denied").
    */
   getFlagDetail(name: string): FlagDetail {
-    // 1. Local override wins and skips telemetry (mirrors the override path).
-    const pov = this.flagOverrides.get(name);
-    if (pov !== undefined) return { value: pov, reason: "OVERRIDE" };
-    // A URL override is likewise a forced value — short-circuit before telemetry.
-    const urlOv = readGateOverride(name);
-    if (urlOv !== null) return { value: urlOv, reason: "OVERRIDE" };
+    // 1. A local or URL override wins and skips telemetry (mirrors the override path).
+    const forced = this.forcedFlag(name);
+    if (forced !== undefined) return { value: forced, reason: "OVERRIDE" };
     // Single telemetry emit for every non-override path.
     this.telemetry.emit("gate", name);
     // 2. No eval result yet.
@@ -2444,10 +2453,19 @@ export const flags = {
   get(name: string, defaultValue = false): boolean {
     return safeRun("flags.get", defaultValue, () => {
       const bs = getBootstrap();
+      // After hydration an override (programmatic, devtools or `?se_gate_`)
+      // beats the SSR bootstrap, the same precedence getFlag documents. Before
+      // it, the bootstrap alone answers so the first client render matches the
+      // server's and nothing mismatches. Checking the bootstrap first left
+      // every override dead on any page the server bootstrapped.
+      if (_mountedAndReady) {
+        const forced = _client ? _client.forcedFlag(name) : (readGateOverride(name) ?? undefined);
+        if (forced !== undefined) return forced;
+      }
       if (bs !== null && name in bs.flags) return bs.flags[name];
       if (!_mountedAndReady) return defaultValue;
-      if (_client) return _client.getFlag(name, defaultValue); // includes URL overrides + evalResult
-      return readGateOverride(name) ?? defaultValue;
+      if (_client) return _client.getFlag(name, defaultValue); // evalResult (overrides handled above)
+      return defaultValue;
     });
   },
   /** Evaluate a gate and report why (value + reason). See {@link FlagDetail}. */

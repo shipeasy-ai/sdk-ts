@@ -80,7 +80,11 @@ clearOverrides(); // drop every on-the-spot override
 
 A programmatic override always **wins** over the fetched/seeded value. In the
 browser the precedence is: programmatic override > URL/devtools override
-(`?se_ks_…` / `?se_cf_…` / `?se_exp_…`) > the server's evaluation.
+(`?se_ks_…` / `?se_gate_…` / `?se_cf_…` / `?se_exp_…`) > the server's
+evaluation — including the SSR bootstrap, once the page has hydrated. On the
+server, pass the request (`cookies: request`, or `urlOverrides`) and the
+bootstrap is rendered with the URL's gate overrides already applied, so the
+first paint matches too.
 
 ## Offline snapshot (server)
 
