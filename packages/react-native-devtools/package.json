@@ -1,6 +1,6 @@
 {
   "name": "@shipeasy/react-native-devtools",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Shake-to-open Shipeasy devtools overlay for React Native / Expo apps.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://shipeasy.ai",
@@ -88,6 +88,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@shipeasy/devtools-core": "1.1.0"
+    "@shipeasy/devtools-core": "1.2.0"
   }
 }
