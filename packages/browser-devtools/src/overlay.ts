@@ -13,6 +13,7 @@ import {
 import { DevtoolsApi, DEVTOOLS_UNAUTHED_EVENT } from "./api";
 import { renderUserPanel, type UserPanelState } from "./panels/user";
 import { renderGatesPanel } from "./panels/gates";
+import { renderKillswitchesPanel } from "./panels/killswitches";
 import { renderExperimentsPanel } from "./panels/experiments";
 import { renderConfigsPanel } from "./panels/configs";
 import { renderLabelsPanel, toggleEditLabels, scanAndReplaceMarkers } from "./panels/i18n";
@@ -24,7 +25,15 @@ import { getControlsState, refreshControls, subscribeControls } from "./controls
 import { see, configureSelfReport } from "@shipeasy/devtools-core/self-report";
 import { I } from "./icons";
 
-type PanelKey = "user" | "gates" | "experiments" | "configs" | "labels" | "feedback" | "events";
+type PanelKey =
+  | "user"
+  | "gates"
+  | "killswitches"
+  | "experiments"
+  | "configs"
+  | "labels"
+  | "feedback"
+  | "events";
 type Edge = "top" | "right" | "bottom" | "left";
 
 interface OverlayState {
@@ -47,6 +56,7 @@ const PANEL_MIN_H = 460;
 
 const PANEL_MODULE: Partial<Record<PanelKey, keyof ProjectRecord["modules"]>> = {
   gates: "gates",
+  killswitches: "gates",
   configs: "configs",
   experiments: "experiments",
   labels: "translations",
@@ -57,7 +67,8 @@ const PANEL_MODULE: Partial<Record<PanelKey, keyof ProjectRecord["modules"]>> = 
 
 const TABS: Array<{ k: PanelKey; label: string; icon: string; description: string }> = [
   { k: "user", label: "User", icon: I.users, description: "props · impersonate" },
-  { k: "gates", label: "Feature Flags", icon: I.shield, description: "flags & killswitches" },
+  { k: "gates", label: "Feature Flags", icon: I.shield, description: "flag rollouts" },
+  { k: "killswitches", label: "Killswitches", icon: I.power, description: "instant off-switches" },
   { k: "experiments", label: "Experiments", icon: I.flask, description: "A/B variants" },
   { k: "configs", label: "Configs", icon: I.sliders, description: "remote values" },
   { k: "labels", label: "Translations", icon: I.book, description: "i18n strings" },
@@ -126,6 +137,7 @@ function saveOverlayState(s: OverlayState): void {
 const VALID_PANEL_KEYS: ReadonlySet<string> = new Set([
   "user",
   "gates",
+  "killswitches",
   "experiments",
   "configs",
   "labels",
@@ -334,6 +346,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
   const tabView: Record<PanelKey, ViewState> = loadTabView({
     user: { view: "all", search: "" },
     gates: { view: "page", search: "" },
+    killswitches: { view: "all", search: "" },
     experiments: { view: "page", search: "" },
     configs: { view: "page", search: "" },
     labels: { view: "page", search: "" },
@@ -356,6 +369,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
   const overridesByTab: Record<PanelKey, number> = {
     user: 0,
     gates: 0,
+    killswitches: 0,
     experiments: 0,
     configs: 0,
     labels: 0,
@@ -897,7 +911,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
         <div class="mk" title="Drag to reposition"></div>
         <div class="ti">
           <span class="title">${escapeHtml(tabDef.label)}</span>
-          <span class="sub">${escapeHtml(sub)}</span>
+          <span class="sub" title="Project ${escapeAttr(session.projectId)}, the project whose SDK runs on this page">${escapeHtml(sub)}</span>
         </div>
         ${headExtrasHtml(tab)}
         <div class="actions">
@@ -1104,7 +1118,7 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
   }
 
   function tabHasSearch(tab: PanelKey): boolean {
-    return tab === "gates" || tab === "experiments" || tab === "configs";
+    return tab === "gates" || tab === "killswitches" || tab === "experiments" || tab === "configs";
   }
 
   function searchBarHtml(tab: PanelKey): string {
@@ -1377,10 +1391,13 @@ export function createOverlay(opts: Required<DevtoolsOptions>): { destroy: () =>
 
     switch (tab) {
       case "user":
-        renderUserPanel(body, api, userState, () => render());
+        renderUserPanel(body, api, userState, () => render(), project?.name ?? "");
         break;
       case "gates":
         void renderGatesPanel(body, api, view, setOverrideCount);
+        break;
+      case "killswitches":
+        void renderKillswitchesPanel(body, api, view, setOverrideCount);
         break;
       case "experiments":
         void renderExperimentsPanel(body, api, view, setOverrideCount);

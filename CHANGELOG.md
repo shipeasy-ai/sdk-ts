@@ -1,5 +1,39 @@
 # Changelog
 
+## 9.1.0 — devtools-core 1.2.0, react-native-devtools 1.1.1 (2026-11-04)
+
+- `@shipeasy/sdk`: the client devtools bridge gains an optional
+  `getKillswitch(name)`, which the overlays' Killswitches panel reads.
+- `@shipeasy/devtools-core`: `explainGateFalse` (why a flag reads `false`) and
+  the admin client refreshed against the current spec (ops list
+  `reporter` / `closedSince` / `closedAt`).
+- `@shipeasy/react-native-devtools`: pins `@shipeasy/devtools-core` 1.2.0.
+
+## browser-devtools (2026-10-28)
+
+Overlay (`@shipeasy/browser-devtools` / hosted `se-devtools.js`) plus
+`devtools-core`; released to npm in 9.1.0 above.
+
+- Added a **Killswitches** panel (force killed/live via `?se_ks_*`, live state
+  read from the page's SDK).
+- Fixed experiment variant weights rendering x100 (5000 basis points showed as
+  `5000%`); control now shows its real share.
+- The User panel states the project the overlay is bound to and flags a
+  differing `user.project_id` attribute; the header names the project on hover.
+- Flags that read `false` say why (disabled, targeting, whitelist, rollout
+  bucket, no identified user) via `explainGateFalse` in `devtools-core`.
+- The Attachments field in the bug and feature forms is a dropzone: drag
+  screenshots and files straight onto it.
+
+## devtools-core 1.1.0 (2026-10-26)
+
+### Public reports carry `tags`
+
+`submitPublicBug` / `submitPublicFeature` take an optional `tags: string[]`.
+Each name is matched case-insensitively against the project's existing tags —
+reused when it matches, created when it doesn't — and attached to the filed
+ticket (at most 50 names, each up to 64 characters).
+
 ## browser-devtools (2026-08-03)
 
 Overlay-only fixes (`@shipeasy/browser-devtools` / hosted `se-devtools.js`);
@@ -62,6 +96,17 @@ logged-in menu.
 Trailing full stops dropped from overlay copy (house style), the duplicate form
 heading removed (the sheet header already names the screen), and the grab handle
 is a real drag target.
+
+## 9.0.3 (2026-11-04)
+
+### Fixed: a staging/dev server key no longer reads prod by default
+
+The server `Engine` sent `/sdk/flags?env=prod` whenever `configure()` had no
+`env` option, and the edge honours a valid `?env=` from a server key — so a
+`staging` or `dev` server key silently read **prod** flags and configs. The SDK
+now sends `?env=` only when you set `env`; otherwise the edge reads the env the
+key is bound to. This matches the Go and Python SDKs. Setting `env` explicitly
+still overrides the key's binding, as before.
 
 ## 9.0.2 (2026-08-09)
 

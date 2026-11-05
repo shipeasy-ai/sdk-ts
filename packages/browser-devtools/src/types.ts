@@ -27,6 +27,7 @@ export type {
   FeedbackConnectorData,
   GateRecord,
   KeyRecord,
+  KillswitchRecord,
   ProfileRecord,
   ProjectModules,
   ProjectRecord,
@@ -149,6 +150,8 @@ export interface ShipeasySdkBridge {
   getFlag(name: string): boolean;
   getExperiment(name: string): { inExperiment: boolean; group: string } | undefined;
   getConfig(name: string): unknown;
+  /** Live killswitch state (true = killed). Absent on SDKs older than the Killswitches panel. */
+  getKillswitch?(name: string): boolean;
   /** Last identify() payload — the User panel reads it when present. */
   user?: Record<string, unknown> | null;
 }

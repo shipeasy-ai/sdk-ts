@@ -42,8 +42,7 @@ flags.getFlag("new_checkout", true);  // true ONLY if not-ready / not-found
 
 ## Evaluation detail — `getFlagDetail`
 
-`getFlagDetail` returns `{ value, reason }` (LaunchDarkly `variationDetail`
-parity) so you can see *why* a flag resolved:
+`getFlagDetail` returns `{ value, reason }` so you can see *why* a flag resolved:
 
 ```ts
 import type { FlagReason } from "@shipeasy/sdk/server"; // or /client

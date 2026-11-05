@@ -77,12 +77,19 @@ same keys in `window.__se_devtools_config`.
 
 ## Panels
 
-User (simulate properties + re-evaluate), Gates (force on/off), Experiments
-(force variants), Configs (schema-form editing), Translations (profile/draft
-selection and in-page click-to-edit label editing via `?se_edit_labels=1`),
-Feedback (bugs + feature requests with attachments, screenshot capture and an
-annotator), and a live Events stream. Tabs are hidden for modules the project
-has disabled.
+User (simulate properties + re-evaluate), Feature Flags (force on/off; a flag
+that reads `false` says why: disabled, targeting, whitelist or rollout bucket),
+Killswitches (force killed/live), Experiments (force variants), Configs
+(schema-form editing), Translations (profile/draft selection and in-page
+click-to-edit label editing via `?se_edit_labels=1`), Feedback (bugs + feature
+requests with attachments, screenshot capture and an annotator; drop files onto
+the Attachments field), and a live Events stream. Tabs are hidden for modules
+the project has disabled.
+
+The overlay reads the project whose SDK runs on the page, not the project open
+in the Shipeasy dashboard. The header and the User panel's `devtools.project`
+row name that project; a `project_id` attribute your app puts on the user is
+shown as the app's own value and flagged when it differs.
 
 ## Overrides are URL-only
 

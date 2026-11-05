@@ -502,6 +502,26 @@ describe("submitPublicBug", () => {
     expect(r).toEqual({ number: 7, deduped: false });
   });
 
+  it("sends tag names when given, and omits an empty list", async () => {
+    const bodies: unknown[] = [];
+    const opts = {
+      clientKey: "k",
+      edgeBaseUrl: "https://edge.test",
+      fetch: (async (_: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return jsonResponse({ number: 1 }, 201);
+      }) as unknown as typeof fetch,
+    };
+    await submitPublicBug({ title: "T", tags: ["ios", "checkout"] }, opts);
+    await submitPublicFeature({ title: "F", tags: ["ui"] }, opts);
+    await submitPublicBug({ title: "T", tags: [] }, opts);
+    expect(bodies).toEqual([
+      { title: "T", tags: ["ios", "checkout"] },
+      { type: "feature", title: "F", tags: ["ui"] },
+      { title: "T" },
+    ]);
+  });
+
   it("maps a dedupe response", async () => {
     const r = await submitPublicBug(
       { title: "Same again" },

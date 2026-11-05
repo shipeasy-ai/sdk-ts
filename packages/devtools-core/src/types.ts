@@ -87,6 +87,19 @@ export interface GateRecord {
   stack?: GateStackEntry[] | null;
 }
 
+/** One killswitch (list projection): the flat boolean published per env, plus
+ *  its named sub-switches. `value: true` means KILLED. */
+export interface KillswitchRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  updatedAt: string;
+  envs: Record<
+    string,
+    { value: boolean; switches?: Record<string, boolean>; version: number; publishedAt: string }
+  >;
+}
+
 /** Permissive default schema. Used when a config record arrives without one. */
 export const PERMISSIVE_CONFIG_SCHEMA: Record<string, unknown> = {
   type: "object",

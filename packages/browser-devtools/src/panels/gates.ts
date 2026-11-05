@@ -2,6 +2,7 @@ import type { DevtoolsApi } from "../api";
 import { see } from "@shipeasy/devtools-core/self-report";
 import { getGateOverride, setGateOverride } from "../overrides";
 import type { GateRecord, ShipeasySdkBridge } from "../types";
+import { explainGateFalse } from "@shipeasy/devtools-core/gate-flow";
 import { I } from "../icons";
 import {
   emptyState,
@@ -30,6 +31,8 @@ interface RenderRow {
   override: boolean | null; // null = no override
   effective: boolean;
   live: boolean | null; // bridge value (null = bridge unavailable)
+  /** Why the flag reads false (disabled / targeting / whitelist / rollout), or null. */
+  why: string | null;
   updatedAt: string;
 }
 
@@ -42,7 +45,10 @@ function buildRow(g: GateRecord): RenderRow {
   const liveVal = bridge()?.getFlag(g.name);
   const live = typeof liveVal === "boolean" ? liveVal : null;
   const effective = ov !== null ? ov : (live ?? g.enabled);
+  const user = bridge()?.user ?? null;
+  const why = ov !== null ? null : explainGateFalse(g, effective, user);
   return {
+    why,
     name: g.name,
     killswitch: g.killswitch,
     enabled: g.enabled,
@@ -82,7 +88,7 @@ function renderRow(r: RenderRow, expandedKey: string | null): string {
     ? r.effective
       ? `killswitch · KILLED (override: ${overridden ? "yes" : "no"})`
       : `killswitch · live · ${(r.rolloutPct / 100).toFixed(0)}% rollout`
-    : `flag · ${(r.rolloutPct / 100).toFixed(0)}% rollout · updated ${timeAgo(r.updatedAt)}`;
+    : `flag · ${(r.rolloutPct / 100).toFixed(0)}% rollout${r.why ? ` · false: ${r.why}` : ""} · updated ${timeAgo(r.updatedAt)}`;
 
   const detail = r.killswitch
     ? `
@@ -109,6 +115,7 @@ function renderRow(r: RenderRow, expandedKey: string | null): string {
           </span>
         </div>
         <div class="indent">rollout <span style="color:var(--fg-4)">=</span> ${(r.rolloutPct / 100).toFixed(0)}%</div>
+        ${r.why ? `<div class="indent">why false <span style="color:var(--fg-4)">=</span> ${escapeHtml(r.why)}</div>` : ""}
       </div>
       <div class="mini">
         <span class="lbl">live</span><span class="v">${r.live === null ? "—" : r.live ? "true" : "false"}</span>

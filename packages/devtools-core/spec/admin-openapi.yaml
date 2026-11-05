@@ -21,13 +21,13 @@ security:
   - bearerSdkKey: []
 tags:
   - name: Release
-    summary: Feature delivery — flags, kill switches, dynamic configs, A/B experiments, and the universes they bucket in.
+    summary: Feature delivery — flags, killswitches, dynamic configs, A/B experiments, and the universes they bucket in.
     kind: nav
     description: |-
       Release: the feature-delivery surface. One roof over the five resources
-      that decide which code path a user gets — feature gates (flags), kill
-      switches, dynamic configs, A/B/n experiments, and the universes that bucket
-      them — each exposed as its own subcommand group.
+      that decide which code path a user gets — feature gates (flags),
+      killswitches, dynamic configs, A/B/n experiments, and the universes that
+      bucket them — each exposed as its own subcommand group.
 
       **Groups.**
       - `flags` — boolean feature gates: AND-combined targeting rules + a percentage rollout (basis points), evaluated on the SDK hot path.
@@ -197,6 +197,12 @@ tags:
       and the `ops ack` agent types: an AI ack (`ops ack <handle> --agent
       <type>`) requires the type to appear here, so this list is where an
       `AGENT_NOT_CONNECTED` error sends you.
+  - name: Attachments
+    parent: Ops
+    description: |-
+      Screenshots, recordings, and files attached to a bug or feature request —
+      the evidence a QA lane captures at verification time. Upload by base64
+      bytes or a public https URL; append-only.
   - name: Comments
     parent: Ops
     description: |-
@@ -207,6 +213,22 @@ tags:
       **Mentions.** `@teammate` in a body raises an in-app notification for that
       person; `@shipeasy` asks Jarvis (the AI agent) to read the item and reply.
       Comments authored by Jarvis carry `authorType: system`.
+  - name: Activity
+    parent: Ops
+    description: |-
+      The change history of queue items — status, priority, owner and tag moves,
+      edits, comments, acknowledgements, and every pull-request event (linked,
+      unlinked, merged, closed unmerged). Read it per item or across the whole
+      project, filtered by kind and time, to learn what changed since a given
+      moment instead of diffing status lists.
+  - name: Routing rules
+    parent: Ops
+    description: |-
+      Tag automation rules — the project's "when an item carries tag X, do Y"
+      settings. A rule matches newly filed queue items by tag (or ticket type)
+      and assigns a person, hands the item to a connected coding agent, sets
+      status or priority, or subscribes emails. Rules run in order; `create`
+      appends one without touching the rest.
   - name: Investigations
     parent: Ops
     description: |-
@@ -216,6 +238,44 @@ tags:
       the AI-write seam the cockpit's detail panel renders: `list` reads what a
       previous run found, `create` appends a new record, and `update` fills in the
       `working` run record you were handed (findings, PR, confidence) as you work.
+  - name: Questions
+    parent: Ops
+    description: |-
+      Structured questions an agent asks the team about a queue item — the
+      `AskUserQuestion` shape: a short `header`, the `question`, 2–4 `options`
+      (label + description), and `multiSelect` for checkboxes instead of radios.
+      Every question also accepts a free-text "Other" answer. Open questions sit
+      at the very top of the item's detail panel and mark the row in the queue.
+
+      **Asking.** `ask` posts 1–4 questions at once. Several agents (or several
+      runs) may have questions open on the same item at the same time.
+
+      **Getting the answer back.** `delivery: resume` (the default for a run
+      launched through a trigger connector) re-fires that same agent on the
+      item once every question its run asked is answered, continuing the same
+      run record with the answers in the prompt. `delivery: poll` (the default
+      for a live, connector-less session such as Claude Code in a terminal)
+      fires nothing — call `list` until the status reads `completed`.
+  - name: QA notes
+    parent: Ops
+    description: |-
+      Typed QA notes on a queue item — the QA follow-up that is not discussion.
+      Each note is one of four kinds: `narrowing` (only part of the bug still
+      fails), `clarification` (changes what "fixed" means), `verification` (a
+      `pass` / `fail` verdict on a fix) or `correction` (withdraws an earlier
+      framing). Notes are append-only, carry their author and time, and render in
+      their own section of the item's detail panel, separate from the comment
+      thread. A failing verification offers a "Reopen item" action in the
+      dashboard; it is always an explicit click, never a side effect of `create`.
+  - name: QA questions
+    parent: Ops
+    description: |-
+      Questions put to QA on a queue item — for when the person or agent working
+      an item does not know the answer and wants QA's call without a build or a
+      meeting. `ask` records the question; QA (a person, or an agent assigned the
+      QA role) finds the backlog with `ops list --qa-questions open`, reads the
+      item (`ops get` carries a `qaQuestions` field), and `answer`s it. Answers
+      are plain text and the asker reads them back with `list` or `ops get`.
   - name: Projects
     description: |-
       Projects: the account-level container every other resource is scoped to.
@@ -258,6 +318,19 @@ tags:
       Continue) schedule on their own surface — typically a GitHub Actions
       `schedule:` cron running the platform's headless CLI with the shared
       trigger prompt.
+  - name: Tags
+    description: |-
+      Tags: free-form, project-scoped labels any item can carry — queue items
+      (bugs, feature requests, error/alert tickets), flags, configs,
+      killswitches, metrics, tracked errors, alert rules, and experiments all
+      share one tag roster.
+
+      **Identity.** A tag is its name, unique case-insensitively per project. A
+      tag is born the first time it's attached — there is no separate create.
+
+      **Addressing.** An item is named by `entityType` + its handle (an ops
+      item's number, a resource's name, or any id). `set` replaces the full tag
+      set; `update` adds/removes names incrementally.
   - name: Connectors
     description: |-
       Outbound integrations: the per-project destinations feedback + trigger
@@ -894,7 +967,7 @@ paths:
         - name: id
           in: path
           required: true
-          description: Stable opaque gate id (`gate_…`) or the gate's `name`.
+          description: Stable opaque gate id (`gat_…`) or the gate's `name`.
           schema:
             $ref: '#/components/schemas/ResourceId'
       responses:
@@ -905,7 +978,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GateWhitelist'
               example:
-                id: gate_01j7w8a1b2c3d4e5f6g7h8i9j0
+                id: gat_01j7w8a1b2c3d4e5f6g7h8i9j0
                 name: new_checkout
                 attr: email
                 entries:
@@ -952,7 +1025,7 @@ paths:
         - name: id
           in: path
           required: true
-          description: Stable opaque gate id (`gate_…`) or the gate's `name`.
+          description: Stable opaque gate id (`gat_…`) or the gate's `name`.
           schema:
             $ref: '#/components/schemas/ResourceId'
       requestBody:
@@ -988,7 +1061,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GateWhitelist'
               example:
-                id: gate_01j7w8a1b2c3d4e5f6g7h8i9j0
+                id: gat_01j7w8a1b2c3d4e5f6g7h8i9j0
                 name: new_checkout
                 attr: email
                 entries:
@@ -1032,7 +1105,7 @@ paths:
         - name: id
           in: path
           required: true
-          description: Stable opaque gate id (`gate_…`) or the gate's `name`.
+          description: Stable opaque gate id (`gat_…`) or the gate's `name`.
           schema:
             $ref: '#/components/schemas/ResourceId'
       requestBody:
@@ -1062,7 +1135,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GateWhitelist'
               example:
-                id: gate_01j7w8a1b2c3d4e5f6g7h8i9j0
+                id: gat_01j7w8a1b2c3d4e5f6g7h8i9j0
                 name: new_checkout
                 attr: email
                 entries:
@@ -1108,7 +1181,7 @@ paths:
         - name: id
           in: path
           required: true
-          description: Stable opaque gate id (`gate_…`) or the gate's `name`.
+          description: Stable opaque gate id (`gat_…`) or the gate's `name`.
           schema:
             $ref: '#/components/schemas/ResourceId'
       requestBody:
@@ -1131,7 +1204,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GateWhitelist'
               example:
-                id: gate_01j7w8a1b2c3d4e5f6g7h8i9j0
+                id: gat_01j7w8a1b2c3d4e5f6g7h8i9j0
                 name: new_checkout
                 attr: email
                 entries:
@@ -1457,7 +1530,7 @@ paths:
       description: |-
         Partial update. `allocation_pct`, `groups`, `salt`, `universe`, `params` are **immutable while running** — returns `409` if you try. Stop the experiment first.
 
-        Editing `groups` while in `draft` is fine; weights must still sum to 10000.
+        Editing `groups` while in `draft` is fine; weights must sum to `10000 − reserved_headroom`.
 
         **Use cases**
 
@@ -1489,7 +1562,7 @@ paths:
                   allocation_pct: 5000
               changeWeights:
                 summary: Change group weights
-                description: Replace the groups array — weights must still sum to 10000.
+                description: Replace the groups array — weights must sum to `10000 − reserved_headroom`.
                 value:
                   groups:
                     - name: control
@@ -5440,7 +5513,11 @@ paths:
       operationId: listOpsItems
       summary: List the operational queue
       description: |-
-        Returns the unified ops queue (bugs, feature requests, errors, alerts, measurement plans) in work order — highest priority first, oldest first within a priority — so consumers work it top-down. Filter by `type` and/or `status`, and cap with `limit`. Human-gated holding states (items awaiting human sign-off in the dashboard) are never returned by `all`/default status.
+        Returns the unified ops queue (bugs, feature requests, errors, alerts, measurement plans) in work order — highest priority first, oldest first within a priority — so consumers work it top-down. Every filter is applied in SQL before paging, and filters combine with AND. Human-gated holding states (items awaiting human sign-off in the dashboard) are never returned by `all`/default status.
+
+        **Filters:** `type` (one item type), `status` (one lifecycle status, or `unresolved` — everything not yet `resolved`/`wont_fix`), `priority` (one triage priority), `owner` (one person or agent), `reporter` (one filer's email), `closedSince` (drop items closed before a time), and `scope=ready` — the items ready to be picked up right now: `open`, with nobody working them (no open run), and either unowned or reopened (sent back to `open` after an earlier run finished).
+
+        **Paging:** `limit` is the page size and `offset` the number of items to skip. The order is stable, so walk the queue with `offset += limit`; a page shorter than `limit` is the last one.
 
         **Use case:** Pull the open queue to triage — e.g. every `bug` still `open` — before working items down one by one.
       tags:
@@ -5467,28 +5544,88 @@ paths:
         - name: status
           in: query
           required: false
-          description: Filter by lifecycle status, or `all` (the default). The human-gated holding state (`pending_approval`) is excluded from `all`/default and returned only when requested as the exact status.
+          description: Filter by one lifecycle status, `unresolved` for every status that is not `resolved` or `wont_fix`, or `all` for every status. Defaults to `all` over HTTP; the CLI and MCP tool default to `unresolved`, so pass `all` there to include resolved and won't-fix items. The human-gated holding state (`pending_approval`) is excluded from `unresolved` and `all`, and returned only when requested as the exact status.
           schema:
             default: all
             anyOf:
               - $ref: '#/components/schemas/OpsItemStatus'
               - type: string
+                const: unresolved
+              - type: string
                 const: all
+          x-cli:
+            default: unresolved
+          x-mcp:
+            default: unresolved
+        - name: priority
+          in: query
+          required: false
+          description: Filter by triage priority, or `all` (the default). Items with no priority set are returned only under `all`.
+          schema:
+            default: all
+            anyOf:
+              - $ref: '#/components/schemas/OpsItemPriority'
+              - type: string
+                const: all
+        - name: scope
+          in: query
+          required: false
+          description: '`ready` narrows to the items ready to be picked up right now: status `open`, no open run (nobody has acked it and is still working), and either unowned (no person and no agent) or reopened (sent back to `open` after an earlier run finished). Leave `status` unset with it. `all` (the default) applies no such narrowing.'
+          schema:
+            type: string
+            enum:
+              - all
+              - ready
+            default: all
+        - name: qaQuestions
+          in: query
+          required: false
+          description: '`open` narrows to the items with at least one unanswered QA question — the backlog QA answers first (read each with `ops get`, answer with `ops qa-questions answer`). `all` (the default) applies no such narrowing.'
+          schema:
+            type: string
+            enum:
+              - all
+              - open
+            default: all
         - name: limit
           in: query
           required: false
-          description: Max items to return (1–500). Defaults to 200.
+          description: Page size — max items to return (1–500). A page shorter than `limit` is the last one.
           schema:
             type: integer
             minimum: 1
             maximum: 500
             default: 200
+          x-mcp:
+            required: true
+        - name: offset
+          in: query
+          required: false
+          description: Number of items to skip before the page starts. Defaults to 0. The order is stable, so `offset += limit` walks the queue page by page.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100000
+            default: 0
         - name: owner
           in: query
           required: false
-          description: Narrow to items owned by one person OR one agent. Matches a person by `users.id`, email, or display name, and an agent by connector id, display name, or kebab-case handle — e.g. `owner=Claude` or `owner=alice@acme.dev`. Case-insensitive exact match, applied over the returned page.
+          description: Narrow to items owned by one person OR one agent. Matches a person by `users.id`, email, or display name, and an agent by connector id, display name, or kebab-case handle — e.g. `owner=Claude` or `owner=alice@acme.dev`. Case-insensitive exact match.
           schema:
             type: string
+        - name: reporter
+          in: query
+          required: false
+          description: 'Narrow to items filed by one reporter — an email, matched case-insensitive and exact against `reporterEmail`. Items with no reporter never match. While set, `status=all` also returns `pending_approval` items: public intake files every ticket as `pending_approval`, and a reporter must see the ticket they just filed.'
+          schema:
+            type: string
+        - name: closedSince
+          in: query
+          required: false
+          description: ISO-8601 timestamp. Items still being worked are always returned; `resolved` and `wont_fix` items only when they closed at or after this time (see `closedAt`). Combines with `status` like any other filter.
+          schema:
+            type: string
+            format: date-time
       responses:
         '200':
           description: List the operational queue
@@ -5532,6 +5669,8 @@ paths:
         - FORBIDDEN
       x-cli:
         name: list
+      x-mcp:
+        description: 'List the operational queue (bugs, feature requests, errors, alerts, measurement plans) in work order — highest priority first, oldest first within a priority. PAGING: `limit` (page size, 1–500) is REQUIRED — the call fails without it. Start at `offset: 0` and add `limit` to `offset` for the next page; a page shorter than `limit` is the last one. FILTERS (all optional, combined with AND, applied before paging): `type` = bug | feature_request | error | alert | measure_plan; `status` = open | in_progress | investigating_by_ai | blocked | ready_for_qa | resolved | wont_fix | pending_approval | unresolved | all — DEFAULTS TO `unresolved` (omitted = items still being worked: open, in_progress, blocked, ready_for_qa…; no resolved or wont_fix ones). Pass `status: "all"` to include resolved and wont_fix too (pending_approval is only returned when asked for exactly); `priority` = critical | high | medium | nice_to_have; `owner` = a person (id, email or name) or an agent (connector id, name or handle, e.g. "Claude"); `scope: "ready"` = what to work on now — open items nobody is working (no open run) that are unowned or were reopened after an earlier run. Use `scope: "ready"` to pick the next item, then `ops_ack` it.'
     post:
       operationId: createOpsItem
       summary: File a queue item
@@ -5628,6 +5767,8 @@ paths:
 
         The project is the key's own project; there is no `X-Project-Id` to pass and no way to file into someone else's queue. Repeat submissions of the same title dedupe against the open ticket already tracking it, which returns `200` with `deduped: true` instead of filing again.
 
+        Send a `dedupKey` to own that grain yourself — the same key from a monitor, a job, or a retried install re-triggers its open ticket: the ticket's fields are refreshed from the new payload and a "re-triggered" comment is appended (`200` with `deduped: true, updated: true`), so one recurring failure stays one ticket with its history intact.
+
         This endpoint is served by the Shipeasy **edge worker** (`api.shipeasy.ai`), not the admin API — see `servers` below.
 
         **Use case:** `shipeasy setup` fails on a customer's machine and self-reports the failure with the user's consent — `{ "title": "Setup failed at Feature installs", "stepsToReproduce": "…", "actualResult": "…" }`.
@@ -5707,7 +5848,7 @@ paths:
       description: |-
         Files one feature request onto a project's queue, awaiting human approval. The feature-request counterpart to `POST /ops/bug`, with the same three gates: a `client` key carrying `tickets:public_create`, a project that has opted in, and a `pending_approval` state forced server-side.
 
-        The project is the key's own project; there is no `X-Project-Id` to pass. Repeat submissions of the same title dedupe against the open ticket already tracking it, which returns `200` with `deduped: true` instead of filing again.
+        The project is the key's own project; there is no `X-Project-Id` to pass. Repeat submissions of the same title dedupe against the open ticket already tracking it, which returns `200` with `deduped: true` instead of filing again. A `dedupKey` works exactly as on `POST /ops/bug`: a repeat carrying the same key refreshes the open ticket and comments that it was re-triggered.
 
         This endpoint is served by the Shipeasy **edge worker** (`api.shipeasy.ai`), not the admin API — see `servers` below.
 
@@ -5785,7 +5926,12 @@ paths:
       description: |-
         Fetch a single queue item by its per-project `number` or full id.
 
-        **Use case:** Inspect one item's full detail before updating its status or linking a PR.
+        An item linked to others (blocked by / blocking / duplicate of) carries its `group`: every connected item, and the `master` agent runs work through. Pass `include=linked` to inline the other members' content as `linkedItems`, so one call reads the whole group.
+
+        **Use cases**
+
+        - **Inspect one item** before updating its status or linking a PR.
+        - **Pick up linked work** — `include=linked` reads the master and everything tied to it before a run starts.
       tags:
         - Ops
       parameters:
@@ -5796,6 +5942,14 @@ paths:
           description: Per-project item number (e.g. `7`) or the full ops item id.
           schema:
             $ref: '#/components/schemas/ResourceId'
+        - name: include
+          in: query
+          required: false
+          description: '`linked` inlines the content of every other member of the item''s link group as `linkedItems`.'
+          schema:
+            type: string
+            enum:
+              - linked
       responses:
         '200':
           description: Get one queue item
@@ -5953,7 +6107,10 @@ paths:
       operationId: linkPrToOpsItem
       summary: Link a fixing PR
       description: |-
-        Record the pull request that fixes a queue item (and clears the link with `prNumber: null`).
+        Record a pull request that fixes a queue item. An item can carry several
+        PRs: each call ADDS one (re-linking a linked PR is a no-op), `unlink: true`
+        removes one, and `prNumber: null` clears them all. `connectorData.github.prs`
+        lists them; `github.pr` is the primary one (newest open, else newest merged).
 
         **Use case:** Tie the fixing PR to the item so closing the PR can flip it to ready_for_qa.
       tags:
@@ -6006,6 +6163,174 @@ paths:
         name: link-pr
         positional:
           - handle
+  /api/admin/ops/{handle}/links:
+    patch:
+      operationId: updateOpsLinks
+      summary: Link related items
+      description: |-
+        Edits how this queue item relates to others: which items block it ("blocked by"), which items it blocks ("blocking"), and which item it duplicates ("duplicate of"). The blocker lists are incremental — already-linked or never-linked items are no-ops and every other relation is left as is; `duplicateOf` sets or (with `null`) clears the one canonical item. An item with a blocker that is not `resolved`/`wont_fix` sits in the dashboard's Blocked lane. The relations show on `ops get` as `blockedBy` / `blocking` / `duplicateOf` / `duplicates`.
+
+        A link that would make an item block or duplicate itself — directly or through a chain — is rejected with `409`; an item from another project doesn't resolve (`404`). Marking an item a duplicate of a still-open item closes it as `wont_fix`; if the canonical is already `resolved`/`wont_fix` (or the item itself is already closed) its status is left alone.
+
+        **Use cases**
+
+        - **This item can't move until #12 lands** — `{ "addBlockedBy": ["12"] }`.
+        - **Split work: this item gates #20 and #21** — `{ "addBlocking": ["20", "21"] }`.
+        - **The dependency turned out not to be one** — `{ "removeBlockedBy": ["12"] }`.
+        - **Same bug was filed twice** — `{ "duplicateOf": "8" }` on the newer item — it closes as `wont_fix` while #8 is open.
+      tags:
+        - Ops
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOpsLinksRequest'
+            examples:
+              blockedBy:
+                summary: Record a blocker
+                value:
+                  addBlockedBy:
+                    - '12'
+              blocking:
+                summary: Record the items this one gates
+                value:
+                  addBlocking:
+                    - '20'
+                    - '21'
+              duplicate:
+                summary: Mark as a duplicate
+                value:
+                  duplicateOf: '8'
+      responses:
+        '200':
+          description: Link related items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsItemLinksResponse'
+              example:
+                id: fb_01j7w8a1b2c3d4e5f6g7h8i9j0
+                blockedBy:
+                  - id: fb_01j7w8a1b2c3d4e5f6g7h8i9j1
+                    number: 12
+                    type: bug
+                    title: Checkout total ignores the coupon
+                    status: in_progress
+                blocking: []
+                duplicateOf: null
+                duplicates: []
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: links
+        positional:
+          - handle
+  /api/admin/ops/{handle}/group:
+    patch:
+      operationId: updateOpsGroup
+      summary: Update a linked group
+      description: |-
+        Applies `status` and/or `priority` to every item in this item's link group — the items tied to it, directly or through a chain, by blocked-by / blocking / duplicate-of links (see `group` on `ops get`). Each member goes through the normal item update, so activity, audit, run close-out and the error sync happen exactly as for a one-item edit. Members already in the requested state are left alone. An item with no links is a group of one.
+
+        **Use cases**
+
+        - **The fix landed for the whole group** — `{ "status": "resolved" }` on any member.
+        - **Drop the group** — `{ "status": "wont_fix" }`.
+        - **Escalate it together** — `{ "priority": "critical" }`.
+      tags:
+        - Ops
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id — any member of the group.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOpsGroupRequest'
+            examples:
+              resolve:
+                summary: Resolve the whole group
+                value:
+                  status: resolved
+      responses:
+        '200':
+          description: Update a linked group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsItemGroupResponse'
+              example:
+                id: fb_01j7w8a1b2c3d4e5f6g7h8i9j0
+                group:
+                  master:
+                    id: fb_01j7w8a1b2c3d4e5f6g7h8i9j1
+                    number: 12
+                    type: bug
+                    title: Checkout total ignores the coupon
+                    status: resolved
+                  items:
+                    - id: fb_01j7w8a1b2c3d4e5f6g7h8i9j1
+                      number: 12
+                      type: bug
+                      title: Checkout total ignores the coupon
+                      status: resolved
+                    - id: fb_01j7w8a1b2c3d4e5f6g7h8i9j0
+                      number: 14
+                      type: bug
+                      title: Coupon not applied at checkout
+                      status: resolved
+                updated: 2
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: group
+        positional:
+          - handle
   /api/admin/ops/{handle}/ack:
     post:
       operationId: ackOpsItem
@@ -6019,18 +6344,34 @@ paths:
         time since the run started).
 
         **AI ack.** Pass `agent` with your own agent type (`claude`, `cursor`,
-        `copilot`, `jules`; `gemini` aliases `jules`) and, when you have one, the
+        `copilot`, `jules`; `gemini` is also accepted and is normalized to `jules` on receipt) and, when you have one, the
         run's `sessionId` so the dashboard can deep-link to the session. If the
         project has no connected trigger connector of that type the call fails
         with `AGENT_NOT_CONNECTED` — list the available agents with `ops agents
         list` and use one of those (or connect the agent under Settings →
         Triggers).
 
+        **Launching.** When the named agent has a connected trigger and you pass
+        no `sessionId`, the ack also fires that trigger — a new provider run
+        starts working the item. Pass `launch: false` to only claim the item and
+        record the run (you are doing the work yourself), without starting one.
+        A launch on an item linked to others (see `group` on `ops get`) is only
+        allowed on the group's master — any other member answers `409`
+        `INVALID_TRANSITION`, naming the master to ack instead.
+
         **Completion.** The run closes automatically on the loop's final actions —
         linking the fixing PR (`link-pr`), an ops-notify escalation, or a
         completion status change (`ready_for_qa`/`resolved`) — and the dashboard
         then shows the run result (final action, PR, duration, session link).
-        A repeat ack supersedes the previous open run.
+
+        **One session per item.** An AI ack on an item whose open run belongs to
+        another live agent session answers `409` `ALREADY_EXISTS`, naming that
+        run — skip the item, the other session is working it. Your own run is
+        adopted, not refused: re-ack with its `runId` (a fired run's prompt names
+        it; a previous ack returned it) or the same `sessionId`. A run a trigger
+        fire claimed is adopted by the FIRST session to ack it. A run silent past
+        the stuck-run threshold (6h), or `takeover: true`, is superseded instead.
+        A human ack never replaces an open agent run.
 
         **Use case:** Call this first when picking an item up, so the team sees
         who/what is working on it in real time.
@@ -6077,6 +6418,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
       x-error-codes:
@@ -6084,7 +6427,9 @@ paths:
         - UNAUTHORIZED
         - FORBIDDEN
         - NOT_FOUND
+        - ALREADY_EXISTS
         - AGENT_NOT_CONNECTED
+        - INVALID_TRANSITION
         - VALIDATION
       x-cli:
         name: ack
@@ -6147,7 +6492,9 @@ paths:
         (`kind: investigated`), a blocking question for the team (`kind:
         question`), or how to verify the fix (`kind: ready_for_qa` with
         `qaNotes`). Append-only and create-only, so it is safe for restricted ops
-        keys.
+        keys. For a decision between options you can name, ask a structured
+        question instead (`ops questions ask`) — it is answerable in one tap and
+        the answer comes back to your run.
 
         **Use case:** After working an item, leave a findings write-up (summary,
         markdown findings, sources inspected, confidence) so the team — and the
@@ -6290,6 +6637,583 @@ paths:
         positional:
           - handle
           - investigationId
+  /api/admin/ops/{handle}/questions:
+    get:
+      operationId: listOpsQuestions
+      summary: List an item's questions
+      description: |-
+        The structured questions asked on a queue item, with their answers —
+        newest first (max 100). Pull this to read the answers to questions you
+        asked: an answered question reads `status: completed` and carries
+        `answer.selected` (the option labels picked) and `answer.other` (the
+        free-text "Other" reply, or `null`).
+
+        **Use case:** You asked with `delivery: poll` from a live session — poll
+        this until your questions read `completed`, then continue with the answers.
+      tags:
+        - Questions
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+        - name: status
+          in: query
+          required: false
+          description: Filter by question status, or `all` (the default).
+          schema:
+            default: all
+            anyOf:
+              - $ref: '#/components/schemas/OpsQuestionStatus'
+              - type: string
+                const: all
+      responses:
+        '200':
+          description: List an item's questions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListOpsQuestionsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+      x-cli:
+        name: list
+        positional:
+          - handle
+    post:
+      operationId: askOpsQuestions
+      summary: Ask the team questions about an item
+      description: |-
+        Ask 1–4 structured questions about a queue item — the way to get a
+        decision from a person when the implementation needs one. Each question
+        is the `AskUserQuestion` shape: a short `header` chip, the full
+        `question`, 2–4 `options` (`label` + `description`), and `multiSelect`
+        (checkboxes instead of radios). The person can always answer "Other" in
+        free text, so never add an "Other" option yourself. The questions render
+        at the very top of the item's detail panel and mark the row in the queue.
+
+        **Delivery.** `resume` re-fires your trigger-connector run on the item
+        once every question it asked is answered, continuing the same run record
+        with the answers in the prompt — stop after asking. `poll` fires nothing;
+        poll `GET .../questions` instead. Omitted, it is `resume` when `runId`
+        names a run launched through a trigger connector, else `poll`.
+
+        **Use case:** Blocked on a product decision (which behaviour to keep,
+        which of two fixes to ship) — ask instead of guessing, then wait for the
+        answer.
+      tags:
+        - Questions
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskOpsQuestionsRequest'
+            examples:
+              single:
+                summary: Ask one radio question
+                value:
+                  runId: 0d3f4c8e-7a51-4c2e-9b1f-1e2d3c4b5a69
+                  questions:
+                    - header: Legacy param
+                      question: Should the fix keep honouring the legacy `?v=1` query param?
+                      multiSelect: false
+                      options:
+                        - label: Keep it
+                          description: Old links keep working; the redirect stays
+                        - label: Drop it
+                          description: Simpler code; old links land on the default view
+      responses:
+        '200':
+          description: The created questions, in the order asked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskOpsQuestionsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: ask
+        positional:
+          - handle
+  /api/admin/ops/{handle}/questions/{questionId}/answer:
+    post:
+      operationId: answerOpsQuestion
+      summary: Answer a question
+      description: |-
+        Answer one open question on a queue item — pick option labels in
+        `selected` (exactly one unless the question is `multiSelect`) and/or
+        write a free-text `other`. The question moves to `completed`. When it was
+        the last open question of a `resume` run, that agent is re-fired on the
+        item with every answer. A person's action: never allow-listed for
+        restricted ops keys.
+
+        **Use case:** Unblock an agent from the CLI instead of the dashboard.
+      tags:
+        - Questions
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+        - name: questionId
+          in: path
+          required: true
+          description: The question id (from `ask` or `list`).
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerOpsQuestionRequest'
+            examples:
+              option:
+                summary: Pick an option
+                value:
+                  selected:
+                    - Keep it
+              other:
+                summary: Answer in free text
+                value:
+                  other: Keep it for a release, then drop it
+      responses:
+        '200':
+          description: The answered question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsQuestion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - INVALID_TRANSITION
+        - VALIDATION
+      x-cli:
+        name: answer
+        positional:
+          - handle
+          - questionId
+  /api/admin/ops/{handle}/questions/{questionId}/cancel:
+    post:
+      operationId: cancelOpsQuestion
+      summary: Withdraw a question
+      description: |-
+        Withdraw one open question you asked — it no longer needs an answer
+        (you found it out yourself, or the item moved on). The question moves to
+        `cancelled` and leaves the detail panel. Withdrawing the last open
+        question of a run delivers nothing.
+
+        **Use case:** You asked, then answered it yourself from the code — take
+        it off the person's plate.
+      tags:
+        - Questions
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+        - name: questionId
+          in: path
+          required: true
+          description: The question id (from `ask` or `list`).
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      responses:
+        '200':
+          description: The withdrawn question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsQuestion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - INVALID_TRANSITION
+      x-cli:
+        name: cancel
+        positional:
+          - handle
+          - questionId
+  /api/admin/ops/{handle}/qa-notes:
+    get:
+      operationId: listOpsQaNotes
+      summary: List an item's QA notes
+      description: |-
+        The typed QA notes on a queue item, newest first (max 200) — narrowing,
+        clarification, verification and correction notes, each with its author and
+        time. They are separate from the comment thread: read these to learn the
+        CURRENT QA state of a ticket (what remains failing, what "fixed" now means,
+        the last verification verdict) without parsing prose comments.
+
+        **Use case:** A coding agent picks an item up and checks the latest
+        `verification` verdict and any `narrowing` note before touching the code.
+      tags:
+        - QA notes
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+        - name: kind
+          in: query
+          required: false
+          description: Only notes of this kind.
+          schema:
+            $ref: '#/components/schemas/OpsQaNoteKind'
+      responses:
+        '200':
+          description: List an item's QA notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListOpsQaNotesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+      x-cli:
+        name: list
+        positional:
+          - handle
+    post:
+      operationId: createOpsQaNote
+      summary: Add a QA note to an item
+      description: |-
+        Append one typed QA note to a queue item. `kind` is `narrowing` (what now
+        passes vs what still fails), `clarification` (what "fixed" now means),
+        `verification` (requires a `verdict` of `pass` or `fail`, and `body` says
+        what was checked) or `correction` (withdraws an earlier framing). Notes
+        are append-only and appear in the item's QA notes section, not in the
+        comment thread. The author is the caller's identity; pass `agent` to
+        record the note as written by that agent type's QA automation. A `fail` verdict never changes the item's
+        status by itself: the dashboard offers an explicit "Reopen item" action,
+        and `ops update --status open` does the same from the CLI.
+
+        **Use case:** QA automation records "verified on production: FAIL, the
+        second facet still errors" as data an agent can read back.
+      tags:
+        - QA notes
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOpsQaNoteRequest'
+            examples:
+              verification:
+                summary: A failing verification
+                value:
+                  kind: verification
+                  verdict: fail
+                  body: Retested on production after the deploy — the export still drops the second sheet
+              narrowing:
+                summary: Narrow a bug to the facet that still fails
+                value:
+                  kind: narrowing
+                  body: The list view is fixed; only the detail panel still shows the stale count
+      responses:
+        '200':
+          description: The created note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsQaNote'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: create
+        positional:
+          - handle
+  /api/admin/ops/{handle}/qa-questions:
+    get:
+      operationId: listOpsQaQuestions
+      summary: List an item's QA questions
+      description: |-
+        The questions put to QA on a queue item, newest first (max 100), each with
+        QA's answer once given. `ops get` returns the same list as `qaQuestions`.
+
+        **Use case:** After asking QA, poll this until the question reads `answered`.
+      tags:
+        - QA questions
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+        - name: status
+          in: query
+          required: false
+          description: Only questions in this status.
+          schema:
+            $ref: '#/components/schemas/OpsQaQuestionStatus'
+      responses:
+        '200':
+          description: List an item's QA questions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListOpsQaQuestionsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+      x-cli:
+        name: list
+        positional:
+          - handle
+    post:
+      operationId: askOpsQaQuestion
+      summary: Ask QA a question about an item
+      description: |-
+        Put a question to QA on a queue item — use it when you do not know the
+        answer yourself and QA's decision unblocks the work. The question is open
+        until QA answers it; it surfaces on the item (`ops get` → `qaQuestions`)
+        and in the project-wide QA backlog (`ops list --qa-questions open`). The
+        asker is the caller's identity; pass `agent` to record it as asked by that
+        agent type.
+
+        **Use case:** A coding agent cannot tell whether an empty state is a bug or
+        intended; it asks QA and carries on with the rest of the item.
+      tags:
+        - QA questions
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskOpsQaQuestionRequest'
+            examples:
+              ask:
+                summary: Ask whether behaviour is intended
+                value:
+                  question: Should an archived metric still show on the experiment readout, or be hidden?
+      responses:
+        '200':
+          description: The created question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsQaQuestion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: ask
+        positional:
+          - handle
+  /api/admin/ops/{handle}/qa-questions/{questionId}/answer:
+    post:
+      operationId: answerOpsQaQuestion
+      summary: Answer a QA question
+      description: |-
+        Answer one open QA question. The question moves to `answered` and the
+        answer shows on the item. An answered question cannot be answered again
+        (409); ask a new one to follow up. The answerer is the caller's identity;
+        pass `agent` to record it as answered by that agent type's QA automation.
+
+        **Use case:** QA reads the backlog, checks the build, and replies "hide it —
+        archived metrics never show on readouts".
+      tags:
+        - QA questions
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+        - name: questionId
+          in: path
+          required: true
+          description: The question id (from `ask`, `list` or `ops get`).
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerOpsQaQuestionRequest'
+            examples:
+              answer:
+                summary: Answer with QA's decision
+                value:
+                  answer: Hide it — archived metrics never show on experiment readouts
+      responses:
+        '200':
+          description: The answered question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsQaQuestion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - INVALID_TRANSITION
+        - VALIDATION
+      x-cli:
+        name: answer
+        positional:
+          - handle
+          - questionId
   /api/admin/agent-profiles:
     get:
       operationId: listOpsAgents
@@ -6435,6 +7359,312 @@ paths:
         name: create
         positional:
           - handle
+  /api/admin/ops/{handle}/attachments:
+    post:
+      operationId: createOpsAttachment
+      summary: Attach a screenshot to an item
+      description: |-
+        Attach a screenshot, screen recording, or file to a bug or feature request, so the fixer sees what QA saw instead of reconstructing it from measurements. Send the bytes as `contentBase64` (a bare base64 string or a `data:` URI) or give a public https `url` for the server to fetch — exactly one of the two. The `kind` (`screenshot` | `recording` | `file`) defaults from the media type. Up to 25 MiB.
+
+        Error and alert tickets cannot carry attachments (`422`). Append-only: there is no replace or delete, so it is safe for restricted ops keys.
+
+        **Use case:** A QA lane captures a screenshot at verification time and the filing agent attaches it to the bug or feature request it just filed.
+      tags:
+        - Attachments
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOpsAttachmentRequest'
+            example:
+              filename: checkout-overflow.png
+              contentBase64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==
+      responses:
+        '201':
+          description: Attach a screenshot to an item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOpsAttachmentResponse'
+              example:
+                id: att_01j7w8a1b2c3d4e5f6g7h8i9j0
+                filename: checkout-overflow.png
+                kind: screenshot
+                mimeType: image/png
+                sizeBytes: 68
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: create
+        positional:
+          - handle
+  /api/admin/ops/{handle}/comment-media:
+    post:
+      operationId: createOpsCommentMedia
+      summary: Upload an image to embed in a comment
+      description: |-
+        Upload an image to embed in a comment on a queue item. Takes the same body as the attachment upload (`contentBase64` or `url`). The response carries a relative `url` — reference it from the comment body as a markdown image (`![caption](url)`) in `ops comments create`, so an evidence comment shows the screenshot inline.
+
+        Append-only, safe for restricted ops keys.
+
+        **Use case:** Put a screenshot inside an evidence comment rather than on the item itself.
+      tags:
+        - Comments
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: handle
+          in: path
+          required: true
+          description: Per-project item number (e.g. `7`) or the full ops item id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOpsAttachmentRequest'
+            example:
+              filename: checkout-overflow.png
+              contentBase64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==
+      responses:
+        '201':
+          description: Upload an image to embed in a comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOpsCommentMediaResponse'
+              example:
+                id: cmm_01j7w8a1b2c3d4e5f6g7h8i9j0
+                url: /api/admin/ops/comment-media/cmm_01j7w8a1b2c3d4e5f6g7h8i9j0
+                mimeType: image/png
+                sizeBytes: 68
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: upload-media
+        positional:
+          - handle
+  /api/admin/ops/activity:
+    get:
+      operationId: listOpsActivity
+      summary: List queue activity
+      description: |-
+        The activity feed of the project's queue items, newest first: every status,
+        priority, owner, tag and content change, every comment, every alert
+        acknowledgement, and every pull-request event (`linked`, `unlinked`,
+        `merged`, `closed` unmerged). Each entry names the item it belongs to, who
+        made the change (or `github` for a merge/close the webhook observed) and
+        when.
+
+        Filter to one item with `item`, to one kind of change with `field`, and to a
+        time window with `since` / `until` (ISO-8601, exclusive). Pass
+        `field=pr` and `since` to learn which PRs were added to an item since you
+        last looked, instead of diffing status lists.
+
+        **Use case:** A QA agent polling for "what PRs were linked to item 7 since T?"
+        or "what changed on this project since T?".
+      tags:
+        - Activity
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: item
+          in: query
+          required: false
+          description: Narrow to one item — its per-project number (e.g. `7`) or full id. Omit for the whole project.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+        - name: field
+          in: query
+          required: false
+          description: Narrow to one kind of change.
+          schema:
+            $ref: '#/components/schemas/OpsActivityField'
+        - name: since
+          in: query
+          required: false
+          description: Only entries strictly after this ISO-8601 instant.
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          required: false
+          description: Only entries strictly before this ISO-8601 instant.
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          required: false
+          description: Maximum entries to return (1-200). Defaults to 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: List queue activity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListOpsActivityResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+      x-cli:
+        name: list
+  /api/admin/ops/routing-rules:
+    get:
+      operationId: listOpsRoutingRules
+      summary: List tag automation rules
+      description: |-
+        The project's tag automation rules in evaluation order. Each rule matches
+        newly filed queue items by tag (or ticket type) and applies its actions —
+        assign a person, launch a connected coding agent, set status or priority,
+        subscribe emails.
+
+        **Use case:** Check what automation already exists before adding a rule, so a new one doesn't duplicate or shadow it.
+      tags:
+        - Routing rules
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: List tag automation rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListOpsRoutingRulesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+      x-cli:
+        name: list
+    post:
+      operationId: createOpsRoutingRule
+      summary: Create a tag automation rule
+      description: |-
+        Appends one rule after the existing ones; existing rules are untouched.
+        The rule fires on a newly filed item carrying any of `tags` (or whose type
+        is in `types`) and applies its actions: `user` assigns a person,
+        `connector` hands the item to a connected coding agent (launching a run,
+        steered by `agentPrompt`), `status` / `priority` set triage fields, and
+        `subscribers` emails people. Tags are created on first use.
+
+        Returns `400` when the rule has no tag or type, or no action. Returns the
+        full rule list after the append.
+
+        **Use cases**
+
+        - **Auto-fix** — tag `ai-fix` hands the item to a connected agent with a steering prompt.
+        - **Triage** — every `error` ticket goes to `high` priority and an on-call email.
+      tags:
+        - Routing rules
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOpsRoutingRuleRequest'
+            examples:
+              triage:
+                summary: Prioritise every error ticket
+                value:
+                  types:
+                    - error
+                  priority: high
+                  subscribers:
+                    - oncall@example.com
+              autoFix:
+                summary: Hand tagged items to a coding agent
+                value:
+                  tags:
+                    - ai-fix
+                  connector: con_01j7w8a1b2c3d4e5f6g7h8i9j0
+                  agentPrompt: Reproduce, fix at the root cause, open one PR
+      responses:
+        '200':
+          description: The rules after the append
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListOpsRoutingRulesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+      x-cli:
+        name: create
   /api/admin/notifications:
     post:
       operationId: notifyOps
@@ -9522,6 +10752,8 @@ paths:
         - PLAN_LIMIT
       x-cli:
         name: create
+      x-mcp:
+        expose: true
   /api/admin/keys/{id}:
     patch:
       operationId: updateKey
@@ -9712,6 +10944,276 @@ paths:
         - FORBIDDEN
       x-cli:
         name: search
+  /api/admin/tags:
+    get:
+      operationId: listTags
+      summary: List the project's tags
+      description: |-
+        Returns every tag in the project — the shared roster any item (queue items, flags, configs, kill switches, metrics, tracked errors, alert rules, experiments) can carry. Sorted by name.
+
+        **Use case:** See which tags already exist before tagging an item, so you reuse `ios` instead of minting `iOS-app`.
+      tags:
+        - Tags
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring filter on the tag name. Omit to return every tag.
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: List the project's tags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListTagsResponse'
+              example:
+                - id: tag_01j7w8a1b2c3d4e5f6g7h8i9j0
+                  name: checkout
+                - id: tag_01j7w8a1b2c3d4e5f6g7h8i9j1
+                  name: ios
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+      x-cli:
+        name: list
+  /api/admin/tags/{entityType}/{entityId}:
+    get:
+      operationId: getEntityTags
+      summary: Read an item's tags
+      description: |-
+        Returns the tags attached to one item. The item is addressed by kind (`entityType`) plus its handle, so the same call reads tags off a queue item, a flag, a config, a kill switch, a metric, a tracked error, an alert rule, or an experiment.
+
+        **Use case:** Check an item's current tags before editing them.
+      tags:
+        - Tags
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: entityType
+          in: path
+          required: true
+          description: The kind of item — `ops`, `flag`, `config`, `killswitch`, `metric`, `error`, `alert_rule`, or `experiment`.
+          schema:
+            $ref: '#/components/schemas/TaggableEntityType'
+        - name: entityId
+          in: path
+          required: true
+          description: The item's handle — an ops item's number (e.g. `7`) or id; a flag/config/killswitch/metric/alert rule/experiment's name or id; a tracked error's id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      responses:
+        '200':
+          description: Read an item's tags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityTagsResponse'
+              example:
+                entityType: ops
+                entityId: fb_01j7w8a1b2c3d4e5f6g7h8i9j0
+                tags:
+                  - checkout
+                  - ios
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+      x-cli:
+        name: get
+        positional:
+          - entityType
+          - entityId
+    put:
+      operationId: setEntityTags
+      summary: Replace an item's tags
+      description: |-
+        Replaces the item's whole tag set with `tags`: names not yet in the project are created, attached names not in the list are detached, and `[]` clears every tag. Names are deduped case-insensitively, reusing an existing tag's casing (sending `iOS` when `ios` exists attaches `ios`).
+
+        **Use cases**
+
+        - **Tag an item** — `{ "tags": ["checkout", "ios"] }`.
+        - **Clear tags** — `{ "tags": [] }`.
+
+        To add or remove a few tags without restating the rest, use the incremental `PATCH` instead.
+      tags:
+        - Tags
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: entityType
+          in: path
+          required: true
+          description: The kind of item — `ops`, `flag`, `config`, `killswitch`, `metric`, `error`, `alert_rule`, or `experiment`.
+          schema:
+            $ref: '#/components/schemas/TaggableEntityType'
+        - name: entityId
+          in: path
+          required: true
+          description: The item's handle — an ops item's number (e.g. `7`) or id; a flag/config/killswitch/metric/alert rule/experiment's name or id; a tracked error's id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetEntityTagsRequest'
+            examples:
+              tag:
+                summary: Set the item's tags
+                value:
+                  tags:
+                    - checkout
+                    - ios
+              clear:
+                summary: Remove every tag
+                value:
+                  tags: []
+      responses:
+        '200':
+          description: Replace an item's tags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityTagsResponse'
+              example:
+                entityType: ops
+                entityId: fb_01j7w8a1b2c3d4e5f6g7h8i9j0
+                tags:
+                  - checkout
+                  - ios
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: set
+        positional:
+          - entityType
+          - entityId
+    patch:
+      operationId: updateEntityTags
+      summary: Add or remove tags on an item
+      description: |-
+        Edits an item's tags incrementally: attaches every name in `add` (creating project tags as needed) and detaches every name in `remove`, leaving the item's other tags untouched. Matching is case-insensitive; a name in both lists ends up removed.
+
+        **Use cases**
+
+        - **Add a tag** — `{ "add": ["regression"] }`.
+        - **Swap a tag** — `{ "add": ["p1"], "remove": ["p2"] }`.
+      tags:
+        - Tags
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: entityType
+          in: path
+          required: true
+          description: The kind of item — `ops`, `flag`, `config`, `killswitch`, `metric`, `error`, `alert_rule`, or `experiment`.
+          schema:
+            $ref: '#/components/schemas/TaggableEntityType'
+        - name: entityId
+          in: path
+          required: true
+          description: The item's handle — an ops item's number (e.g. `7`) or id; a flag/config/killswitch/metric/alert rule/experiment's name or id; a tracked error's id.
+          schema:
+            $ref: '#/components/schemas/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEntityTagsRequest'
+            examples:
+              add:
+                summary: Attach one tag
+                value:
+                  add:
+                    - regression
+              swap:
+                summary: Replace one tag with another
+                value:
+                  add:
+                    - p1
+                  remove:
+                    - p2
+      responses:
+        '200':
+          description: Add or remove tags on an item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityTagsResponse'
+              example:
+                entityType: ops
+                entityId: fb_01j7w8a1b2c3d4e5f6g7h8i9j0
+                tags:
+                  - checkout
+                  - ios
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      x-error-codes:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - VALIDATION
+      x-cli:
+        name: update
+        positional:
+          - entityType
+          - entityId
 components:
   securitySchemes:
     bearerSdkKey:
@@ -14595,7 +16097,7 @@ components:
         - pending_approval
         - working
         - backlog
-      description: 'Where automation has taken an item in the investigation lifecycle — the signal the ops cockpit renders as "what AI did" plus the one action expected of the user. It is **written as a side-effect of the actions that already happen**, never authored on its own: linking a PR sets `pr_ready`, moving to `in_progress` sets `working`, `ready_for_qa` sets `ready_for_qa`, a system/assistant reply sets `question`, resolving clears it, and creation seeds `backlog` or `investigated`/`detected` for auto-filed error/alert tickets. `backlog` is the single "nothing has happened yet" state — how urgent that is reads off `priority`, not off a separate state, and its one action is to hand the item to an agent. `pr_merged` and `pr_closed` are written by the GitHub `pull_request` webhook when the linked PR reaches a terminal outcome — merged (the fix shipped, resolve the item) or closed without merging (the fix was rejected, decide what happens next). Absent on rows filed before the field existed — consumers should treat a missing value as "derive from the other fields".'
+      description: 'Where automation has taken an item in the investigation lifecycle — the signal the ops cockpit renders as "what AI did" plus the one action expected of the user. It is **written as a side-effect of the actions that already happen**, never authored on its own: linking a PR sets `pr_ready`, moving to `in_progress` sets `working`, `ready_for_qa` sets `ready_for_qa`, a system/assistant reply sets `question`, resolving clears it, and creation seeds `backlog` for every untouched item (bugs, features, and auto-filed error/alert tickets alike — type is not a signal). `backlog` is the single "nothing has happened yet" state — how urgent that is reads off `priority`, not off a separate state, and its one action is to hand the item to an agent. `investigated`/`detected` are set when a completed agent run leaves findings to review, not at filing time. `pr_merged` and `pr_closed` are written by the GitHub `pull_request` webhook when the linked PR reaches a terminal outcome — merged (the fix shipped, resolve the item) or closed without merging (the fix was rejected, decide what happens next). Absent on rows filed before the field existed — consumers should treat a missing value as "derive from the other fields".'
     OpsBrowserContext:
       type: object
       properties:
@@ -15026,8 +16528,14 @@ components:
           description: The GitHub issue this item opened.
         pr:
           $ref: '#/components/schemas/GithubPrLink'
+          description: 'The item''s PRIMARY linked pull request, derived from `prs`: the newest still-open one, else the newest merged one, else the newest closed one. Kept for readers that show one PR; `prs` is the full list.'
+        prs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GithubPrLink'
+          description: Every pull request linked to the item, oldest link first — an item can legitimately take several PRs (a fix split across repos, a follow-up). Absent on items linked before multi-PR support; `pr` then is the only one.
       additionalProperties: {}
-      description: GitHub connector trace — the issue it opened and, once linked, the pull request.
+      description: GitHub connector trace — the issue it opened and, once linked, the pull requests.
     SlackConnectorData:
       type: object
       properties:
@@ -15347,6 +16855,11 @@ components:
           updatedAt:
             type: string
             description: ISO-8601 last-update timestamp.
+          closedAt:
+            anyOf:
+              - type: string
+              - type: 'null'
+            description: ISO-8601 timestamp the item was closed (`resolved` or `wont_fix`), or `null` while it is open.
         required:
           - id
           - number
@@ -15360,9 +16873,15 @@ components:
           - lastRun
           - createdAt
           - updatedAt
+          - closedAt
         additionalProperties: {}
         description: One queue item — any type — plus its resolved `owner` and run state.
       description: A page of queue items, newest first.
+    TagName:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: A tag name. Trimmed; matched case-insensitively against the project's existing tags.
     CreateBugRequest:
       type: object
       properties:
@@ -15406,6 +16925,9 @@ components:
             - type: string
             - type: 'null'
           description: The `users.id` of the person to assign as owner at creation, or `null`.
+        delegateConnectorId:
+          type: string
+          description: The agent connector the filer chose to delegate this item to at creation. When set, the server launches that one agent and skips any tag-rule auto-launch, so the filer's choice prevails and only one run starts.
         subscribers:
           type: array
           items:
@@ -15415,10 +16937,11 @@ components:
           description: Emails of teammates to subscribe to this item's Slack pings at creation.
         tags:
           type: array
+          maxItems: 50
           items:
-            type: string
+            $ref: '#/components/schemas/TagName'
           default: []
-          description: Tag names to attach at creation (get-or-created by name, deduped case-insensitively).
+          description: Tag names to label the item with, e.g. `["ios", "checkout"]`. Each name is matched case-insensitively against the project's existing tags and reuses that tag (keeping its stored casing) when one matches; a name with no match creates a new project tag.
         reporterEmail:
           anyOf:
             - type: string
@@ -15497,6 +17020,9 @@ components:
             - type: string
             - type: 'null'
           description: The `users.id` of the person to assign as owner at creation, or `null`.
+        delegateConnectorId:
+          type: string
+          description: The agent connector the filer chose to delegate this item to at creation. When set, the server launches that one agent and skips any tag-rule auto-launch, so the filer's choice prevails and only one run starts.
         subscribers:
           type: array
           items:
@@ -15506,10 +17032,11 @@ components:
           description: Emails of teammates to subscribe to this item's Slack pings at creation.
         tags:
           type: array
+          maxItems: 50
           items:
-            type: string
+            $ref: '#/components/schemas/TagName'
           default: []
-          description: Tag names to attach at creation (get-or-created by name, deduped case-insensitively).
+          description: Tag names to label the item with, e.g. `["ios", "checkout"]`. Each name is matched case-insensitively against the project's existing tags and reuses that tag (keeping its stored casing) when one matches; a name with no match creates a new project tag.
         reporterEmail:
           anyOf:
             - type: string
@@ -15616,10 +17143,11 @@ components:
           description: Emails of teammates to subscribe to this item's Slack pings at creation.
         tags:
           type: array
+          maxItems: 50
           items:
-            type: string
+            $ref: '#/components/schemas/TagName'
           default: []
-          description: Tag names to attach at creation (get-or-created by name, deduped case-insensitively).
+          description: 'Tag names to label the item with, e.g. `["ios", "checkout"]`. Each name is matched case-insensitively against the project''s existing tags and reuses that tag (keeping its stored casing) when one matches; a name with no match creates a new project tag. Here the tags only label the ticket: the project''s tag rules (owner/status/agent routing) are not applied to a public report while it awaits approval.'
         reporterEmail:
           anyOf:
             - type: string
@@ -15650,6 +17178,10 @@ components:
               additionalProperties: {}
             - type: 'null'
           description: Arbitrary capture context, or `null`.
+        dedupKey:
+          type: string
+          maxLength: 200
+          description: 'Caller-chosen dedupe identity for this report, stored on the ticket. A repeat submission carrying the same key does NOT file a second ticket: the open ticket already holding that key is refreshed from this payload (title and the report fields overwritten, a "re-triggered" comment appended) and returned with `deduped: true` and `updated: true`. Triage state a human owns — status, priority, assignee, tags — is left untouched, and a `resolved`/`wont_fix` ticket no longer holds the key, so a failure that comes back after being closed files a fresh ticket. Omit it to fall back to the derived (title + `context.step`) dedupe, whose repeats return the existing ticket unchanged.'
         notify:
           anyOf:
             - $ref: '#/components/schemas/NotificationTarget'
@@ -15658,7 +17190,7 @@ components:
       required:
         - title
       additionalProperties: false
-      description: Body for `POST /ops/bug`. The same bug fields as `CreateBugRequest`, minus the `type` discriminator — the path already says what is being filed.
+      description: Body for `POST /ops/bug`. The same bug fields as `CreateBugRequest`, minus the `type` discriminator — the path already says what is being filed, plus the public intake's own `dedupKey`.
     CreatePublicTicketResponse:
       type: object
       properties:
@@ -15671,10 +17203,13 @@ components:
         deduped:
           type: boolean
           description: '`true` when an open ticket already tracked this report and nothing was filed (HTTP 200). Absent on a fresh file (HTTP 201).'
+        updated:
+          type: boolean
+          description: '`true` when the deduped ticket was REFRESHED from this payload and got a "re-triggered" comment — only ever set alongside `deduped` on a submission that carried a `dedupKey`. Absent when the existing ticket was returned untouched.'
       required:
         - number
       additionalProperties: false
-      description: 'Response for the public ticket intake. A fresh file returns `201` with `id` + `number`; a repeat of a report already tracked by an open ticket returns `200` with that ticket''s `number` and `deduped: true`.'
+      description: 'Response for the public ticket intake. A fresh file returns `201` with `id` + `number`; a repeat of a report already tracked by an open ticket returns `200` with that ticket''s `number` and `deduped: true` — plus `updated: true` when a `dedupKey` re-triggered it and its fields were refreshed.'
     CreatePublicFeatureRequestRequest:
       type: object
       properties:
@@ -15717,10 +17252,11 @@ components:
           description: Emails of teammates to subscribe to this item's Slack pings at creation.
         tags:
           type: array
+          maxItems: 50
           items:
-            type: string
+            $ref: '#/components/schemas/TagName'
           default: []
-          description: Tag names to attach at creation (get-or-created by name, deduped case-insensitively).
+          description: 'Tag names to label the item with, e.g. `["ios", "checkout"]`. Each name is matched case-insensitively against the project''s existing tags and reuses that tag (keeping its stored casing) when one matches; a name with no match creates a new project tag. Here the tags only label the ticket: the project''s tag rules (owner/status/agent routing) are not applied to a public report while it awaits approval.'
         reporterEmail:
           anyOf:
             - type: string
@@ -15745,6 +17281,10 @@ components:
               additionalProperties: {}
             - type: 'null'
           description: Arbitrary capture context, or `null`.
+        dedupKey:
+          type: string
+          maxLength: 200
+          description: 'Caller-chosen dedupe identity for this request, stored on the ticket. Behaves exactly as on `POST /ops/bug`: a repeat carrying the same key refreshes the open ticket already holding it (fields overwritten, a "re-triggered" comment appended) and returns `deduped: true` with `updated: true`, instead of filing a second one.'
         notify:
           anyOf:
             - $ref: '#/components/schemas/NotificationTarget'
@@ -15753,7 +17293,7 @@ components:
       required:
         - title
       additionalProperties: false
-      description: Body for `POST /ops/feature-request`. The same feature-request fields as `CreateFeatureRequestRequest`, minus the `type` discriminator — the path already says what is being filed.
+      description: Body for `POST /ops/feature-request`. The same feature-request fields as `CreateFeatureRequestRequest`, minus the `type` discriminator — the path already says what is being filed, plus the public intake's own `dedupKey`.
     OpsItemAttachment:
       type: object
       properties:
@@ -15807,6 +17347,190 @@ components:
           description: HTML URL of the linked GitHub pull request, if any.
       additionalProperties: {}
       description: Deep links to the resources behind this item — every value is either a dashboard-relative path or an admin-API path fetchable with the same key.
+    OpsItemRef:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Stable opaque item id.
+        number:
+          anyOf:
+            - type: number
+            - type: 'null'
+          description: Per-project item number (the `#7` handle), or `null` if unnumbered.
+        type:
+          type: string
+          enum:
+            - bug
+            - feature_request
+            - error
+            - alert
+            - measure_plan
+          description: Queue item type.
+        title:
+          type: string
+          description: One-line item title.
+        status:
+          $ref: '#/components/schemas/OpsItemStatus'
+      required:
+        - id
+        - number
+        - type
+        - title
+        - status
+      additionalProperties: false
+      description: A compact reference to another queue item — enough to name it and tell whether it is still open.
+    OpsQaQuestionStatus:
+      type: string
+      enum:
+        - open
+        - answered
+      description: 'Where a QA question stands: `open` (waiting on QA) or `answered`.'
+    OpsQaQuestion:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Question id.
+        feedbackId:
+          type: string
+          description: The queue item the question hangs off.
+        question:
+          type: string
+          description: The question for QA (markdown).
+        status:
+          $ref: '#/components/schemas/OpsQaQuestionStatus'
+        askedByEmail:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: Email of the person (or the key's actor) who asked, or `null` when an agent asked.
+        askedByAgent:
+          anyOf:
+            - type: string
+              enum:
+                - jarvis
+                - claude
+                - cursor
+                - copilot
+                - jules
+            - type: 'null'
+          description: The agent type that asked, or `null` for a person.
+        answer:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: QA's answer (markdown), or `null` while the question is open.
+        answeredByEmail:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: Email of the person who answered, or `null` while open or when an agent answered.
+        answeredByAgent:
+          anyOf:
+            - type: string
+              enum:
+                - jarvis
+                - claude
+                - cursor
+                - copilot
+                - jules
+            - type: 'null'
+          description: The agent type (QA automation) that answered, or `null` for a person or while open.
+        answeredAt:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: ISO-8601 answer timestamp, or `null` while open.
+        createdAt:
+          type: string
+          description: ISO-8601 creation timestamp.
+      required:
+        - id
+        - feedbackId
+        - question
+        - status
+        - askedByEmail
+        - askedByAgent
+        - answer
+        - answeredByEmail
+        - answeredByAgent
+        - answeredAt
+        - createdAt
+      additionalProperties: false
+      description: A question put to QA on a queue item, with QA's answer once given.
+    OpsItemGroup:
+      type: object
+      properties:
+        master:
+          $ref: '#/components/schemas/OpsItemRef'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsItemRef'
+          description: Every member of the group, this item included, master first. The rest follow in the order the master is picked by.
+      required:
+        - master
+        - items
+      additionalProperties: false
+      description: 'A link group: the items connected by blocked-by / blocking / duplicate-of links, which the dashboard shows and moves together. Its master is the one member agent runs work on — the first open member that is not a duplicate and has no open blocker, then the most urgent priority, then the oldest. Closed members only lead once every member is closed.'
+    OpsLinkedItem:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Stable opaque item id.
+        number:
+          anyOf:
+            - type: number
+            - type: 'null'
+          description: Per-project item number (the `#7` handle), or `null` if unnumbered.
+        type:
+          type: string
+          enum:
+            - bug
+            - feature_request
+            - error
+            - alert
+            - measure_plan
+          description: Queue item type.
+        title:
+          type: string
+          description: One-line item title.
+        status:
+          $ref: '#/components/schemas/OpsItemStatus'
+        priority:
+          anyOf:
+            - $ref: '#/components/schemas/OpsItemPriority'
+            - type: 'null'
+          description: Triage priority, or `null` if not yet set.
+        description:
+          type: string
+          description: Feature description (`feature_request`), empty string otherwise.
+        stepsToReproduce:
+          type: string
+          description: Bug repro steps (`bug`), empty string otherwise.
+        actualResult:
+          type: string
+          description: What happened (`bug`), empty string otherwise.
+        expectedResult:
+          type: string
+          description: What was expected (`bug`), empty string otherwise.
+        useCase:
+          type: string
+          description: Feature use case (`feature_request`), empty string otherwise.
+        createdAt:
+          type: string
+          description: ISO-8601 creation timestamp.
+      required:
+        - id
+        - number
+        - type
+        - title
+        - status
+        - priority
+      additionalProperties: {}
+      description: One linked item's content, inlined into `ops get` by `include=linked` so a run reads the whole group in one call. Its comments, attachments and runs are on its own `ops get`.
     GetOpsItemResponse:
       type: object
       properties:
@@ -15885,6 +17609,41 @@ components:
           description: Files attached to the report — screenshots, recordings, logs. Populated for `bug`/`feature_request`; always an empty array for auto-filed `error`/`alert`/`measure_plan` tickets. Fetch each via its `fetchUrl` with the same admin/ops key (the download route is ops-key allow-listed).
         related:
           $ref: '#/components/schemas/OpsItemRelated'
+        blockedBy:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsItemRef'
+          description: Items that block this one. While any of them is not `resolved`/`wont_fix` the item is blocked — work its blockers first. Edit with `PATCH /api/admin/ops/{handle}/links`.
+        blocking:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsItemRef'
+          description: Items this one blocks — closing it unblocks them.
+        duplicateOf:
+          anyOf:
+            - $ref: '#/components/schemas/OpsItemRef'
+            - type: 'null'
+          description: The canonical item this one duplicates, or `null`. Work happens on the canonical item.
+        duplicates:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsItemRef'
+          description: Items marked as duplicates of this one — their reports add context to this item.
+        qaQuestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsQaQuestion'
+          description: Questions put to QA on this item, newest first (max 100), each with QA's answer once given. List the project-wide backlog with `ops list --qa-questions open`; ask with `ops qa-questions ask`.
+        group:
+          anyOf:
+            - $ref: '#/components/schemas/OpsItemGroup'
+            - type: 'null'
+          description: The link group this item belongs to — every item tied to it, directly or through a chain, by a blocked-by / blocking / duplicate-of link — or `null` when it has no links. Agent runs only work a group through its `master`; read the other members before starting, and close them together with `PATCH /api/admin/ops/{handle}/group`.
+        linkedItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsLinkedItem'
+          description: The full content of every OTHER member of the link group, master first. Present only when the request passes `include=linked`.
         connectorData:
           anyOf:
             - $ref: '#/components/schemas/ConnectorData'
@@ -16055,11 +17814,15 @@ components:
               exclusiveMinimum: 0
               maximum: 9007199254740991
             - type: 'null'
-          description: PR number to record on the item. `null` unlinks the PR.
+          description: PR number to ADD to the item's linked PRs (re-linking one already linked is a no-op). `null` unlinks EVERY PR on the item.
         prUrl:
           description: Explicit PR URL. Required for error/alert tickets (no GitHub issue to derive the URL from).
           type: string
           format: uri
+        unlink:
+          type: boolean
+          default: false
+          description: Remove just this PR (`prNumber`, or `prUrl` when given) from the item instead of adding it.
       required:
         - prNumber
       additionalProperties: false
@@ -16074,12 +17837,121 @@ components:
           anyOf:
             - $ref: '#/components/schemas/GithubPrLink'
             - type: 'null'
-          description: 'The PR link now recorded on the item (`connectorData.github.pr`), or `null` after an unlink (`prNumber: null`).'
+          description: The item's primary PR link after the write (`connectorData.github.pr`), or `null` when no PR is linked any more.
+        prs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GithubPrLink'
+          description: Every PR now linked to the item (`connectorData.github.prs`), oldest first.
       required:
         - id
         - pr
+        - prs
       additionalProperties: false
       description: Response for `POST /api/admin/ops/{handle}/link-pr` — the item id and the resulting PR link.
+    OpsItemHandle:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: A queue item's per-project number (e.g. `12`, `#12` also accepted) or its full id.
+    UpdateOpsLinksRequest:
+      type: object
+      properties:
+        addBlockedBy:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/OpsItemHandle'
+          default: []
+          description: Items (number or id) to record as blocking this one. Already-linked items are a no-op.
+        removeBlockedBy:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/OpsItemHandle'
+          default: []
+          description: Items (number or id) to stop recording as blocking this one. Unlinked items are a no-op.
+        addBlocking:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/OpsItemHandle'
+          default: []
+          description: Items (number or id) this one blocks. Already-linked items are a no-op.
+        removeBlocking:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/OpsItemHandle'
+          default: []
+          description: Items (number or id) this one should stop blocking. Unlinked items are a no-op.
+        duplicateOf:
+          anyOf:
+            - $ref: '#/components/schemas/OpsItemHandle'
+            - type: 'null'
+          description: Mark this item as a duplicate of another (number or id), replacing any earlier canonical; `null` clears it. Omit to leave it unchanged. While the canonical is still open, the item closes as `wont_fix`; a canonical that is already `resolved`/`wont_fix` leaves the item's status alone.
+      additionalProperties: false
+      description: Incremental edit of an item's relations — pass any mix of fields; omitted ones are left as is. A link that would make an item block (or duplicate) itself, directly or through a chain, is rejected with `409`.
+    OpsItemLinksResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Id of the item the links were edited on.
+        blockedBy:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsItemRef'
+          description: Items that block this one, oldest link first. While any of them is not `resolved`/`wont_fix` the item is blocked.
+        blocking:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsItemRef'
+          description: Items this one blocks, oldest link first.
+        duplicateOf:
+          anyOf:
+            - $ref: '#/components/schemas/OpsItemRef'
+            - type: 'null'
+          description: The canonical item this one duplicates, or `null`.
+        duplicates:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsItemRef'
+          description: Items marked as duplicates of this one, oldest link first.
+      required:
+        - id
+        - blockedBy
+        - blocking
+        - duplicateOf
+        - duplicates
+      additionalProperties: false
+      description: Every relation of one queue item — "blocked by" / "blocking" and "duplicate of" / "duplicates" — in both directions.
+    UpdateOpsGroupRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/OpsItemStatus'
+        priority:
+          $ref: '#/components/schemas/OpsItemPriorityOrNull'
+      additionalProperties: false
+      description: Triage fields applied to EVERY member of the item's link group. Pass at least one field.
+    OpsItemGroupResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Id of the item the call was made on.
+        group:
+          $ref: '#/components/schemas/OpsItemGroup'
+        updated:
+          type: number
+          description: How many members actually changed — members already in the requested state are left alone.
+      required:
+        - id
+        - group
+        - updated
+      additionalProperties: false
+      description: The group after a group-wide update.
     AckOpsItemRequest:
       type: object
       properties:
@@ -16092,13 +17964,25 @@ components:
             - jules
             - gemini
             - jarvis
-          description: The AI agent type acking on the item's behalf — pass your own type when you are a coding agent (Claude Code passes `claude`, Cursor `cursor`, Copilot `copilot`, Jules/Gemini `jules`). Omit entirely for a human ack by the authenticated caller.
+          description: The AI agent type acking on the item's behalf — pass your own type when you are a coding agent (Claude Code passes `claude`, Cursor `cursor`, Copilot `copilot`, Jules `jules`, Gemini `gemini` → normalized to `jules`). Omit entirely for a human ack by the authenticated caller.
         sessionId:
           type: string
           maxLength: 300
           description: The agent-run session id (e.g. Claude's `session_01…`), so the dashboard can deep-link to the exact run page. Omit when the harness has no session id.
+        launch:
+          type: boolean
+          default: true
+          description: 'Whether an AI ack may FIRE the agent''s connected trigger. Default `true`: an ack naming a connected agent, with no `sessionId`, starts a new provider run of that agent. Pass `false` to only record the ack — claim the item and open the run record — without starting anything, e.g. when you ARE that agent working the item yourself and have no session id to pass. Ignored on a human ack.'
+        runId:
+          type: string
+          maxLength: 100
+          description: The run you were handed — the investigation id a fired run's prompt names, or the `runId` an earlier ack returned. Proves the open run is yours, so the ack adopts it instead of answering `409` `ALREADY_EXISTS`.
+        takeover:
+          type: boolean
+          default: false
+          description: Replace another session's LIVE run on the item instead of being refused with `409` `ALREADY_EXISTS`. Only when you were asked to replace that session — two sessions on one item each open their own PR.
       additionalProperties: false
-      description: Body for `POST /api/admin/ops/{handle}/ack`. With `agent` set this is an AI ack — the named agent type must have a connected trigger connector in the project, or the call fails with `AGENT_NOT_CONNECTED` and instructions to query the available agents (`ops agents list`). `gemini` is accepted as an alias for `jules`. Without `agent` it is a HUMAN ack by the authenticated caller.
+      description: Body for `POST /api/admin/ops/{handle}/ack`. With `agent` set this is an AI ack — the named agent type must have a connected trigger connector in the project, or the call fails with `AGENT_NOT_CONNECTED` and instructions to query the available agents (`ops agents list`). `gemini` is accepted as an input value and is normalized to `jules`. Without `agent` it is a HUMAN ack by the authenticated caller.
     AckOpsItemResponse:
       type: object
       properties:
@@ -16518,6 +18402,394 @@ components:
       additionalProperties: false
       minProperties: 1
       description: Body for `PATCH /api/admin/ops/{handle}/investigation/{investigationId}` — a partial update of one existing investigation record (typically the `working` run record you were handed). Send only the fields you want to change; at least one is required.
+    OpsQuestionStatus:
+      type: string
+      enum:
+        - open
+        - completed
+        - cancelled
+      description: Where a question stands — `open` (waiting on a person), `completed` (answered), or `cancelled` (withdrawn by the asker).
+    OpsQuestionAnswer:
+      type: object
+      properties:
+        selected:
+          type: array
+          items:
+            type: string
+          description: The option labels the person picked (empty when they only answered "Other").
+        other:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The free-text "Other" answer, or `null`.
+      required:
+        - selected
+        - other
+      additionalProperties: false
+      description: A person's answer to a question.
+    OpsQuestionDelivery:
+      type: string
+      enum:
+        - resume
+        - poll
+      description: How the answer gets back to the asker — `resume` re-fires the asking run's trigger connector on the item once every question that run asked is answered; `poll` fires nothing and the asker reads `GET .../questions`.
+    OpsQuestion:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Question id.
+        feedbackId:
+          type: string
+          description: The queue item the question hangs off.
+        header:
+          type: string
+          description: Short chip label for the question.
+        question:
+          type: string
+          description: The full question (markdown).
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+                description: The option's display text.
+              description:
+                anyOf:
+                  - type: string
+                  - type: 'null'
+                description: What picking the option means, or `null`.
+            required:
+              - label
+              - description
+            additionalProperties: false
+            description: One offered choice.
+          description: The offered choices, in order.
+        multiSelect:
+          type: boolean
+          description: Whether several options may be picked.
+        status:
+          $ref: '#/components/schemas/OpsQuestionStatus'
+        answer:
+          anyOf:
+            - $ref: '#/components/schemas/OpsQuestionAnswer'
+            - type: 'null'
+          description: The person's answer, or `null` while the question is open (or was withdrawn).
+        answeredBy:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: Email of the person who answered, or `null`.
+        answeredAt:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: ISO-8601 timestamp of the answer, or `null`.
+        agent:
+          anyOf:
+            - type: string
+              enum:
+                - jarvis
+                - claude
+                - cursor
+                - copilot
+                - jules
+            - type: 'null'
+          description: The agent that asked, or `null` (asked by a person or an unattributed key).
+        askedBy:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: Email of the person who asked, when a human asked, or `null`.
+        runId:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The run (investigation record id) the question was asked under, or `null`.
+        delivery:
+          $ref: '#/components/schemas/OpsQuestionDelivery'
+        deliveredAt:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: ISO-8601 timestamp the answer was re-delivered to the asking run (`resume` only), or `null`.
+        deliveryError:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: Why a `resume` re-delivery failed, or `null`.
+        createdAt:
+          type: string
+          description: ISO-8601 creation timestamp.
+        updatedAt:
+          type: string
+          description: ISO-8601 last-update timestamp.
+      required:
+        - id
+        - feedbackId
+        - header
+        - question
+        - options
+        - multiSelect
+        - status
+        - answer
+        - answeredBy
+        - answeredAt
+        - agent
+        - askedBy
+        - runId
+        - delivery
+        - deliveredAt
+        - deliveryError
+        - createdAt
+        - updatedAt
+      additionalProperties: false
+      description: One structured question on a queue item and, once answered, its answer.
+    ListOpsQuestionsResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/OpsQuestion'
+      description: Response for `GET /api/admin/ops/{handle}/questions` — the item's questions, newest first (max 100).
+    OpsQuestionOption:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: The option's display text — short (1–5 words). Answers name options by this label.
+        description:
+          type: string
+          maxLength: 500
+          description: What picking this option means — its trade-off or consequence.
+      required:
+        - label
+      additionalProperties: false
+      description: One choice offered by a question — rendered as a radio, or a checkbox when the question is `multiSelect`.
+    AskOpsQuestionInput:
+      type: object
+      properties:
+        header:
+          type: string
+          minLength: 1
+          maxLength: 24
+          description: Very short chip label for the question (max 24 chars), e.g. `Auth method`.
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: The complete question, ending with a question mark (markdown).
+        options:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/OpsQuestionOption'
+          description: 2–4 distinct choices. Do not add an "Other" option — a free-text answer is always offered.
+        multiSelect:
+          type: boolean
+          default: false
+          description: '`true` lets the person pick several options (checkboxes); `false` (the default) exactly one (radios).'
+      required:
+        - header
+        - question
+        - options
+      additionalProperties: false
+      description: One question to ask — the `AskUserQuestion` shape.
+    AskOpsQuestionsRequest:
+      type: object
+      properties:
+        questions:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/AskOpsQuestionInput'
+          description: 1–4 questions to ask at once.
+        runId:
+          type: string
+          maxLength: 200
+          description: The run (investigation record id) you are working the item under — the `runId` an ack or a launch handed you. Ties the questions to that run so a `resume` delivery continues it.
+        agent:
+          type: string
+          enum:
+            - jarvis
+            - claude
+            - cursor
+            - copilot
+            - jules
+          description: The agent type asking — pass your own type when you are a coding agent. Defaults to the run's agent.
+        delivery:
+          $ref: '#/components/schemas/OpsQuestionDelivery'
+      required:
+        - questions
+      additionalProperties: false
+      description: Body for `POST /api/admin/ops/{handle}/questions`.
+    AskOpsQuestionsResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/OpsQuestion'
+      description: Response for `POST /api/admin/ops/{handle}/questions` — the created questions, in the order asked.
+    AnswerOpsQuestionRequest:
+      type: object
+      properties:
+        selected:
+          type: array
+          maxItems: 4
+          items:
+            type: string
+            maxLength: 120
+          description: The option labels picked — exactly one for a single-select question (unless answering only with `other`), one or more for `multiSelect`.
+        other:
+          type: string
+          maxLength: 10000
+          description: A free-text "Other" answer.
+      additionalProperties: false
+      minProperties: 1
+      description: Body for `POST /api/admin/ops/{handle}/questions/{questionId}/answer` — pick option labels, write a free-text answer, or both (multi-select only).
+    OpsQaNoteKind:
+      type: string
+      enum:
+        - narrowing
+        - clarification
+        - verification
+        - correction
+      description: What a QA note is — `narrowing` (only part of the bug still fails), `clarification` (changes what "fixed" means), `verification` (a pass/fail verdict on a fix) or `correction` (withdraws an earlier framing).
+    OpsQaNoteVerdict:
+      type: string
+      enum:
+        - pass
+        - fail
+      description: The outcome a `verification` note records.
+    OpsQaNote:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Note id.
+        feedbackId:
+          type: string
+          description: The queue item the note hangs off.
+        kind:
+          $ref: '#/components/schemas/OpsQaNoteKind'
+        verdict:
+          anyOf:
+            - $ref: '#/components/schemas/OpsQaNoteVerdict'
+            - type: 'null'
+          description: The pass/fail verdict of a `verification` note; `null` for every other kind.
+        body:
+          type: string
+          description: The note (markdown) — for a `verification`, what was checked.
+        authorEmail:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: Email of the person (or the key's actor) who wrote the note, or `null` when an agent wrote it.
+        authorAgent:
+          anyOf:
+            - type: string
+              enum:
+                - jarvis
+                - claude
+                - cursor
+                - copilot
+                - jules
+            - type: 'null'
+          description: The agent type that wrote the note (QA automation), or `null` for a person.
+        createdAt:
+          type: string
+          description: ISO-8601 creation timestamp.
+      required:
+        - id
+        - feedbackId
+        - kind
+        - verdict
+        - body
+        - authorEmail
+        - authorAgent
+        - createdAt
+      additionalProperties: false
+      description: One typed, append-only QA note on a queue item.
+    ListOpsQaNotesResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/OpsQaNote'
+      description: Response for `GET /api/admin/ops/{handle}/qa-notes` — the item's QA notes, newest first (max 200).
+    CreateOpsQaNoteRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/OpsQaNoteKind'
+        body:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: The note (markdown).
+        verdict:
+          $ref: '#/components/schemas/OpsQaNoteVerdict'
+        agent:
+          type: string
+          enum:
+            - jarvis
+            - claude
+            - cursor
+            - copilot
+            - jules
+          description: The agent type writing the note — pass your own type when you are QA automation. Omitted, the note is attributed to the caller's identity.
+      required:
+        - kind
+        - body
+      additionalProperties: false
+      description: Body for `POST /api/admin/ops/{handle}/qa-notes`. A `verification` note requires `verdict`; every other kind rejects it.
+    ListOpsQaQuestionsResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/OpsQaQuestion'
+      description: Response for `GET /api/admin/ops/{handle}/qa-questions` — the item's QA questions, newest first (max 100).
+    AskOpsQaQuestionRequest:
+      type: object
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: What you need QA to answer (markdown). Include what you already tried.
+        agent:
+          type: string
+          enum:
+            - jarvis
+            - claude
+            - cursor
+            - copilot
+            - jules
+          description: The agent type asking — pass your own type when you are a coding agent. Omitted, the question is attributed to the caller's identity.
+      required:
+        - question
+      additionalProperties: false
+      description: Body for `POST /api/admin/ops/{handle}/qa-questions`.
+    AnswerOpsQaQuestionRequest:
+      type: object
+      properties:
+        answer:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: QA's answer (markdown).
+        agent:
+          type: string
+          enum:
+            - jarvis
+            - claude
+            - cursor
+            - copilot
+            - jules
+          description: The agent type answering — pass your own type when you are QA automation. Omitted, the answer is attributed to the caller's identity.
+      required:
+        - answer
+      additionalProperties: false
+      description: Body for `POST /api/admin/ops/{handle}/qa-questions/{questionId}/answer`.
     OpsAgentProfile:
       type: object
       properties:
@@ -16635,6 +18907,370 @@ components:
         - id
       additionalProperties: false
       description: Response for `POST /api/admin/ops/{handle}/comments`.
+    CreateOpsAttachmentRequest:
+      type: object
+      properties:
+        contentBase64:
+          type: string
+          description: The file bytes, base64-encoded (a bare string or a `data:<mime>;base64,` URI). Pass this or `url`, not both.
+        url:
+          type: string
+          format: uri
+          description: A public https URL for the server to fetch the file from (no IP literals or internal hosts; max 25 MiB). Pass this or `contentBase64`, not both.
+        filename:
+          type: string
+          description: File name, e.g. `checkout-overflow.png`. Defaults to the last segment of `url`, else `file`.
+        mimeType:
+          type: string
+          description: Media type, e.g. `image/png`. Defaults from the data URI, the fetched response, or the filename extension.
+        kind:
+          type: string
+          enum:
+            - screenshot
+            - recording
+            - file
+          description: Attachment kind. Defaults from the media type (image → screenshot, video → recording, else file). Ignored by the comment-media upload.
+      additionalProperties: false
+      description: Body for `POST /api/admin/ops/{handle}/attachments` and `POST /api/admin/ops/{handle}/comment-media`. Exactly one of `contentBase64` / `url` is required.
+    CreateOpsAttachmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Newly created attachment id.
+        filename:
+          type: string
+        kind:
+          type: string
+          enum:
+            - screenshot
+            - recording
+            - file
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+      required:
+        - id
+        - filename
+        - kind
+        - mimeType
+        - sizeBytes
+      additionalProperties: false
+      description: Response for `POST /api/admin/ops/{handle}/attachments`.
+    CreateOpsCommentMediaResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Newly created media id.
+        url:
+          type: string
+          description: Relative URL to embed in a comment body as a markdown image.
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+      required:
+        - id
+        - url
+        - mimeType
+        - sizeBytes
+      additionalProperties: false
+      description: Response for `POST /api/admin/ops/{handle}/comment-media`.
+    OpsActivityField:
+      type: string
+      enum:
+        - status
+        - priority
+        - owner
+        - tags
+        - ack
+        - pr
+        - comment
+        - edit
+      description: Which kind of change an activity entry records. `pr` is a pull-request event (see `pr.event`); `comment` carries an excerpt in `to`; `edit` names the edited content fields in `added`.
+    OpsActivityPr:
+      type: object
+      properties:
+        event:
+          type: string
+          enum:
+            - linked
+            - unlinked
+            - merged
+            - closed
+          description: What happened to the pull request. `closed` means closed WITHOUT merging.
+        number:
+          type: integer
+          description: PR number within its repository.
+        url:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The pull request's URL, when known.
+        repo:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: '`owner/repo` the pull request lives in, when known.'
+        title:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The pull request's title, when GitHub was reachable.
+        author:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The pull request's GitHub author, when known.
+      required:
+        - event
+        - number
+        - url
+        - repo
+        - title
+        - author
+      additionalProperties: false
+      description: The pull request a `pr` activity entry is about.
+    OpsActivityEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Activity entry id.
+        at:
+          type: string
+          description: ISO-8601 timestamp of the change.
+        itemId:
+          type: string
+          description: The queue item the change belongs to.
+        itemNumber:
+          anyOf:
+            - type: integer
+            - type: 'null'
+          description: The item's per-project number.
+        itemTitle:
+          type: string
+          description: The item's title.
+        actor:
+          type: string
+          description: Who made the change — a teammate email, a key's actor, or `github` for a PR outcome the webhook observed.
+        actorType:
+          type: string
+          description: '`user`, `cli` or `system`.'
+        via:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The door the change came through (`dashboard`, `cli`, `mcp`, …).
+        viaAgent:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The AI agent that drove the change, when one did.
+        field:
+          $ref: '#/components/schemas/OpsActivityField'
+        from:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The previous value of a scalar field.
+        to:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The new value of a scalar field, or a comment excerpt.
+        added:
+          type: array
+          items:
+            type: string
+          description: Tags added, or the content fields edited.
+        removed:
+          type: array
+          items:
+            type: string
+          description: Tags removed.
+        pr:
+          anyOf:
+            - $ref: '#/components/schemas/OpsActivityPr'
+            - type: 'null'
+          description: The pull-request event, for `pr` entries; `null` otherwise.
+      required:
+        - id
+        - at
+        - itemId
+        - itemNumber
+        - itemTitle
+        - actor
+        - actorType
+        - via
+        - viaAgent
+        - field
+        - from
+        - to
+        - added
+        - removed
+        - pr
+      additionalProperties: false
+      description: One change recorded against a queue item.
+    ListOpsActivityResponse:
+      type: object
+      properties:
+        activity:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsActivityEntry'
+      required:
+        - activity
+      additionalProperties: false
+      description: Response for `GET /api/admin/ops/activity` — newest first.
+    OpsRoutingRuleType:
+      type: string
+      enum:
+        - error
+        - alert
+        - bug
+        - feature_request
+      description: A ticket type a tag rule can also fire on. Error and alert tickets carry no tags, so a rule that should catch them matches on type.
+    OpsRoutingRule:
+      type: object
+      description: One tag automation rule. A rule fires on a newly filed queue item that carries ANY of its `tags` (or whose `type` is in `types`) and applies its actions — assign a person, hand the item to a connected coding agent (which launches a run), set a status or priority, and subscribe emails. Rules are evaluated in order; each action is optional but a rule needs at least one.
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          maxItems: 20
+          description: Tag names the rule matches (case-insensitive). Tags are created on first use.
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsRoutingRuleType'
+          maxItems: 4
+          description: Ticket types the rule also fires on. A rule needs at least one tag or type.
+        enabled:
+          type: boolean
+          description: Whether the rule is live. Defaults to `true` on create.
+        user:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 128
+            - type: 'null'
+          description: Person to assign — a user id. `null` leaves the owner alone.
+        connector:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 128
+            - type: 'null'
+          description: Connected coding agent to hand the item to — a connector id from `ops agents list`. Launches a run when the rule fires.
+        agentPrompt:
+          anyOf:
+            - type: string
+              maxLength: 4000
+            - type: 'null'
+          description: Steering prompt for the launched agent. Only kept alongside a `connector`.
+        status:
+          anyOf:
+            - $ref: '#/components/schemas/OpsItemStatus'
+            - type: 'null'
+          description: Status to set on a matching item.
+        priority:
+          $ref: '#/components/schemas/OpsItemPriorityOrNull'
+        subscribers:
+          type: array
+          items:
+            type: string
+            format: email
+          maxItems: 20
+          description: Emails notified about matching items.
+        skipApproval:
+          type: boolean
+          description: A public-intake ticket this rule matches skips `pending_approval` and runs the rule on filing, instead of waiting for a human to approve it.
+        triage:
+          type: boolean
+          description: While a matching public-intake ticket waits in `pending_approval`, the rule's agent safety-triages it and tags it from the central triage set. Needs a `connector`; always `false` alongside `skipApproval`.
+        triageAgent:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: Who does the triage — `null` means the rule's own `connector`, `jarvis` (Enterprise), or a connector id. Only meaningful with `triage`.
+        triageAutoApprove:
+          type: boolean
+          description: With `triage`, approve the ticket automatically when the agent tags it safe and nothing else. Off means a human still approves.
+      required:
+        - tags
+        - types
+        - enabled
+        - user
+        - connector
+        - agentPrompt
+        - status
+        - priority
+        - subscribers
+        - skipApproval
+        - triage
+        - triageAgent
+        - triageAutoApprove
+      additionalProperties: false
+    ListOpsRoutingRulesResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/OpsRoutingRule'
+    CreateOpsRoutingRuleRequest:
+      type: object
+      description: Appends one tag automation rule after the existing ones; the existing rules are untouched. Needs at least one of `tags` / `types` and at least one action (`user`, `connector`, `status`, `priority` or `subscribers`).
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          maxItems: 20
+          description: Tag names the rule matches (case-insensitive). Tags are created on first use.
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsRoutingRuleType'
+          maxItems: 4
+          description: Ticket types the rule also fires on.
+        enabled:
+          type: boolean
+          description: Whether the rule is live. Defaults to `true`.
+        user:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Person to assign — a user id.
+        connector:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Connected coding agent to hand the item to — a connector id from `ops agents list`.
+        agentPrompt:
+          type: string
+          maxLength: 4000
+          description: Steering prompt for the launched agent. Only kept alongside a `connector`.
+        status:
+          $ref: '#/components/schemas/OpsItemStatus'
+        priority:
+          $ref: '#/components/schemas/OpsItemPriority'
+        subscribers:
+          type: array
+          items:
+            type: string
+            format: email
+          maxItems: 20
+          description: Emails notified about matching items.
+        skipApproval:
+          type: boolean
+          description: Let a matching public-intake ticket skip `pending_approval`. Defaults to `false`.
+      additionalProperties: false
     NotifyOpsRequest:
       type: object
       properties:
@@ -16732,6 +19368,38 @@ components:
         - op
         - rules
       additionalProperties: false
+    AlertRuleNotify:
+      anyOf:
+        - type: object
+          properties:
+            slackChannel:
+              anyOf:
+                - type: object
+                  properties:
+                    id:
+                      type: string
+                      minLength: 1
+                    name:
+                      type: string
+                      minLength: 1
+                  required:
+                    - id
+                    - name
+                  additionalProperties: false
+                - type: 'null'
+            email:
+              anyOf:
+                - type: string
+                  format: email
+                - type: 'null'
+            inApp:
+              anyOf:
+                - type: boolean
+                - type: 'null'
+              description: Whether the in-app notification (the dashboard bell and Home) is recorded when the rule fires. Absent or `null` means on; `false` skips it for this rule.
+          additionalProperties: false
+        - type: 'null'
+      description: Delivery target for a rule's alert; `null` = use the project default. The `NotificationTarget` shape plus the in-app switch.
     ListAlertRulesResponse:
       type: array
       items:
@@ -16862,7 +19530,7 @@ components:
             type: boolean
             description: Whether the rule is evaluated by the cron.
           notify:
-            $ref: '#/components/schemas/NotificationTarget'
+            $ref: '#/components/schemas/AlertRuleNotify'
           createdAt:
             type: string
             description: ISO-8601 timestamp of creation.
@@ -17038,7 +19706,7 @@ components:
           description: Whether the rule is evaluated by the cron.
           type: boolean
         notify:
-          $ref: '#/components/schemas/NotificationTarget'
+          $ref: '#/components/schemas/AlertRuleNotify'
       required:
         - name
         - metricId
@@ -17181,7 +19849,7 @@ components:
         enabled:
           type: boolean
         notify:
-          $ref: '#/components/schemas/NotificationTarget'
+          $ref: '#/components/schemas/AlertRuleNotify'
       additionalProperties: false
     UpdateAlertRuleResponse:
       type: object
@@ -17912,6 +20580,16 @@ components:
                 anyOf:
                   - type: string
                   - type: 'null'
+              experimentId:
+                description: Id of the experiment this key's copy change is linked to, or `null` when it is not linked; absent from servers that predate the link. A data link only — it does not change what the key serves.
+                anyOf:
+                  - type: string
+                  - type: 'null'
+              experimentName:
+                description: Name of the linked experiment, or `null` when the key is not linked.
+                anyOf:
+                  - type: string
+                  - type: 'null'
               updatedAt:
                 description: ISO-8601 timestamp of the last edit.
                 type: string
@@ -18092,6 +20770,13 @@ components:
             type: string
             minLength: 1
             maxLength: 64
+        experimentId:
+          description: Link this key's copy change to an experiment (id or name) so the change can be tracked against it. `null` removes the link; omit to leave the current link untouched. A data link only — it does not change what the key serves.
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 128
+            - type: 'null'
       required:
         - value
       additionalProperties: false
@@ -19426,6 +22111,14 @@ components:
             - type: string
             - type: 'null'
           description: Last 4 characters of the raw token, so the dashboard mask is matchable against the held key. `null` for keys minted before this column.
+        origin:
+          type: string
+          enum:
+            - cli
+            - mobile
+            - dashboard
+            - api
+          description: Where the key was minted. `cli` (a signed-in CLI session from device auth), `mobile` (a mobile app login), `dashboard` (the "New API key" dialog) or `api` (minted with another key — CLI, MCP, agents). Set at mint time; keys that predate the column were backfilled from their label, defaulting to `dashboard`.
       required:
         - id
         - type
@@ -19438,6 +22131,7 @@ components:
         - description
         - scopes
         - last4
+        - origin
       additionalProperties: false
     ListKeysResponse:
       type: object
@@ -19594,7 +22288,10 @@ components:
             - config
             - killswitch
             - metric
-          description: Resource family — drives the result group + icon in the palette. (`member` hits are surfaced first.)
+            - ops
+            - error
+            - change
+          description: Resource family — drives the result group + icon in the palette. (`member` hits are surfaced first.) `error` is a tracked error group, `change` an audit-log entry (Settings → Changes).
         id:
           type: string
           description: Stable identifier used to deep-link into the row's detail pane. For `member` hits this is the teammate's email; for everything else it is the resource id.
@@ -19627,6 +22324,85 @@ components:
       required:
         - hits
       additionalProperties: false
+    Tag:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Stable opaque tag id.
+        name:
+          type: string
+          description: Display name — also the tag's identity, unique case-insensitively within the project.
+      required:
+        - id
+        - name
+      additionalProperties: false
+    ListTagsResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/Tag'
+      description: The project's tags, sorted by name.
+    TaggableEntityType:
+      type: string
+      enum:
+        - ops
+        - flag
+        - config
+        - killswitch
+        - metric
+        - error
+        - alert_rule
+        - experiment
+      description: 'The kind of item a tag set hangs off: `ops` (any queue item — bug, feature request, error/alert/measure-plan ticket), `flag` (feature gate), `config` (dynamic config), `killswitch`, `metric`, `error` (tracked error group), `alert_rule`, or `experiment`.'
+    EntityTagsResponse:
+      type: object
+      properties:
+        entityType:
+          $ref: '#/components/schemas/TaggableEntityType'
+        entityId:
+          type: string
+          description: The item's canonical id (the handle you passed, resolved).
+        tags:
+          type: array
+          items:
+            type: string
+          description: The tag names now attached to the item, sorted by name.
+      required:
+        - entityType
+        - entityId
+        - tags
+      additionalProperties: false
+    SetEntityTagsRequest:
+      type: object
+      properties:
+        tags:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/TagName'
+          description: The complete tag set the item should carry — tags not listed are detached. Names are get-or-created (a new name mints a project tag), deduped case-insensitively; `[]` clears every tag.
+      required:
+        - tags
+      additionalProperties: false
+    UpdateEntityTagsRequest:
+      type: object
+      properties:
+        add:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/TagName'
+          default: []
+          description: Tag names to attach (get-or-created by name, case-insensitive). Already-attached names are a no-op.
+        remove:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/TagName'
+          default: []
+          description: Tag names to detach (case-insensitive). Names the item doesn't carry are a no-op. A name in both lists is removed.
+      additionalProperties: false
+      description: Incremental tag edit — pass `add`, `remove`, or both. Every other tag on the item is left as is.
   responses:
     BadRequest:
       description: The request was malformed (bad JSON or missing project scope).

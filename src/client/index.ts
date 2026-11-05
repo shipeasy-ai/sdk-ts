@@ -1783,6 +1783,7 @@ export class Engine {
         return { inExperiment: entry?.inExperiment ?? false, group: entry?.group ?? "control" };
       },
       getConfig: (n) => this.getConfig(n),
+      getKillswitch: (n) => this.getKillswitch(n),
       user: this.lastUser,
     };
     (window as unknown as { __shipeasy?: ShipeasySdkBridge }).__shipeasy = bridge;
@@ -1921,6 +1922,8 @@ export interface ShipeasySdkBridge {
   getFlag(name: string): boolean;
   getExperiment(name: string): { inExperiment: boolean; group: string } | undefined;
   getConfig(name: string): unknown;
+  /** Live killswitch state (true = killed) — the devtools Killswitches panel reads it. */
+  getKillswitch?(name: string): boolean;
   /** Last identify() payload (caller fields ⊕ auto-collected attrs) — the
    *  devtools User panel reads it. Null before the app identifies. */
   user?: Record<string, unknown> | null;

@@ -872,7 +872,11 @@ export type EngineEnv = "dev" | "staging" | "prod";
 export interface EngineOptions {
   apiKey: string;
   baseUrl?: string;
-  /** Which published env to read values from. Defaults to "prod". */
+  /**
+   * Which published env to read values from. Omit it (the default) to read the
+   * env the server key is bound to — the SDK then sends no `?env=` at all.
+   * Set it only to override that binding for this process.
+   */
   env?: EngineEnv;
   /**
    * Preload the flags blob synchronously without a network fetch. Primarily
@@ -955,6 +959,10 @@ export class Engine {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly env: EngineEnv;
+  // The caller's explicit `env`, if any. Only this is sent as `?env=` — an
+  // unset `env` must let the edge resolve the read env from the key's binding,
+  // or a staging/dev server key silently reads prod (shipeasy #551).
+  private readonly explicitEnv: EngineEnv | undefined;
   private readonly privateAttributes: readonly string[];
   private readonly stickyStore: StickyBucketStore | undefined;
   // Master network gate — false ⇒ the SDK never touches the network (no fetch,
@@ -999,6 +1007,7 @@ export class Engine {
     setLogLevel(opts.logLevel);
     this.apiKey = opts.apiKey;
     this.baseUrl = (opts.baseUrl ?? "https://cdn.shipeasy.ai").replace(/\/$/, "");
+    this.explicitEnv = opts.env;
     this.env = opts.env ?? "prod";
     this.privateAttributes = opts.privateAttributes ?? [];
     this.stickyStore = opts.stickyStore;
@@ -1187,7 +1196,8 @@ export class Engine {
   private async fetchFlags(): Promise<{ interval: number | null; changed: boolean }> {
     const headers: Record<string, string> = { "X-SDK-Key": this.apiKey };
     if (this.flagsEtag) headers["If-None-Match"] = this.flagsEtag;
-    const res = await globalThis.fetch(`${this.baseUrl}/sdk/flags?env=${this.env}`, { headers });
+    const envQuery = this.explicitEnv ? `?env=${encodeURIComponent(this.explicitEnv)}` : "";
+    const res = await globalThis.fetch(`${this.baseUrl}/sdk/flags${envQuery}`, { headers });
     const interval = Number(res.headers.get("X-Poll-Interval") ?? "30") || 30;
     if (res.status === 304) return { interval, changed: false };
     if (!res.ok) throw new Error(`/sdk/flags returned ${res.status}`);
