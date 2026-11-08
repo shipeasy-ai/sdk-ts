@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — devtools-core
+
+### Public reports attach the reporter's identity automatically
+
+`submitPublicBug` / `submitPublicFeature` now send the configured client SDK's
+identified user (the `identify()` payload, read via the engine bridge) as
+`user`. Shipeasy evaluates the flags, kill switches and experiments that user had
+on and stores them on the ticket for triage and the agent working it. Pass
+`user` to override, or `user: null` to file without it. The React Native
+devtools' public **Report a bug** / **Request a feature** pick this up with no
+change.
+
 ## 9.1.1 (2026-11-05)
 
 - Browser `flags.get`: after hydration a programmatic, devtools or

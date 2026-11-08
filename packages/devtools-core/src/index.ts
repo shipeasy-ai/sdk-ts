@@ -66,6 +66,7 @@ export type {
   PublicBugInput,
   PublicBugResult,
   PublicFeatureInput,
+  ReporterUser,
   SubmitPublicBugOptions,
 } from "./public-report";
 

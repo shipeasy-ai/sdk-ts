@@ -7,8 +7,30 @@
 //   3. the ticket is force-filed as `pending_approval` (human-reviewed).
 // A 403 from either gate 1 or 2 rejects with `PublicTicketsDisabled` so the UI
 // can show a friendly "not enabled for this project" instead of a raw error.
+//
+// Identity rides along automatically: the configured `@shipeasy/sdk/client`
+// singleton's identified user (whatever the app passed to `identify()`, or the
+// server-adopted `data-user`) is attached as `user`, read through the engine
+// bridge — no extra call for the app to make. Shipeasy then snapshots the flags,
+// kill switches and experiments that user had on onto the ticket. Pass `user`
+// explicitly to override, or `null` to file without it.
 
-import { DEFAULT_EDGE_BASE_URL } from "./types";
+import { DEFAULT_EDGE_BASE_URL, readEngineBridge } from "./types";
+
+/** The reporter's SDK user attributes, as passed to `identify()`. */
+export type ReporterUser = Record<string, unknown>;
+
+/** `input.user` when the caller set it (incl. `null` = opt out), else the
+ *  configured client SDK's identified user, else nothing. */
+function reporterUser(explicit: ReporterUser | null | undefined): ReporterUser | null {
+  if (explicit !== undefined) return explicit;
+  try {
+    const user = readEngineBridge()?.getUser();
+    return user && Object.keys(user).length > 0 ? (user as ReporterUser) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** The project has not opted into public ticket creation (or the client key
  *  lacks the `tickets:public_create` scope). */
@@ -38,6 +60,11 @@ export interface PublicBugInput {
    *  case-insensitively against the project's existing tags — reused when it
    *  matches, created when it doesn't. */
   tags?: string[];
+  /** The reporter's SDK identity. Defaults to the configured client SDK's
+   *  identified user (via the engine bridge); pass `null` to file without one.
+   *  Shipeasy snapshots the flags / kill switches / experiments this user had
+   *  on onto the ticket. */
+  user?: ReporterUser | null;
 }
 
 export interface PublicBugResult {
@@ -64,6 +91,11 @@ export interface PublicFeatureInput {
    *  case-insensitively against the project's existing tags — reused when it
    *  matches, created when it doesn't. */
   tags?: string[];
+  /** The reporter's SDK identity. Defaults to the configured client SDK's
+   *  identified user (via the engine bridge); pass `null` to file without one.
+   *  Shipeasy snapshots the flags / kill switches / experiments this user had
+   *  on onto the ticket. */
+  user?: ReporterUser | null;
 }
 
 export interface SubmitPublicBugOptions {
@@ -108,6 +140,11 @@ async function postPublicReport(
   return { number: data.number, deduped: data.deduped === true };
 }
 
+function withUser(explicit: ReporterUser | null | undefined): { user?: ReporterUser } {
+  const user = reporterUser(explicit);
+  return user ? { user } : {};
+}
+
 export async function submitPublicBug(
   input: PublicBugInput,
   opts: SubmitPublicBugOptions,
@@ -121,6 +158,7 @@ export async function submitPublicBug(
       ...(input.step ? { step: input.step } : {}),
       ...(input.context ? { context: input.context } : {}),
       ...(input.tags?.length ? { tags: input.tags } : {}),
+      ...withUser(input.user),
     },
     opts,
     "Bug report",
@@ -143,6 +181,7 @@ export async function submitPublicFeature(
       ...(input.step ? { step: input.step } : {}),
       ...(input.context ? { context: input.context } : {}),
       ...(input.tags?.length ? { tags: input.tags } : {}),
+      ...withUser(input.user),
     },
     opts,
     "Feature request",

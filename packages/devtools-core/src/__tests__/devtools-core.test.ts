@@ -2,7 +2,7 @@
 // device-auth flow, the public bug intake, and the shared form schemas.
 // Hermetic: every network call goes through an injected fetch stub.
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthError, DevtoolsClient } from "../api";
 import { LoginCancelled, parseDeepLinkQuery, startDeviceAuth } from "../auth";
 import {
@@ -549,6 +549,52 @@ describe("submitPublicBug", () => {
         },
       ),
     ).rejects.toBeInstanceOf(PublicTicketsDisabled);
+  });
+});
+
+// ── reporter identity on public reports ──────────────────────────────────────
+
+describe("public reports carry the reporter's SDK identity", () => {
+  const BRIDGE_KEY = "__SE_DEVTOOLS_ENGINE__";
+  const g = globalThis as Record<string, unknown>;
+  let bodies: Array<Record<string, unknown>>;
+  const opts = () => ({
+    clientKey: "k",
+    edgeBaseUrl: "https://edge.test",
+    fetch: (async (_: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return jsonResponse({ number: 1 }, 201);
+    }) as unknown as typeof fetch,
+  });
+  let prior: unknown;
+  beforeEach(() => {
+    bodies = [];
+    prior = g[BRIDGE_KEY];
+  });
+  afterEach(() => {
+    g[BRIDGE_KEY] = prior;
+  });
+
+  it("attaches the configured client's identified user automatically", async () => {
+    g[BRIDGE_KEY] = { getUser: () => ({ user_id: "u-42", plan: "pro" }) };
+    await submitPublicBug({ title: "T" }, opts());
+    await submitPublicFeature({ title: "F" }, opts());
+    expect(bodies[0]?.user).toEqual({ user_id: "u-42", plan: "pro" });
+    expect(bodies[1]?.user).toEqual({ user_id: "u-42", plan: "pro" });
+  });
+
+  it("an explicit user wins, and null opts out", async () => {
+    g[BRIDGE_KEY] = { getUser: () => ({ user_id: "bridge" }) };
+    await submitPublicBug({ title: "T", user: { user_id: "explicit" } }, opts());
+    await submitPublicBug({ title: "T", user: null }, opts());
+    expect(bodies[0]?.user).toEqual({ user_id: "explicit" });
+    expect(bodies[1]).not.toHaveProperty("user");
+  });
+
+  it("sends no user when no client SDK is configured", async () => {
+    g[BRIDGE_KEY] = undefined;
+    await submitPublicBug({ title: "T" }, opts());
+    expect(bodies[0]).not.toHaveProperty("user");
   });
 });
 

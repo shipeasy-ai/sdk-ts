@@ -196,6 +196,13 @@ the engine bridge — also exposed as the `useIdentityEmail()` hook): when the a
 has identified an email the form doesn't ask for it, and only shows the email
 field otherwise.
 
+A public report also carries the reporter's identity automatically: the whole
+`identify()` payload rides along as `user`, and Shipeasy snapshots the flags,
+kill switches and experiments that user had on onto the ticket, where triage
+and the agent working it can see them. Calling `submitPublicBug` /
+`submitPublicFeature` from `@shipeasy/devtools-core` yourself does the same;
+pass `user` to override it or `user: null` to file without it.
+
 ### Attaching a screenshot
 
 When logged in, the forms show an **Attach a screenshot** button
