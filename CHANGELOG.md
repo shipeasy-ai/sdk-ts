@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — devtools-core
+## devtools-core 1.3.0, react-native-devtools 1.1.2 (2026-11-08)
 
 ### Public reports attach the reporter's identity automatically
 
