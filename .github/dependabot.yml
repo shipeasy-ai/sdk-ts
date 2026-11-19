@@ -7,6 +7,17 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # TypeScript 7 is the native (Go) compiler with no JS compiler API, and
+      # tsup's dts step (rollup-plugin-dts) needs that API — the 6->7 bump in
+      # the grouped PR broke every build. Lift once tsup's dts runs on TS 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Vite 8 (Rolldown) externalises unresolved imports silently, which
+      # blinds src/__tests__/bundler-portability.test.ts — that test models
+      # the strict Vite <=7 consumer. Move it deliberately, not via a group.
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

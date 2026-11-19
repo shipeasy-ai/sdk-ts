@@ -5,3 +5,10 @@
 # subpath and declare `@shipeasy/sdk` as a peer (one Engine, no bridge skew).
 packages:
   - "packages/*"
+
+overrides:
+  # parse5-parser-stream@8.1.0 (jsdom 31) declares `parse5: ^8.0.0` but calls
+  # `tokenizer.flushCharacters`, which only exists from parse5 8.1.0. pnpm
+  # dedupes it onto 8.0.1 and every jsdom test fails to boot. Drop this once
+  # parse5-parser-stream's own range says ^8.1.0.
+  parse5: ^8.1.0

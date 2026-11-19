@@ -15,9 +15,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Keep in sync with package.json "engines" (>=20). vitest 4's std-env
-        # dep is ESM-only and cannot even load on Node 18.
-        node: ["20", "22", "24"]
+        # The dev toolchain (vitest 5, jsdom 31, tsup 9) requires Node
+        # ^22.12 || ^24 || >=26, so Node 20 (EOL 2026-04) cannot run the
+        # suite. package.json "engines" is the consumer contract and is
+        # tracked separately.
+        node: ["22", "24"]
     steps:
       - uses: actions/checkout@v7
 

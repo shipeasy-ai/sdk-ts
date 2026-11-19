@@ -32,7 +32,7 @@
     "@types/node": "^26.0.1",
     "next": "^16.2.3",
     "tsup": "^9.0.0",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^5.1.0"
   },
   "publishConfig": { "access": "public" },
