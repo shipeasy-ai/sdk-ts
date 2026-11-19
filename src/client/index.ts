@@ -56,7 +56,9 @@ declare global {
   }
 }
 
-export const version = "4.0.0";
+// Reported as `sdk_version` on every see() event. Keep equal to package.json
+// `version` — src/__tests__/version.test.ts fails the build when they drift.
+export const version = "9.2.0";
 
 // ---- Types ----
 
@@ -544,12 +546,14 @@ export function installXhrCorrelation(ignoreUrlPrefixes: string[]): void {
       } catch {
         /* header already sent / invalid state — best effort */
       }
-      // `loadend` fires for success, error, abort, and timeout alike, with the
-      // final status available. status 0 = network-level failure (no response),
-      // >=500 = server error — the two cases app code would report with see().
+      // `loadend` fires for success, error, abort, and timeout alike. Stamp
+      // EVERY completed request, whatever its status: a GraphQL (or any
+      // envelope-style) API reports a failed operation as HTTP 200 + errors[],
+      // and the server exception behind it still carries this token. The stamp
+      // only links when the server actually reported one for this request.
       this.addEventListener("loadend", () => {
         try {
-          if (this.status === 0 || this.status >= 500) markCorrelated(this, corr);
+          markCorrelated(this, corr);
         } catch {
           /* best effort */
         }
@@ -657,11 +661,13 @@ function installAutoGuardrails(
         if (!ignored && corr && !isExpected(err)) markCorrelated(err, corr);
         throw err;
       }
-      // On a 5xx the server ran and errored, but fetch RETURNS (never throws),
-      // so we can't stamp a thrown error — stamp the Response instead. A fetcher
-      // that throws `new Error(msg, { cause: res })` (or otherwise reports this
-      // failure) then links via findCorrelation walking the .cause chain.
-      if (!ignored && corr && res.status >= 500) markCorrelated(res, corr);
+      // fetch RETURNS (never throws) on any HTTP status, so stamp the Response.
+      // Every status, not just 5xx: a GraphQL (or any envelope-style) API
+      // answers a failed operation with HTTP 200 + errors[], and the server
+      // exception behind it carries this same token. A fetcher that throws
+      // `new Error(msg, { cause: res })` then links via findCorrelation walking
+      // the .cause chain; the stamp is inert unless the server reported too.
+      if (!ignored && corr) markCorrelated(res, corr);
       return res;
     };
   }
