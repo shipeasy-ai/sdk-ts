@@ -94,9 +94,11 @@ update is incomplete — when in doubt, grep `docs/` for the symbol you touched.
 ## Versioning & release
 
 - Bump `version` in `package.json` and add a `CHANGELOG.md` entry.
-- Publishing is **release-gated**: a GitHub release on `shipeasy-ai/sdk-ts` triggers
-  the OIDC Trusted-Publishing workflow (`.github/workflows/publish.yml`) which
-  publishes `@shipeasy/sdk` to npm with provenance. Never `npm publish` from a
+- **A version bump pushed to `main` IS the release.** `.github/workflows/publish.yml`
+  runs on every push to `main`, publishes any package whose `package.json`
+  version is not on npm yet (OIDC Trusted Publishing, with provenance), then cuts
+  the `v<sdk version>` tag + GitHub release from the CHANGELOG section. So bump
+  the version only in the commit you mean to ship. Never `npm publish` from a
   local checkout.
 
 ## Checks before you commit

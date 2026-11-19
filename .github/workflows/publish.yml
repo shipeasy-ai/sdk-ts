@@ -1,6 +1,19 @@
 name: Publish
 
+# A version bump merged to main IS the release — same model as the other six
+# SDKs. Every push to main checks each package's version against npm; when one
+# is new, this run tests, publishes it, then cuts the `v<sdk version>` tag and
+# GitHub release itself (notes = that version's CHANGELOG section). Pushes that
+# bump nothing exit after the check. A manually created release or a dispatch
+# still runs the same idempotent path.
+#
+# Keep this file named publish.yml: the npm Trusted Publisher rule for every
+# package names it. And keep publishing IN this run — a release created with
+# GITHUB_TOKEN fires no other workflow, so a "cut release here, publish over
+# there" split would never publish.
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
@@ -15,16 +28,38 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # create the v<version> tag + GitHub release
       id-token: write # for npm provenance
+    env:
+      PACKAGES: ". packages/devtools-core packages/react-native-devtools packages/next packages/openfeature"
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
+      # Cheap gate: is any package's version missing from npm? Everything below
+      # runs only if so, so an ordinary push to main costs one npm lookup.
+      - name: Anything unpublished?
+        id: need
+        run: |
+          need=0
+          for dir in $PACKAGES; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version 2>/dev/null | grep -qx "$version"; then
+              echo "on npm: $name@$version"
+            else
+              echo "NEW: $name@$version"; need=1
+            fi
+          done
+          echo "publish=$need" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - if: steps.need.outputs.publish == '1'
+        uses: pnpm/action-setup@v6
         with:
           version: 10
 
-      - uses: actions/setup-node@v7
+      - if: steps.need.outputs.publish == '1'
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -34,16 +69,21 @@ jobs:
       # Node 22 ships with npm 10.x which falls back to NODE_AUTH_TOKEN.
       # Pinned, not @latest: npm 11.6.x ships without its sigstore dep, so
       # `npm publish --provenance` dies with "Cannot find module 'sigstore'".
-      - name: Upgrade npm
+      - if: steps.need.outputs.publish == '1'
+        name: Upgrade npm
         run: npm install -g npm@11.5.2
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm -r --include-workspace-root run type-check
+      - if: steps.need.outputs.publish == '1'
+        run: pnpm install --frozen-lockfile
+      - if: steps.need.outputs.publish == '1'
+        run: pnpm -r --include-workspace-root run type-check
       # Build BEFORE test, same order as test.yml: the bundler-portability suite
       # bundles the emitted dist (the source is not what ships), and rebuilding it
       # from inside the test just to satisfy step order wastes a minute here.
-      - run: pnpm -r --include-workspace-root run build
-      - run: pnpm -r --include-workspace-root run test
+      - if: steps.need.outputs.publish == '1'
+        run: pnpm -r --include-workspace-root run build
+      - if: steps.need.outputs.publish == '1'
+        run: pnpm -r --include-workspace-root run test
 
       # ----- npm -----
       # Trusted Publishing via OIDC — no token required. Requires a matching
@@ -55,7 +95,8 @@ jobs:
       # The drop-in <script> loader artifact (R2 upload) is published from the
       # private shipeasy monorepo on submodule bump — keeping CF account id /
       # API token out of this public repo.
-      - name: Publish @shipeasy/sdk to npm
+      - if: steps.need.outputs.publish == '1'
+        name: Publish @shipeasy/sdk to npm
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
           if npm view "@shipeasy/sdk@$PKG_VERSION" version 2>/dev/null | grep -q "$PKG_VERSION"; then
@@ -75,7 +116,8 @@ jobs:
       #
       # @shipeasy/browser-devtools is deliberately NOT here: it is private and
       # ships as the hosted se-devtools.js script, built by the shipeasy monorepo.
-      - name: Publish the satellite packages to npm
+      - if: steps.need.outputs.publish == '1'
+        name: Publish the satellite packages to npm
         run: |
           for pkg in devtools-core react-native-devtools next openfeature; do
             dir="packages/$pkg"
@@ -87,3 +129,18 @@ jobs:
               (cd "$dir" && npm publish --access public --provenance)
             fi
           done
+
+      # Tag + GitHub release for the SDK version, once. Satellite-only bumps
+      # publish above but cut no release (their versions are in the CHANGELOG).
+      - name: Cut the v${{ steps.need.outputs.version }} release
+        if: steps.need.outputs.publish == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.need.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists"; exit 0
+          fi
+          awk -v h="## $VERSION" 'index($0, h) == 1 && (length($0) == length(h) || substr($0, length(h) + 1, 1) == " ") {f=1; next} /^## / {if (f) exit} f' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          [ -s "$RUNNER_TEMP/notes.md" ] || echo "See CHANGELOG.md" > "$RUNNER_TEMP/notes.md"
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "@shipeasy/sdk $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
