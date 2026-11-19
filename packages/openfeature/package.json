@@ -41,9 +41,9 @@
     "@openfeature/web-sdk": "^1.9.0",
     "@shipeasy/sdk": "workspace:*",
     "@types/node": "^26.0.1",
-    "tsup": "^8.3.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "tsup": "^9.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   },
   "publishConfig": { "access": "public" },
   "engines": { "node": ">=20" }
