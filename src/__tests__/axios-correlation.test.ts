@@ -116,4 +116,32 @@ describe("real axios integration — XHR correlation stamp", () => {
     // The whole point: see(err) would auto-carry the token, no manual wiring.
     expect(findCorrelation(err)).toBe("axios-corr-1");
   });
+  it("stamps a 200 too, so an error thrown from a GraphQL errors[] body still links", async () => {
+    vi.stubGlobal("location", { href: "https://app.test/x", origin: "https://app.test" });
+    vi.stubGlobal("crypto", { randomUUID: () => "axios-corr-200" });
+
+    let lastXhr: FakeXHR | undefined;
+    class TrackedXHR extends FakeXHR {
+      constructor() {
+        super();
+        lastXhr = this;
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", TrackedXHR);
+
+    const axios = (await import("axios")).default;
+    const { installXhrCorrelation } = await import("../client/index");
+    const { findCorrelation } = await import("../see/core");
+    installXhrCorrelation([]);
+
+    const pending = axios.post("https://app.test/graphql", {}, { adapter: "xhr" });
+    await vi.waitFor(() => expect(lastXhr).toBeDefined());
+    lastXhr!._finish(200, JSON.stringify({ errors: [{ message: "Internal server error" }] }));
+    const res = await pending;
+
+    // The app throws its own Error from the body; the axios response's request
+    // (the XHR) carries the token through `.response`.
+    const err = Object.assign(new Error("Internal server error"), { response: res });
+    expect(findCorrelation(err)).toBe("axios-corr-200");
+  });
 });

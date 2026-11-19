@@ -1,5 +1,24 @@
 # Changelog
 
+## 9.2.0 (2026-11-19)
+
+### A client error links to the server exception behind it on any HTTP status
+
+The browser `fetch` / `XMLHttpRequest` instrumentation stamped the request's
+`X-SE-Correlation` token on the `Response` / XHR only on a 5xx (or status 0).
+A GraphQL API answers a failed operation with HTTP 200 and an `errors[]` body,
+so a GraphQL app's client errors never carried the token and Shipeasy never
+linked them to the server exception for the same request. Every completed
+same-origin request is now stamped; throw `new Error(msg, { cause: res })` from
+your fetcher to keep the link (see Error reporting → Client auto-capture).
+Cross-origin requests are still never touched.
+
+### `sdk_version` reports the real package version
+
+`version` (sent as `sdk_version` on every `see()` event) was frozen at
+`"4.0.0"`. It now matches the published package version, and a test fails the
+build when the two drift.
+
 ## devtools-core 1.3.0, react-native-devtools 1.1.2 (2026-11-08)
 
 ### Public reports attach the reporter's identity automatically

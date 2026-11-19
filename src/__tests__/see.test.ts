@@ -691,6 +691,33 @@ describe("client see() wiring", () => {
     // links to the server-side issue for the same request.
     expect(findCorrelation(res)).toBe("corr-fixed");
   });
+
+  it("auto-capture: stamps a same-origin 200 too (GraphQL errors[] arrive as HTTP 200)", async () => {
+    const { client, fetchMock } = await bootClient();
+    await client.identify({});
+    vi.stubGlobal("location", { href: "https://app.test/x", origin: "https://app.test" });
+    vi.stubGlobal("crypto", { randomUUID: () => "corr-gql" });
+    const w = globalThis.window as unknown as { fetch: typeof fetch };
+
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers() });
+    const res = await w.fetch("https://app.test/graphql");
+    // A Relay/Apollo-style fetcher throws its own Error from the errors[] body;
+    // passing the Response as its cause keeps the link to the server exception.
+    const err = new Error("Internal server error", { cause: res });
+    expect(findCorrelation(err)).toBe("corr-gql");
+  });
+
+  it("auto-capture: never stamps a cross-origin Response", async () => {
+    const { client, fetchMock } = await bootClient();
+    await client.identify({});
+    vi.stubGlobal("location", { href: "https://app.test/x", origin: "https://app.test" });
+    vi.stubGlobal("crypto", { randomUUID: () => "corr-x" });
+    const w = globalThis.window as unknown as { fetch: typeof fetch };
+
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers() });
+    const res = await w.fetch("https://third-party.test/api");
+    expect(findCorrelation(res)).toBeUndefined();
+  });
 });
 
 // ---- server facade ----

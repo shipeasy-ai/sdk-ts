@@ -140,13 +140,32 @@ mints a token, sends it up on the `X-SE-Correlation` header (which a server
 
 - a **network failure** (offline / DNS / CORS) throws — the token is stamped on
   the thrown error, so `see(err)` picks it up automatically;
-- a **5xx** over `fetch` returns a `Response` — the token is stamped on the
-  `Response`, so a fetcher that throws `new Error(msg, { cause: res })` links via
-  the `.cause` chain;
-- a **5xx** (or network failure) over `XMLHttpRequest` — the token is stamped on
-  the `XMLHttpRequest`, which axios and most wrappers expose on the thrown error
+- every completed `fetch` returns a `Response` — the token is stamped on the
+  `Response` whatever its status, so a fetcher that throws
+  `new Error(msg, { cause: res })` links via the `.cause` chain. That includes a
+  **GraphQL** (or any envelope-style) API that answers a failed operation with
+  HTTP 200 and an `errors[]` body;
+- every completed (or failed) `XMLHttpRequest` — the token is stamped on the
+  `XMLHttpRequest`, which axios and most wrappers expose on the thrown error
   as `.request` / `.response.request`, so `see(err)` in your `catch` or axios
   interceptor picks it up with nothing threaded by hand.
+
+A GraphQL fetcher (a Relay network layer, an Apollo link) usually throws a new
+`Error` built from the parsed body, which drops the `Response`. Keep it as the
+cause so the link survives:
+
+```ts
+const res = await fetch("/graphql", { method: "POST", body });
+const json = await res.json();
+if (json.errors?.length) {
+  const err = new Error(json.errors[0].message, { cause: res });
+  see(err).causes_the("patient diagnoses").to("not be saved");
+  throw err;
+}
+```
+
+The stamp is inert on its own: it links only when the server reported an error
+for that same request.
 
 Either way, once you `see()` the failure, that occurrence and the server-side
 issue for the same request fold into one `caused_by` chain. The SDK also

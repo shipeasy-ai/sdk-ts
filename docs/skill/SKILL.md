@@ -120,7 +120,10 @@ runWithExtras(async () => {                    // server: per-request ALS scope
 ```
 
 Fire-and-forget on the next microtask (no `.send()`). Don't catch what you can't
-name a consequence for. You may `see()` then re-throw (links as `caused_by`). Full
+name a consequence for. You may `see()` then re-throw (links as `caused_by`). In the
+browser, a fetcher that throws its own Error from a response body (GraphQL
+`errors[]` on HTTP 200) should pass the `Response` as `{ cause: res }` — that keeps
+the link to the server exception for the same request. Full
 reference: <https://shipeasy-ai.github.io/sdk-ts/pages/error-reporting.md> · snippet
 <https://shipeasy-ai.github.io/sdk-ts/snippets/ops/see.md>
 
