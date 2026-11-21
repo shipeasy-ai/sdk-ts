@@ -12,6 +12,7 @@ paste the URL anywhere and the overrides travel with it.
 | --- | --- |
 | `<script src="https://cdn.shipeasy.ai/se-devtools.js">` | Self-executing bundle; reads `data-project-id` / `data-client-api-key` off the tag |
 | `se.getDevtoolsTag()` / `getDevtoolsData()` | The same tag, emitted from SSR with the ids already filled in |
+| Browser `shipeasy({ clientKey })` | Nothing to add: on **Shift+Alt+S** or `?se=1` the client SDK loads `se-devtools.js` itself when the page has not mounted it |
 
 ## Script tag (zero-code)
 
@@ -25,6 +26,15 @@ paste the URL anywhere and the overrides travel with it.
 ```
 
 The overlay opens with **Shift+Alt+S**, or by loading any page with `?se=1`.
+
+## Pages with no SSR layout (Vite, SPAs, static hosting)
+
+A page running the browser SDK needs no tag at all. When **Shift+Alt+S** or
+`?se=1` fires and `se-devtools.js` is not on the page, `shipeasy({ clientKey })`
+loads it from the SDK's `baseUrl` (`https://cdn.shipeasy.ai` by default) with
+your public client key, and the overlay opens as soon as it starts. Signing in
+resolves the project from the key. A page that already mounts the tag keeps
+using it — the SDK never loads a second copy.
 
 ## Emitting it from SSR
 

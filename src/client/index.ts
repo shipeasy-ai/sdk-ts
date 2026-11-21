@@ -58,7 +58,7 @@ declare global {
 
 // Reported as `sdk_version` on every see() event. Keep equal to package.json
 // `version` — src/__tests__/version.test.ts fails the build when they drift.
-export const version = "9.4.0";
+export const version = "9.5.0";
 
 // ---- Types ----
 
@@ -2002,17 +2002,104 @@ interface DevtoolsMod {
   destroy(): void;
 }
 
+/** The hosted overlay bundle's globals (set by `se-devtools.js` itself). */
+interface DevtoolsBundleGlobals {
+  /** Legacy: an IIFE build exposing init/destroy. The hosted bundle does not set it. */
+  __shipeasy_devtools_global?: DevtoolsMod;
+  /** Set by the hosted `se-devtools.js` once it has started. */
+  __se_devtools_ready?: boolean;
+  /** Read by the hosted bundle at startup (e.g. `{ adminUrl }`). */
+  __se_devtools_config?: Record<string, unknown>;
+}
+
+let _devtoolsBundleInjected = false;
+
 /**
- * If the host page already mounted the standalone devtools IIFE bundle (which
- * exposes `window.__shipeasy_devtools_global`), call its init() and wire up a
- * toggle handle at `window.__shipeasy_devtools`. No-op when the bundle is
- * absent — the customer is responsible for mounting it themselves.
+ * True when the hosted `se-devtools.js` overlay is already on the page — it
+ * finished starting (`__se_devtools_ready`), or its `<script>` tag is there
+ * (mounted by an SSR layout, or still loading). The bundle owns its own
+ * `Shift+Alt+S` / `?se` listeners, so the SDK must not drive it a second time.
  */
-export function loadDevtools(opts: { adminUrl?: string; edgeUrl?: string } = {}): void {
+function isDevtoolsBundleMounted(): boolean {
+  if (typeof window === "undefined") return false;
+  if ((window as unknown as DevtoolsBundleGlobals).__se_devtools_ready) return true;
+  if (_devtoolsBundleInjected) return true;
+  try {
+    return !!document?.querySelector?.('script[src*="se-devtools.js"]');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Load the hosted overlay (`{baseUrl}/se-devtools.js`) on demand — the same
+ * pattern as the i18n loader. `data-open` tells the bundle the open was
+ * already requested (hotkey or `?se`), so it mounts as soon as it starts
+ * instead of waiting for a second key press — and a router that strips `?se`
+ * from the URL before the script lands cannot swallow the request.
+ * Idempotent; returns false when there is no DOM or no client key to hand it.
+ */
+function injectDevtoolsBundle(opts: {
+  clientKey?: string;
+  baseUrl?: string;
+  adminUrl?: string;
+}): boolean {
+  if (_devtoolsBundleInjected) return true;
+  if (typeof document === "undefined" || typeof document.createElement !== "function") {
+    return false;
+  }
+  if (!opts.clientKey || !document.head) return false;
+  _devtoolsBundleInjected = true;
+  try {
+    if (opts.adminUrl) {
+      const w = window as unknown as DevtoolsBundleGlobals;
+      w.__se_devtools_config = { adminUrl: opts.adminUrl, ...(w.__se_devtools_config ?? {}) };
+    }
+    const base = (opts.baseUrl ?? "https://cdn.shipeasy.ai").replace(/\/$/, "");
+    const s = document.createElement("script");
+    s.src = `${base}/se-devtools.js`;
+    s.setAttribute("data-client-api-key", opts.clientKey);
+    s.setAttribute("data-open", "1");
+    s.async = true;
+    document.head.appendChild(s);
+    return true;
+  } catch {
+    _devtoolsBundleInjected = false;
+    return false;
+  }
+}
+
+interface LoadDevtoolsOptions {
+  adminUrl?: string;
+  edgeUrl?: string;
+  /** Public client key — lets the SDK load `se-devtools.js` when the page has not mounted it. */
+  clientKey?: string;
+  /** Where `se-devtools.js` is served from. Defaults to `https://cdn.shipeasy.ai`. */
+  baseUrl?: string;
+}
+
+/**
+ * Open the devtools overlay. When the hosted `se-devtools.js` bundle is not on
+ * the page (a Vite / SPA / static page whose HTML no SSR layout rendered), it
+ * is loaded from `baseUrl` and opens once it starts. When it is already
+ * mounted, the bundle handles the open itself. Warns — never silently no-ops —
+ * when there is no client key to load it with.
+ */
+export function loadDevtools(opts: LoadDevtoolsOptions = {}): void {
   if (typeof window === "undefined") return;
-  const wGlobal = window as unknown as { __shipeasy_devtools_global?: DevtoolsMod };
+  const wGlobal = window as unknown as DevtoolsBundleGlobals;
   const mod = wGlobal.__shipeasy_devtools_global;
-  if (!mod) return;
+  if (!mod) {
+    if (isDevtoolsBundleMounted()) return;
+    if (!injectDevtoolsBundle(opts)) {
+      logger.warn(
+        "[shipeasy] devtools overlay requested but se-devtools.js is not on the page and " +
+          "there is no client key to load it with. Call shipeasy({ clientKey }) or add " +
+          '<script src="https://cdn.shipeasy.ai/se-devtools.js" data-client-api-key="…">.',
+      );
+    }
+    return;
+  }
   mod.init(opts);
 
   const w = window as unknown as { __shipeasy_devtools?: { toggle: () => void } };
@@ -2037,13 +2124,18 @@ interface AttachDevtoolsOptions {
   hotkey?: string;
   adminUrl?: string;
   edgeUrl?: string;
+  /** Public client key — used to load `se-devtools.js` on demand. */
+  clientKey?: string;
+  /** Where `se-devtools.js` is served from. Defaults to `https://cdn.shipeasy.ai`. */
+  baseUrl?: string;
 }
 
 /**
- * One-call bootstrap for the devtools overlay. Installs the bridge, optionally
- * auto-loads the overlay if the page was opened with `?se`, registers a hotkey
- * listener for opening/toggling the overlay, and re-publishes the bridge after
- * each `identify()`/override change. Returns an unsubscribe function for
+ * One-call bootstrap for the devtools overlay. Installs the bridge, opens the
+ * overlay if the page was opened with `?se`, registers a hotkey listener for
+ * opening it, and re-publishes the bridge after each `identify()`/override
+ * change. The overlay itself is the hosted `se-devtools.js`: loaded on demand
+ * when the page has not mounted it. Returns an unsubscribe function for
  * cleanup (e.g. React effect teardown).
  */
 export function attachDevtools(
@@ -2058,29 +2150,48 @@ export function attachDevtools(
   const parts = hotkey.split("+");
   const key = parts[parts.length - 1];
   const shift = parts.includes("Shift");
-  const alt = parts.includes("Alt");
+  const alt = parts.includes("Alt") || parts.includes("Option");
   const ctrl = parts.includes("Ctrl") || parts.includes("Control");
   const meta = parts.includes("Meta") || parts.includes("Cmd");
+  // Match letters on e.code: on macOS Option+Shift+S mutates e.key to "Í", so
+  // an e.key match never fires there. Same rule as the overlay's own listener.
+  const code = /^[a-zA-Z]$/.test(key) ? `Key${key.toUpperCase()}` : null;
+  const loadOpts: LoadDevtoolsOptions = {
+    adminUrl: opts.adminUrl,
+    edgeUrl: opts.edgeUrl,
+    clientKey: opts.clientKey,
+    baseUrl: opts.baseUrl,
+  };
 
   client.installBridge();
-  if (isDevtoolsRequested()) loadDevtools({ adminUrl: opts.adminUrl, edgeUrl: opts.edgeUrl });
+  if (isDevtoolsRequested()) loadDevtools(loadOpts);
 
   let loaded = isDevtoolsRequested();
   function onKeyDown(e: KeyboardEvent) {
+    const keyMatches = code
+      ? e.code === code || e.key === key
+      : String(e.key).toLowerCase() === key.toLowerCase();
     if (
-      e.key === key &&
+      keyMatches &&
       e.shiftKey === shift &&
       e.altKey === alt &&
       e.ctrlKey === ctrl &&
       e.metaKey === meta
     ) {
+      const w = window as unknown as DevtoolsBundleGlobals & {
+        __shipeasy_devtools?: { toggle: () => void };
+      };
+      // The hosted bundle carries its own hotkey listener — once it is on the
+      // page it toggles itself; acting here too would double-toggle.
+      if (!w.__shipeasy_devtools_global) {
+        if (!isDevtoolsBundleMounted()) loadDevtools(loadOpts);
+        return;
+      }
       if (!loaded) {
         loaded = true;
-        loadDevtools({ adminUrl: opts.adminUrl, edgeUrl: opts.edgeUrl });
+        loadDevtools(loadOpts);
       } else {
-        (
-          window as unknown as { __shipeasy_devtools?: { toggle: () => void } }
-        ).__shipeasy_devtools?.toggle();
+        w.__shipeasy_devtools?.toggle();
       }
     }
   }
@@ -2290,7 +2401,7 @@ export function shipeasy(opts: ShipeasyClientConfig): () => void {
       logger.warn("[shipeasy] auto-identify failed:", String(err));
     });
   }
-  return attachDevtools(client, { adminUrl: opts.adminUrl });
+  return attachDevtools(client, { adminUrl: opts.adminUrl, clientKey: opts.clientKey, baseUrl });
 }
 
 export function configureShipeasy(opts: EngineOptions): Engine {
@@ -2312,6 +2423,7 @@ export function _resetShipeasyForTests(): void {
   _client?.destroy();
   _client = null;
   _i18nLoaderInjected = false;
+  _devtoolsBundleInjected = false;
 }
 
 let _i18nLoaderInjected = false;

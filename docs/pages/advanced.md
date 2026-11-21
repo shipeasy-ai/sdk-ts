@@ -124,7 +124,8 @@ Press `Shift+Alt+S` on any page running the SDK (or append `?se=1`). The
 Shipeasy devtools panel mounts in a Shadow DOM overlay and lets you flip every
 gate / config / experiment / translation **for the current session only** —
 handy for QA, demos, and bug repro. The overlay is delivered as a hosted script
-(`se-devtools.js`) — nothing to install, see the Browser devtools page. React
+(`se-devtools.js`) — nothing to install: the browser SDK loads it on demand
+when the page has not mounted the tag, see the Browser devtools page. React
 Native apps get the same panels from the `@shipeasy/react-native-devtools`
 package.
 
