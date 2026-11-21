@@ -129,11 +129,13 @@ describe("browser se_ov_dev writer", () => {
         return jar.v;
       },
       set cookie(x: string) {
-        jar.v = x;
+        // Track only the override cookie (the client also writes its anon-id cookie).
+        if (x.startsWith("se_ov_dev=")) jar.v = x;
       },
     };
     vi.stubGlobal("document", doc);
     vi.stubGlobal("window", { location: { search, protocol } });
+    vi.stubGlobal("location", { search, protocol, hostname: "localhost" });
     return jar;
   }
   function boot() {

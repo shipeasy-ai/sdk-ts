@@ -178,7 +178,10 @@ from `@shipeasy/sdk/server`: programmatic override > signed cookie > evaluation;
 fail-closed (needs the project override key, valid signature, unexpired); unsigned
 `?se_gate_` URL params stay client-only unless you opt in on a dev stack with
 `configure({ devOverrides: true })` (non-production only; reads the browser-written
-`se_ov_dev` cookie; signed `se_ov` wins on conflicts). Full reference:
+`se_ov_dev` cookie; signed `se_ov` wins on conflicts).
+API on a sibling subdomain: cookies auto-scope to the registrable domain (or
+`overrideCookieDomain`); for token-auth APIs send `getOverrideHeaders()` (client) and
+pass the `X-Shipeasy-Overrides` value as the 3rd arg of `withRequestOverrides`. Full reference:
 <https://shipeasy-ai.github.io/sdk-ts/pages/advanced.md>
 
 ## React Native devtools

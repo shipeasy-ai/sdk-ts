@@ -171,3 +171,28 @@ In a production process the option is ignored with one warning and the cookie is
 never read; the browser writer is compiled out of production bundles. Precedence:
 programmatic > signed `se_ov` > `se_ov_dev` > evaluation. Never active in
 production.
+
+### Frontend and API on different subdomains
+
+With the frontend on `app.example.com` and the API on `api.example.com`, the
+override cookies are written with `Domain=.example.com` so both hosts receive
+them. The domain is auto-detected (the broadest one the browser accepts; no
+Domain on `localhost` / IPs); force one with the browser option
+`configure({ clientKey, overrideCookieDomain: ".example.com" })`. Stale host-only
+copies from older SDKs are cleared on every write.
+
+For a token-auth API on another origin that never receives cookies, send them as
+a header instead:
+
+```ts
+import { getOverrideHeaders } from "@shipeasy/sdk/client";
+
+fetch("https://api.example.com/graphql", { headers: { ...getOverrideHeaders() } });
+// Apollo: new HttpLink({ uri, headers: { ...getOverrideHeaders() } })
+```
+
+`getOverrideHeaders()` returns `{ "X-Shipeasy-Overrides": "se_ov=…; se_ov_dev=…" }`
+(or `{}`). Allow that header in the API's CORS config. On the server, pass it as
+the third argument: `withRequestOverrides(req.headers.cookie, next,
+req.headers["x-shipeasy-overrides"])`. The `Cookie` header wins per cookie name;
+the same verification and `devOverrides` guards apply.

@@ -13,6 +13,19 @@ the tag is left alone. With no client key it logs a warning instead of doing
 nothing. The SDK's hotkey now matches on `e.code`, so Option+Shift+S works on
 macOS. The hosted bundle accepts a tag that names the project only by its
 client key.
+### Overrides reach an API on a sibling subdomain (shipeasy ops #714)
+
+A frontend on `app.example.com` and an API on `api.example.com` now share the
+override cookies: both writers (the client's `se_ov_dev` and the DevTools
+overlay's `se_ov`) scope the cookie to the broadest domain the browser accepts
+(`.example.com`; host-only on localhost / IPs), or to the new browser
+`configure({ overrideCookieDomain })`. Deletes clear the domain-scoped and any
+stale host-only copy. For token-auth APIs, `getOverrideHeaders()` from
+`@shipeasy/sdk/client` returns `{ "X-Shipeasy-Overrides": "se_ov=…; se_ov_dev=…" }`
+and `withRequestOverrides(cookieHeader, fn, overridesHeader)` reads it (the
+`Cookie` header wins per name; the same verification and dev guards apply).
+`extractOverrideCookie` now treats input as a bare value only when it has no `=`
+or `;`, so an unrelated cookie like `theme=a.b` no longer blocks the fallback.
 
 ## 9.4.0 (2026-11-21)
 

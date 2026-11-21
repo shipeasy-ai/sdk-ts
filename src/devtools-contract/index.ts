@@ -19,6 +19,7 @@
 
 export * from "./bridge";
 export * from "./capabilities";
+export * from "./cookie-domain";
 
 export * from "../i18n-markers";
 export * from "../overrides/cookie";

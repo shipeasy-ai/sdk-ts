@@ -8,6 +8,7 @@ import { logger, setLogLevel, safeRun, type LogLevel } from "../logger";
 import { setInternalReportContext } from "../internal-report";
 import {
   verifyOverrideCookie,
+  OVERRIDE_COOKIE_NAME,
   extractOverrideCookie,
   type OverrideMap,
 } from "../overrides/cookie";
@@ -1699,6 +1700,32 @@ function requestOverride(kind: "gates" | "configs", name: string): unknown {
   return m && hasOwn(m, name) ? (m as Record<string, unknown>)[name] : undefined;
 }
 
+/** Name of the request header that carries the override cookies (cookie syntax). */
+export const OVERRIDES_HEADER_NAME = "X-Shipeasy-Overrides";
+
+/** First non-empty `name=value` found in the given cookie-syntax strings, in order. */
+function pickOverrideCookie(
+  name: string,
+  ...inputs: (string | null | undefined)[]
+): string | null {
+  for (const input of inputs) {
+    if (!input) continue;
+    for (const part of input.split(";")) {
+      const eq = part.indexOf("=");
+      if (eq < 0 || part.slice(0, eq).trim() !== name) continue;
+      const v = part.slice(eq + 1).trim();
+      if (v) {
+        try {
+          return decodeURIComponent(v);
+        } catch {
+          return v;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 /** Cookie carrying the unsigned dev-only URL overrides (browser writer, non-prod). */
 export const DEV_OVERRIDE_COOKIE_NAME = "se_ov_dev";
 
@@ -1751,15 +1778,24 @@ export function decodeDevOverrideCookie(input: string | null | undefined): Overr
 export async function withRequestOverrides<T>(
   cookieHeader: string | null | undefined,
   fn: () => T | Promise<T>,
+  overridesHeader?: string | null,
 ): Promise<T> {
   let verified: OverrideMap | null = null;
   try {
     const engine = getShipeasyServerClient();
-    verified = (await engine?.verifyOverrides(cookieHeader)) ?? null;
+    // Per cookie name the `Cookie` header wins; `X-Shipeasy-Overrides` (same
+    // cookie syntax, for APIs the browser can't send cookies to) fills in.
+    const signedValue =
+      pickOverrideCookie(OVERRIDE_COOKIE_NAME, cookieHeader, overridesHeader) ??
+      (cookieHeader && !/[=;]/.test(cookieHeader) ? cookieHeader : null);
+    verified = (await engine?.verifyOverrides(signedValue)) ?? null;
     // Unsigned dev-only cookie: looked at ONLY when opted in and non-production.
     // Merged UNDER the signed map (signed wins per name).
     if (engine?.devOverridesActive) {
-      const dev = decodeDevOverrideCookie(cookieHeader);
+      const devValue = pickOverrideCookie(DEV_OVERRIDE_COOKIE_NAME, cookieHeader, overridesHeader);
+      const dev = decodeDevOverrideCookie(
+        devValue ?? (cookieHeader && !/[=;]/.test(cookieHeader) ? cookieHeader : null),
+      );
       if (dev) {
         verified = {
           gates: { ...dev.gates, ...(verified?.gates ?? {}) },
