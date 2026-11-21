@@ -1,5 +1,17 @@
 # Changelog
 
+## 9.4.0 (2026-11-21)
+
+### Dev-only `se_ov_dev` URL overrides reach server reads (shipeasy ops #714)
+
+Dev stacks can opt in to unsigned URL overrides: in non-production builds the
+browser SDK mirrors `?se_gate_…` / `se_config_…` / `se_exp_…` into a `se_ov_dev`
+session cookie, and `configure({ devOverrides: true })` makes the server read it
+inside `withRequestOverrides`. Both the option and a non-production process
+(`SHIPEASY_ENV` / `NODE_ENV`) are required; in production the option is ignored
+with one warning and the browser writer is compiled out. Signed `se_ov` wins per
+name.
+
 ## 9.3.0 (2026-11-21)
 
 ### Signed DevTools overrides now reach server-side reads (shipeasy ops #714)
