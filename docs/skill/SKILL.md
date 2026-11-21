@@ -171,7 +171,11 @@ Full reference: <https://shipeasy-ai.github.io/sdk-ts/pages/openfeature.md>
 (browser: on by default, `__se_sticky` cookie), exposure control (browser:
 `universe(name).assign({ logExposure: false })` + `disableAutoExposure`),
 `onChange(cb)` (requires `configure({ poll: true })`) / browser `subscribe()`.
-Devtools overlay: `Shift+Alt+S` or `?se=1`. Full reference:
+Devtools overlay: `Shift+Alt+S` or `?se=1`. Server reads honour signed devtools
+overrides (the `se_ov` cookie) inside `withRequestOverrides(req.headers.cookie, next)`
+from `@shipeasy/sdk/server`: programmatic override > signed cookie > evaluation;
+fail-closed (needs the project override key, valid signature, unexpired); unsigned
+`?se_gate_` URL params stay client-only. Full reference:
 <https://shipeasy-ai.github.io/sdk-ts/pages/advanced.md>
 
 ## React Native devtools

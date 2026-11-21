@@ -127,3 +127,27 @@ handy for QA, demos, and bug repro. The overlay is delivered as a hosted script
 (`se-devtools.js`) — nothing to install, see the Browser devtools page. React
 Native apps get the same panels from the `@shipeasy/react-native-devtools`
 package.
+
+## Signed overrides on the server
+
+When a developer is signed in to the devtools overlay, every override (including
+a `?se_gate_…` URL one) is mirrored into a signed `se_ov` cookie that reaches
+your server on every same-origin request, page loads and XHR/GraphQL alike. To
+let server-side reads see it, wrap request handling in `withRequestOverrides`:
+
+```ts
+import { withRequestOverrides, Client } from "@shipeasy/sdk/server";
+
+app.use((req, res, next) => withRequestOverrides(req.headers.cookie, next));
+
+// anywhere inside the request
+new Client(user).getFlag("new_checkout"); // true when forced in devtools
+```
+
+Inside the scope `Client.getFlag` / `getFlagDetail` (reason `OVERRIDE`),
+`getKillswitch` (whole-switch reads), `getConfig` and `universe(name).assign()`
+honour the cookie. Precedence: programmatic `overrideFlag` etc., then the signed
+cookie, then normal evaluation. It is fail-closed: it needs the project's
+override key served by Shipeasy, a valid signature and an unexpired cookie, else
+real values resolve. Unsigned `?se_gate_…` URL params alone stay client-only by
+design. Outside a scope, behaviour is unchanged.

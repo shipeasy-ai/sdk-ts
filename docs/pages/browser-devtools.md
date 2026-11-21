@@ -107,6 +107,11 @@ without any Shipeasy code:
 ?se=1                            # open the overlay on load
 ```
 
+Signed in, the overlay also mirrors overrides into a signed `se_ov` cookie.
+Server code opts in with `withRequestOverrides(req.headers.cookie, next)` from
+`@shipeasy/sdk/server` (see Advanced → Signed overrides on the server); unsigned
+`?se_*` params alone never reach the server.
+
 The React Native overlay exposes the same forcing actions through the SDK's
 programmatic overrides instead (no URL on native) — see the React Native
 devtools page.
