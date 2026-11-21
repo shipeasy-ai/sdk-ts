@@ -177,7 +177,10 @@ export function extractOverrideCookie(input: string | null | undefined): string 
   // Already the bare value? A signed value is exactly `body.sig` (two b64url
   // segments, no `;` / `=` from cookie syntax). If it contains `;` or a
   // `name=value` pair, treat it as a Cookie header and parse.
-  if (!input.includes(";") && !input.includes("se_ov=")) {
+  // Bare only when it has neither `=` nor `;` (base64url never contains them), so
+  // an unrelated single cookie like `theme=a.b` is parsed as a header, not taken
+  // as the value.
+  if (!/[=;]/.test(input)) {
     return input.includes(".") ? input : null;
   }
   for (const part of input.split(";")) {

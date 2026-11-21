@@ -18,6 +18,8 @@ import {
   decodeKey,
   OVERRIDE_COOKIE_NAME,
   OVERRIDE_FORMAT_VERSION,
+  writeOverrideCookie,
+  clearOverrideCookie,
   type OverrideMap,
   type OverridePayload,
 } from "@shipeasy/devtools-core/types";
@@ -117,11 +119,11 @@ export async function writeSignedOverrideCookie(map: OverrideMap): Promise<void>
   const value = await signOverrideCookie(payload, decodeKey(grant.signKey));
   const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; secure" : "";
   const maxAge = Math.max(0, grant.exp - Math.floor(Date.now() / 1000));
-  document.cookie = `${OVERRIDE_COOKIE_NAME}=${value}; path=/; max-age=${maxAge}; samesite=lax${secure}`;
+  writeOverrideCookie(OVERRIDE_COOKIE_NAME, value, `max-age=${maxAge}; samesite=lax${secure}`);
 }
 
 /** Delete the `se_ov` cookie (used on clear-all). */
 export function clearSignedOverrideCookie(): void {
   if (typeof document === "undefined") return;
-  document.cookie = `${OVERRIDE_COOKIE_NAME}=; path=/; max-age=0; samesite=lax`;
+  clearOverrideCookie(OVERRIDE_COOKIE_NAME);
 }

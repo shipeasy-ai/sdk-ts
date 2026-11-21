@@ -2,6 +2,11 @@
 
 import { Telemetry, DEFAULT_TELEMETRY_URL } from "../telemetry";
 import { isProductionEnv, i18nRenderKeysOnly, setI18nRenderKeysOnly } from "../env";
+import {
+  writeOverrideCookie,
+  clearOverrideCookie,
+  setConfiguredCookieDomain,
+} from "../devtools-contract/cookie-domain";
 import { CAPABILITIES_BRIDGE_KEY, type CapabilitiesBridge } from "../devtools-contract/capabilities";
 import {
   ENGINE_BRIDGE_KEY,
@@ -58,7 +63,7 @@ declare global {
 
 // Reported as `sdk_version` on every see() event. Keep equal to package.json
 // `version` — src/__tests__/version.test.ts fails the build when they drift.
-export const version = "9.4.0";
+export const version = "9.5.0";
 
 // ---- Types ----
 
@@ -909,6 +914,13 @@ export interface AnonymousStore {
 export interface EngineOptions {
   sdkKey: string;
   baseUrl?: string;
+  /**
+   * Cookie `Domain` for the override cookies (`se_ov`, `se_ov_dev`), e.g.
+   * `".example.com"`, so an API on a sibling subdomain sees them. Default:
+   * auto-detected (broadest domain the browser accepts; host-only on localhost
+   * / IPs).
+   */
+  overrideCookieDomain?: string;
   autoGuardrails?: boolean;
   /**
    * Per-group enablement for auto-collected metrics. When set, overrides the
@@ -1252,6 +1264,7 @@ export class Engine {
     // browser there's usually no native NODE_ENV, so `env` (default "prod") is
     // the signal. testMode always forces offline.
     const prod = isProductionEnv(this.env);
+    setConfiguredCookieDomain(opts.overrideCookieDomain);
     syncDevOverrideCookie(opts.env);
     this.networkEnabled = this.testMode ? false : (opts.isNetworkEnabled ?? prod);
     this.offline = !this.networkEnabled;
@@ -1937,9 +1950,9 @@ function syncDevOverrideCookie(explicitEnv?: string): void {
         for (const b of bytes) bin += String.fromCharCode(b);
         const val = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
         const secure = window.location.protocol === "https:" ? "; secure" : "";
-        document.cookie = `${DEV_OV_COOKIE}=${val}; path=/; samesite=lax${secure}`;
+        writeOverrideCookie(DEV_OV_COOKIE, val, `samesite=lax${secure}`);
       } else {
-        document.cookie = `${DEV_OV_COOKIE}=; path=/; max-age=0; samesite=lax`;
+        clearOverrideCookie(DEV_OV_COOKIE);
       }
     } catch {
       /* never let a dev convenience break the app */
@@ -1957,6 +1970,40 @@ function readParam(canonical: string, legacy?: string): string | null {
     if (legacyVal !== null) return legacyVal;
   }
   return null;
+}
+
+/**
+ * Headers that carry the override cookies to an API the browser will not send
+ * them to (e.g. a token-auth API on another origin): `{ "X-Shipeasy-Overrides":
+ * "se_ov=…; se_ov_dev=…" }` built from the current `document.cookie`, or `{}`
+ * when neither cookie is present. Spread it into your request headers:
+ *
+ * ```ts
+ * fetch(url, { headers: { ...getOverrideHeaders() } });
+ * // Apollo: new HttpLink({ uri, headers: { ...getOverrideHeaders() } })
+ * ```
+ *
+ * The API's CORS config must allow the `X-Shipeasy-Overrides` request header.
+ */
+export function getOverrideHeaders(): Record<string, string> {
+  if (typeof document === "undefined") return {};
+  try {
+    const out: string[] = [];
+    for (const name of ["se_ov", "se_ov_dev"]) {
+      for (const part of document.cookie.split(";")) {
+        const eq = part.indexOf("=");
+        if (eq < 0 || part.slice(0, eq).trim() !== name) continue;
+        const v = part.slice(eq + 1).trim();
+        if (v) {
+          out.push(`${name}=${v}`);
+          break;
+        }
+      }
+    }
+    return out.length ? { "X-Shipeasy-Overrides": out.join("; ") } : {};
+  } catch {
+    return {};
+  }
 }
 
 export function readGateOverride(name: string): boolean | null {
