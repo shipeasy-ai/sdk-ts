@@ -175,7 +175,9 @@ Devtools overlay: `Shift+Alt+S` or `?se=1`. Server reads honour signed devtools
 overrides (the `se_ov` cookie) inside `withRequestOverrides(req.headers.cookie, next)`
 from `@shipeasy/sdk/server`: programmatic override > signed cookie > evaluation;
 fail-closed (needs the project override key, valid signature, unexpired); unsigned
-`?se_gate_` URL params stay client-only. Full reference:
+`?se_gate_` URL params stay client-only unless you opt in on a dev stack with
+`configure({ devOverrides: true })` (non-production only; reads the browser-written
+`se_ov_dev` cookie; signed `se_ov` wins on conflicts). Full reference:
 <https://shipeasy-ai.github.io/sdk-ts/pages/advanced.md>
 
 ## React Native devtools

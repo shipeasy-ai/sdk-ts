@@ -959,6 +959,13 @@ export interface EngineOptions {
    * factory over passing this directly.
    */
   testMode?: boolean;
+  /**
+   * Opt in to the unsigned dev-only `se_ov_dev` URL-override cookie (written by
+   * the browser SDK in non-production builds) inside `withRequestOverrides`.
+   * Default false. Honoured only in a non-production process; in production it
+   * is ignored (one warning) and the cookie is never even read.
+   */
+  devOverrides?: boolean;
 }
 
 export class Engine {
@@ -991,6 +998,9 @@ export class Engine {
   // never fetch, track() is a no-op, and telemetry is off — the client is a
   // fully self-contained, network-free seam for unit tests.
   private readonly testMode: boolean;
+  // `se_ov_dev` read path: opted in AND non-production (testMode counts as
+  // non-production). Decided once at construction; false => cookie never read.
+  private readonly devOverridesOn: boolean;
   // Programmatic overrides (Statsig-style). Set on any client via
   // overrideFlag/overrideConfig/overrideExperiment; they win over the fetched
   // blob in getFlag/getConfig/getExperiment. Cleared by clearOverrides().
@@ -1022,6 +1032,12 @@ export class Engine {
     // SDK's published-env selector) is the fallback signal when no native
     // NODE_ENV/SHIPEASY_ENV is set (e.g. on Cloudflare Workers).
     const prod = isProductionEnv(this.env);
+    this.devOverridesOn = opts.devOverrides === true && (this.testMode || !prod);
+    if (opts.devOverrides === true && !this.devOverridesOn) {
+      logger.warn(
+        "[shipeasy] devOverrides is ignored in a production process; the se_ov_dev cookie is never read",
+      );
+    }
     // Master network gate. testMode always forces offline; otherwise honour an
     // explicit isNetworkEnabled, else default to prod-on.
     this.networkEnabled = this.testMode ? false : (opts.isNetworkEnabled ?? prod);
@@ -1544,6 +1560,11 @@ export class Engine {
     }
   }
 
+  /** True when the dev-only `se_ov_dev` cookie may be read (opt-in + non-prod). */
+  get devOverridesActive(): boolean {
+    return this.devOverridesOn;
+  }
+
   evaluate(user: User, rawUrl?: string, verified?: OverrideMap | null): BootstrapPayload {
     const flags: Record<string, boolean> = {};
     const configs: Record<string, unknown> = {};
@@ -1678,6 +1699,43 @@ function requestOverride(kind: "gates" | "configs", name: string): unknown {
   return m && hasOwn(m, name) ? (m as Record<string, unknown>)[name] : undefined;
 }
 
+/** Cookie carrying the unsigned dev-only URL overrides (browser writer, non-prod). */
+export const DEV_OVERRIDE_COOKIE_NAME = "se_ov_dev";
+
+/**
+ * Decode a `se_ov_dev` value (bare, or inside a full `Cookie:` header, possibly
+ * URL-encoded): base64url(JSON `{gates,configs,exps}`), no signature. Malformed
+ * input yields null and never throws.
+ */
+export function decodeDevOverrideCookie(input: string | null | undefined): OverrideMap | null {
+  if (!input) return null;
+  try {
+    let value: string | null = input;
+    if (input.includes("=") || input.includes(";")) {
+      value = null;
+      for (const part of input.split(";")) {
+        const eq = part.indexOf("=");
+        if (eq >= 0 && part.slice(0, eq).trim() === DEV_OVERRIDE_COOKIE_NAME) {
+          value = part.slice(eq + 1).trim();
+          break;
+        }
+      }
+    }
+    if (!value) return null;
+    value = decodeURIComponent(value);
+    const b64 = value.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
+    const json = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+    const o = JSON.parse(json) as Partial<OverrideMap> | null;
+    if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+    const obj = (v: unknown): Record<string, never> =>
+      v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, never>) : {};
+    return { gates: obj(o.gates), configs: obj(o.configs), exps: obj(o.exps) };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Verify the request's signed DevTools override cookie (`se_ov`) once, then run
  * `fn` with the verified overrides applied to every server `Client` read inside
@@ -1696,7 +1754,20 @@ export async function withRequestOverrides<T>(
 ): Promise<T> {
   let verified: OverrideMap | null = null;
   try {
-    verified = (await getShipeasyServerClient()?.verifyOverrides(cookieHeader)) ?? null;
+    const engine = getShipeasyServerClient();
+    verified = (await engine?.verifyOverrides(cookieHeader)) ?? null;
+    // Unsigned dev-only cookie: looked at ONLY when opted in and non-production.
+    // Merged UNDER the signed map (signed wins per name).
+    if (engine?.devOverridesActive) {
+      const dev = decodeDevOverrideCookie(cookieHeader);
+      if (dev) {
+        verified = {
+          gates: { ...dev.gates, ...(verified?.gates ?? {}) },
+          configs: { ...dev.configs, ...(verified?.configs ?? {}) },
+          exps: { ...dev.exps, ...(verified?.exps ?? {}) },
+        };
+      }
+    }
   } catch {
     verified = null;
   }

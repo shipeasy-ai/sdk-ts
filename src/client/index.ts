@@ -1252,6 +1252,7 @@ export class Engine {
     // browser there's usually no native NODE_ENV, so `env` (default "prod") is
     // the signal. testMode always forces offline.
     const prod = isProductionEnv(this.env);
+    syncDevOverrideCookie(opts.env);
     this.networkEnabled = this.testMode ? false : (opts.isNetworkEnabled ?? prod);
     this.offline = !this.networkEnabled;
     // Self-monitoring: SDK-internal errors caught by safeRun report to
@@ -1891,6 +1892,58 @@ function decodeConfigValue(raw: string): unknown {
     return JSON.parse(raw);
   } catch {
     return raw;
+  }
+}
+
+const DEV_OV_COOKIE = "se_ov_dev";
+
+/**
+ * Dev-only: mirror the current URL's override params (`se_gate_` / `se_ks_` /
+ * `se_config_` / `se_exp_`) into the unsigned `se_ov_dev` session cookie so a
+ * server opted in with `devOverrides` sees them too. Params present -> write;
+ * none -> delete. The whole body sits behind the literal NODE_ENV guard so
+ * bundlers fold it away and production builds ship none of it.
+ */
+function syncDevOverrideCookie(explicitEnv?: string): void {
+  if (typeof process !== "undefined" && process.env.NODE_ENV !== "production") {
+    try {
+      if (explicitEnv === "prod") return;
+      if (typeof document === "undefined" || typeof window === "undefined" || !window.location) {
+        return;
+      }
+      const gates: Record<string, boolean> = {};
+      const configs: Record<string, unknown> = {};
+      const exps: Record<string, string> = {};
+      for (const [k, v] of new URLSearchParams(window.location.search)) {
+        const g = ["se_ks_", "se_gate_", "se-gate-"].find((p) => k.startsWith(p));
+        if (g) {
+          const b = parseBool(v);
+          if (b !== null) gates[k.slice(g.length)] = b;
+          continue;
+        }
+        const c = ["se_config_", "se-config-"].find((p) => k.startsWith(p));
+        if (c) {
+          configs[k.slice(c.length)] = decodeConfigValue(v);
+          continue;
+        }
+        const e = ["se_exp_", "se-exp-"].find((p) => k.startsWith(p));
+        if (e && v !== "" && v !== "default" && v !== "none") exps[k.slice(e.length)] = v;
+      }
+      const has =
+        Object.keys(gates).length + Object.keys(configs).length + Object.keys(exps).length > 0;
+      if (has) {
+        const bytes = new TextEncoder().encode(JSON.stringify({ gates, configs, exps }));
+        let bin = "";
+        for (const b of bytes) bin += String.fromCharCode(b);
+        const val = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        const secure = window.location.protocol === "https:" ? "; secure" : "";
+        document.cookie = `${DEV_OV_COOKIE}=${val}; path=/; samesite=lax${secure}`;
+      } else {
+        document.cookie = `${DEV_OV_COOKIE}=; path=/; max-age=0; samesite=lax`;
+      }
+    } catch {
+      /* never let a dev convenience break the app */
+    }
   }
 }
 

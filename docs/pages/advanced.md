@@ -151,3 +151,22 @@ cookie, then normal evaluation. It is fail-closed: it needs the project's
 override key served by Shipeasy, a valid signature and an unexpired cookie, else
 real values resolve. Unsigned `?se_gate_…` URL params alone stay client-only by
 design. Outside a scope, behaviour is unchanged.
+
+### Dev-only URL overrides without sign-in
+
+On a local/dev/test stack you can make a plain `?se_gate_x=true` reach server
+reads without signing in to devtools. In non-production builds the browser SDK
+mirrors the current URL's override params into an unsigned `se_ov_dev` session
+cookie (written on init, deleted when the URL has no override params). The
+server reads it only when you opt in:
+
+```ts
+configure({ apiKey: process.env.SHIPEASY_SERVER_KEY!, devOverrides: true });
+```
+
+Two guards, both required: `devOverrides: true` AND a non-production process
+(`SHIPEASY_ENV` / `NODE_ENV`; `configureForTesting()` counts as non-production).
+In a production process the option is ignored with one warning and the cookie is
+never read; the browser writer is compiled out of production bundles. Precedence:
+programmatic > signed `se_ov` > `se_ov_dev` > evaluation. Never active in
+production.
