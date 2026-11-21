@@ -23,12 +23,17 @@ if (typeof window !== "undefined") {
     (document.currentScript as HTMLScriptElement | null) ??
     document.querySelector<HTMLScriptElement>("script[data-client-api-key]");
   const dataClientKey = scriptEl?.getAttribute("data-client-api-key") ?? undefined;
-  const dataProjectId = scriptEl?.getAttribute("data-project-id") ?? undefined;
+  const dataProjectId = scriptEl?.getAttribute("data-project-id") || undefined;
+  // `data-open`: the client SDK injected this tag because the open was already
+  // requested (Shift+Alt+S or ?se) on a page that had not mounted the bundle —
+  // mount straight away instead of waiting for a second key press.
+  const dataOpen = scriptEl?.hasAttribute("data-open") ?? false;
 
-  // data-project-id is required. data-client-api-key is required in production
-  // for authenticated API calls; in development it may be omitted and the overlay
-  // opens in unauthenticated mode (URL overrides and hotkey still work).
-  if (!dataProjectId) {
+  // The tag must name the project: by data-project-id, or by the public
+  // data-client-api-key (the sign-in popup resolves the key to its project —
+  // that is the tag the client SDK injects). With only data-project-id the
+  // overlay opens in unauthenticated mode (URL overrides and hotkey still work).
+  if (!dataProjectId && !dataClientKey) {
     console.error(
       "[ShipEasy devtools] Missing required data-project-id attribute.\n" +
         'Add it to the <script> tag: <script src="…/se-devtools.js" data-project-id="<ID>">',
@@ -55,7 +60,7 @@ if (typeof window !== "undefined") {
     // strip unrecognised query params). We pass this flag to loadOnTrigger
     // so the overlay still opens even if the URL is cleaned by the time
     // window.load + 2 rAFs fires.
-    const seRequestedAtLoad = isDevtoolsRequested();
+    const seRequestedAtLoad = dataOpen || isDevtoolsRequested();
 
     // Defer mount past React hydration. Mounting the overlay host onto
     // <html> mid-hydrate makes Next.js's hydration recovery (#418) tear

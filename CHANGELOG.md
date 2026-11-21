@@ -2,6 +2,17 @@
 
 ## 9.5.0 (2026-11-21)
 
+### DevTools hotkey and `?se` load the overlay on pages that did not mount it (shipeasy ops #715)
+
+`shipeasy({ clientKey })` registered `Shift+Alt+S` / `?se=1`, but only ever
+initialised an overlay the page had already mounted, so on a Vite dev server, an
+SPA shell or static hosting both were silent no-ops. The client SDK now loads
+`{baseUrl}/se-devtools.js` with the public client key on the first trigger and
+the overlay opens as soon as it starts (`data-open`); a page that already mounts
+the tag is left alone. With no client key it logs a warning instead of doing
+nothing. The SDK's hotkey now matches on `e.code`, so Option+Shift+S works on
+macOS. The hosted bundle accepts a tag that names the project only by its
+client key.
 ### Overrides reach an API on a sibling subdomain (shipeasy ops #714)
 
 A frontend on `app.example.com` and an API on `api.example.com` now share the
