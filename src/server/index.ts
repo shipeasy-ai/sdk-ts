@@ -46,7 +46,7 @@ export type { LogLevel };
 
 // Reported as `sdk_version` on every see() event. Keep equal to package.json
 // `version` — src/__tests__/version.test.ts fails the build when they drift.
-export const version = "9.2.0";
+export const version = "9.3.0";
 
 // ---- MurmurHash3_x86_32 (seed 0) — must match packages/core/src/eval/hash.ts ----
 
@@ -1236,6 +1236,9 @@ export class Engine {
     // 1. Local override wins and skips telemetry (mirrors the override path).
     const ov = this.flagOverrides.get(name);
     if (ov !== undefined) return { value: ov, reason: "OVERRIDE" };
+    // 1b. Signed DevTools cookie override for the current request scope.
+    const cov = requestOverride("gates", name);
+    if (typeof cov === "boolean") return { value: cov, reason: "OVERRIDE" };
     // Single telemetry emit for every non-override path (steps 2–5).
     this.telemetry.emit("gate", name);
     // 2. No rules blob loaded yet.
@@ -1274,8 +1277,16 @@ export class Engine {
     this.telemetry.emit("config", name);
     const opts: GetConfigOptions<T> =
       typeof decodeOrOpts === "function" ? { decode: decodeOrOpts } : (decodeOrOpts ?? {});
-    const has = this.configOverrides.has(name);
-    const raw = has ? this.configOverrides.get(name) : this.flagsBlob?.configs[name]?.value;
+    let has = this.configOverrides.has(name);
+    let raw = has ? this.configOverrides.get(name) : this.flagsBlob?.configs[name]?.value;
+    if (!has) {
+      // Signed DevTools cookie override (request scope) — below programmatic.
+      const cov = requestOverride("configs", name);
+      if (cov !== undefined) {
+        has = true;
+        raw = cov;
+      }
+    }
     // Config key absent (not overridden, not in the blob): return the supplied
     // default if any, else undefined — backward compatible.
     if (raw === undefined && !has) {
@@ -1357,7 +1368,21 @@ export class Engine {
         (a, b) => (a[1].poolOffsetBp ?? 0) - (b[1].poolOffsetBp ?? 0) || a[0].localeCompare(b[0]),
       );
 
+    const reqExps = currentRequestOverrides()?.exps;
     for (const [name, exp] of candidates) {
+      // Programmatic override > signed cookie override > normal evaluation.
+      if (reqExps && !this.experimentOverrides.has(name) && hasOwn(reqExps, name)) {
+        const group = reqExps[name];
+        if (typeof group === "string") {
+          const params = exp.groups.find((g) => g.name === group)?.params ?? {};
+          return new AssignmentImpl(
+            name,
+            group,
+            mergeParams(paramDefaults, params as Record<string, unknown>),
+            () => this.postExposure(user, name, group),
+          );
+        }
+      }
       const c = this.evalExperiment(name, exp, user);
       if (c.state === "group") {
         const group = c.group as string;
@@ -1598,6 +1623,12 @@ export class Engine {
 
   getKillswitch(name: string, switchKey?: string): boolean {
     this.telemetry.emit("ks", name);
+    // Signed DevTools cookie override: `gates` shares one namespace with kill
+    // switches, but only the whole-switch read honours it (sub-keys untouched).
+    if (switchKey === undefined) {
+      const cov = requestOverride("gates", name);
+      if (typeof cov === "boolean") return cov;
+    }
     const ks = this.flagsBlob?.killswitches?.[name];
     if (!ks) return false;
     if (switchKey === undefined) return isEnabled(ks.killed);
@@ -1611,6 +1642,65 @@ export class Engine {
     }
     return isEnabled(ks.killed);
   }
+}
+
+// ---- Request-scoped signed override map (DevTools `se_ov` cookie) ----
+//
+// `shipeasy()` / `withRequestOverrides()` verify the cookie once and run the
+// rest of the request inside this scope; `Client` reads consult it (programmatic
+// override > cookie > normal evaluation). Parked on a registry-shared Symbol so
+// every bundle layer shares one instance, and entered with `run()` — never
+// `enterWith`, which workerd lacks. Outside a scope nothing changes.
+const _REQ_OVERRIDES_ALS_SYM = Symbol.for("@shipeasy/sdk:request-overrides-als");
+type GlobalWithReqOv = Record<symbol, unknown> & {
+  [_REQ_OVERRIDES_ALS_SYM]?: AsyncLocalStorage<OverrideMap>;
+};
+const _requestOverridesALS: AsyncLocalStorage<OverrideMap> =
+  ((globalThis as GlobalWithReqOv)[_REQ_OVERRIDES_ALS_SYM] as
+    | AsyncLocalStorage<OverrideMap>
+    | undefined) ??
+  ((globalThis as GlobalWithReqOv)[_REQ_OVERRIDES_ALS_SYM] = new AsyncLocalStorage<OverrideMap>());
+
+function hasOwn(o: object, k: string): boolean {
+  return Object.prototype.hasOwnProperty.call(o, k);
+}
+
+function currentRequestOverrides(): OverrideMap | undefined {
+  try {
+    return _requestOverridesALS.getStore();
+  } catch {
+    return undefined;
+  }
+}
+
+function requestOverride(kind: "gates" | "configs", name: string): unknown {
+  const m = currentRequestOverrides()?.[kind];
+  return m && hasOwn(m, name) ? (m as Record<string, unknown>)[name] : undefined;
+}
+
+/**
+ * Verify the request's signed DevTools override cookie (`se_ov`) once, then run
+ * `fn` with the verified overrides applied to every server `Client` read inside
+ * it (`getFlag` / `getFlagDetail` / `getKillswitch` / `getConfig` /
+ * `universe().assign()`). Accepts the raw `Cookie:` header or a bare cookie
+ * value. Fail-closed: with no project override key from Shipeasy, a missing,
+ * forged or expired cookie, `fn` simply runs against real values.
+ *
+ * ```ts
+ * app.use((req, res, next) => withRequestOverrides(req.headers.cookie, next));
+ * ```
+ */
+export async function withRequestOverrides<T>(
+  cookieHeader: string | null | undefined,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  let verified: OverrideMap | null = null;
+  try {
+    verified = (await getShipeasyServerClient()?.verifyOverrides(cookieHeader)) ?? null;
+  } catch {
+    verified = null;
+  }
+  return verified ? _requestOverridesALS.run(verified, fn) : fn();
 }
 
 // ---- i18n SSR helpers ----

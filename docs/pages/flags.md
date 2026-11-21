@@ -56,7 +56,7 @@ const d = flags.getFlagDetail("new_checkout"); // bound Client
 | `CLIENT_NOT_READY` | no rules loaded yet (`init()` / `identify()` pending) |
 | `FLAG_NOT_FOUND` | the gate name isn't in the loaded rules |
 | `OFF` | the gate exists but is disabled / killed (server only) |
-| `OVERRIDE` | a local override (or `?se_gate_…` URL override) decided it |
+| `OVERRIDE` | a local override, `?se_gate_…` URL override, or (server, inside `withRequestOverrides`) a signed devtools cookie override decided it |
 | `RULE_MATCH` | the gate evaluated `true` |
 | `DEFAULT` | the gate evaluated `false` |
 

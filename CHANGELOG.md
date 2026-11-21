@@ -1,5 +1,21 @@
 # Changelog
 
+## 9.3.0 (2026-11-21)
+
+### Signed DevTools overrides now reach server-side reads (shipeasy ops #714)
+
+A signed-in DevTools session mirrors its overrides (including `?se_gate_…` URL
+state) into the signed `se_ov` cookie, but the server `Client` ignored it, so
+server-evaluated gates never saw a forced value. New package-level
+`withRequestOverrides(cookieHeader, fn)` from `@shipeasy/sdk/server` verifies the
+cookie once and scopes the verified overrides to `fn` (AsyncLocalStorage, no
+`enterWith`, workerd-safe): `Client.getFlag` / `getFlagDetail` (reason
+`OVERRIDE`), `getKillswitch` (whole-switch reads), `getConfig` and
+`universe().assign()` honour it. Precedence: programmatic override, then signed
+cookie, then normal evaluation. Fail-closed: needs the project override key
+served by Shipeasy, a valid signature and an unexpired cookie; unsigned URL
+params stay client-only. Outside a scope nothing changes.
+
 ## 9.2.0 (2026-11-19)
 
 ### A client error links to the server exception behind it on any HTTP status

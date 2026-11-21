@@ -58,7 +58,7 @@ declare global {
 
 // Reported as `sdk_version` on every see() event. Keep equal to package.json
 // `version` — src/__tests__/version.test.ts fails the build when they drift.
-export const version = "9.2.0";
+export const version = "9.3.0";
 
 // ---- Types ----
 
