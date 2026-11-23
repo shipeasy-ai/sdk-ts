@@ -294,6 +294,85 @@ describe("Engine lifecycle", () => {
     vi.unstubAllGlobals();
   });
 
+  it("concurrent initOnce calls share one fetch", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "X-Poll-Interval": "30" }),
+      json: async () => ({ version: "v1", plan: "free", gates: {}, configs: {} }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new Engine({ apiKey: "k", baseUrl: "http://x" });
+    await Promise.all([client.initOnce(), client.initOnce(), client.initOnce()]);
+    expect(fetchMock.mock.calls.length).toBe(2); // one /sdk/flags + one /sdk/experiments
+    vi.unstubAllGlobals();
+  });
+
+  it("initOnce gives up on a stalled fetch after 2s and retries on the next call (ops #726)", async () => {
+    vi.useFakeTimers();
+    // A subrequest that never answers until it is aborted.
+    const hanging = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    vi.stubGlobal("fetch", hanging);
+    const client = new Engine({ apiKey: "k", baseUrl: "http://x" });
+    const settled = vi.fn();
+    const first = client.initOnce().then(settled, settled);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(settled).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await first;
+    expect(settled).toHaveBeenCalledOnce();
+    // Reads fail safe while nothing is loaded.
+    expect(client.getFlag("anything", { user_id: "u" })).toBe(false);
+
+    // Not cached as done: the next call fetches again and succeeds.
+    const ok = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "X-Poll-Interval": "30" }),
+      json: async () => ({ version: "v2", plan: "free", gates: {}, configs: {} }),
+    });
+    vi.stubGlobal("fetch", ok);
+    await client.initOnce();
+    // Only the blob fetches — the getFlag above may also flush a telemetry beacon.
+    const blobCalls = ok.mock.calls.filter(([url]) =>
+      /\/sdk\/(flags|experiments)/.test(String(url)),
+    );
+    expect(blobCalls.length).toBe(2);
+    expect((client as any).initialized).toBe(true);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("the blob timeout also bounds a body that never finishes", async () => {
+    vi.useFakeTimers();
+    const slowBody = vi.fn((_url: string, init: RequestInit) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+          }),
+      }),
+    );
+    vi.stubGlobal("fetch", slowBody);
+    const client = new Engine({ apiKey: "k", baseUrl: "http://x" });
+    const settled = vi.fn();
+    const p = client.initOnce().then(settled, settled);
+    await vi.advanceTimersByTimeAsync(2000);
+    await p;
+    expect(settled).toHaveBeenCalledOnce();
+    expect((client as any).initialized).toBe(false);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
   it("destroy clears poll timer", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

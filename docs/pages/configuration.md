@@ -58,6 +58,14 @@ call fails silently: it returns the documented safe default (`false` /
 `console` so you still find out. A feature-flag read can never take down a
 request.
 
+The network side is bounded the same way. Each `/sdk/flags` and
+`/sdk/experiments` fetch (and the SSR i18n strings fetch) gives up after
+**2 seconds**, so awaiting `shipeasy({ serverKey })` before you render can
+never hold a page for longer than that, even when the network stalls. A fetch
+that times out is treated like any network error: reads serve the last loaded
+values or your code defaults, and the next `shipeasy()` call or background poll
+tries again. Concurrent first calls on a fresh process share one fetch.
+
 `logLevel` controls how loud that reporting is:
 
 ```ts

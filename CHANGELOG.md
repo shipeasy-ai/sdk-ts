@@ -1,5 +1,19 @@
 # Changelog
 
+## 9.5.1 (2026-11-23)
+
+### The flags and experiments fetch can no longer hold a render (shipeasy ops #726)
+
+`/sdk/flags` and `/sdk/experiments` were fetched with no timeout, and
+`shipeasy({ serverKey })` awaits the first fetch. An SSR root loader that awaits
+it could not render until that one subrequest answered, and in production a
+stalled subrequest held a sign-in page for 20 seconds. Each fetch now gives up
+after 2 seconds, body read included, the same budget the SSR i18n fetch already
+had. The i18n fetch's timer now covers its body read too. A timed-out fetch is
+an ordinary failure: reads serve the last blob or code defaults, and the next
+`initOnce()` or poll retries. Concurrent `initOnce()` calls on a fresh process
+now share one in-flight fetch instead of each starting their own.
+
 ## 9.5.0 (2026-11-21)
 
 ### DevTools hotkey and `?se` load the overlay on pages that did not mount it (shipeasy ops #715)

@@ -47,7 +47,7 @@ export type { LogLevel };
 
 // Reported as `sdk_version` on every see() event. Keep equal to package.json
 // `version` — src/__tests__/version.test.ts fails the build when they drift.
-export const version = "9.5.0";
+export const version = "9.5.1";
 
 // ---- MurmurHash3_x86_32 (seed 0) — must match packages/core/src/eval/hash.ts ----
 
@@ -969,6 +969,34 @@ export interface EngineOptions {
   devOverrides?: boolean;
 }
 
+/**
+ * Upper bound on one `/sdk/flags` or `/sdk/experiments` request, body included.
+ *
+ * `shipeasy()` awaits the first fetch, so an app that awaits `shipeasy()` before
+ * rendering (an SSR root loader) cannot render until it settles. Unbounded, one
+ * stalled subrequest held a page for 20s (shipeasy ops #726). On a timeout the
+ * fetch rejects like any network error: reads serve the last blob or code
+ * defaults, and the next `initOnce()` / poll tries again. Same budget as the
+ * SSR i18n fetch.
+ */
+const BLOB_FETCH_TIMEOUT_MS = 2000;
+
+async function fetchBlob<T>(
+  url: string,
+  headers: Record<string, string>,
+  timeoutMs = BLOB_FETCH_TIMEOUT_MS,
+): Promise<{ res: Response; body: T | undefined }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await globalThis.fetch(url, { headers, signal: controller.signal });
+    const body = res.ok && res.status !== 304 ? ((await res.json()) as T) : undefined;
+    return { res, body };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export class Engine {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -995,6 +1023,7 @@ export class Engine {
   private pollInterval = 30;
   private timer: ReturnType<typeof setInterval> | null = null;
   private initialized = false;
+  private initOncePending: Promise<void> | null = null;
   // Test mode: built by `Engine.forTesting()`. When set, init()/initOnce()
   // never fetch, track() is a no-op, and telemetry is off — the client is a
   // fully self-contained, network-free seam for unit tests.
@@ -1132,8 +1161,17 @@ export class Engine {
 
   async initOnce(): Promise<void> {
     if (this.offline || this.initialized) return;
-    await this.fetchAll();
-    this.initialized = true;
+    // Concurrent first requests on a fresh process share ONE fetch instead of
+    // each starting their own. Cleared when it settles, so a failed or
+    // timed-out first fetch is retried by the next caller rather than cached.
+    this.initOncePending ??= this.fetchAll()
+      .then(() => {
+        this.initialized = true;
+      })
+      .finally(() => {
+        this.initOncePending = null;
+      });
+    return this.initOncePending;
   }
 
   // ---- Local overrides (Statsig-style) ----
@@ -1220,25 +1258,28 @@ export class Engine {
     const headers: Record<string, string> = { "X-SDK-Key": this.apiKey };
     if (this.flagsEtag) headers["If-None-Match"] = this.flagsEtag;
     const envQuery = this.explicitEnv ? `?env=${encodeURIComponent(this.explicitEnv)}` : "";
-    const res = await globalThis.fetch(`${this.baseUrl}/sdk/flags${envQuery}`, { headers });
+    const { res, body } = await fetchBlob<FlagsBlob>(
+      `${this.baseUrl}/sdk/flags${envQuery}`,
+      headers,
+    );
     const interval = Number(res.headers.get("X-Poll-Interval") ?? "30") || 30;
     if (res.status === 304) return { interval, changed: false };
     if (!res.ok) throw new Error(`/sdk/flags returned ${res.status}`);
     const etag = res.headers.get("ETag");
     if (etag) this.flagsEtag = etag;
-    this.flagsBlob = (await res.json()) as FlagsBlob;
+    this.flagsBlob = body as FlagsBlob;
     return { interval, changed: true };
   }
 
   private async fetchExps(): Promise<boolean> {
     const headers: Record<string, string> = { "X-SDK-Key": this.apiKey };
     if (this.expsEtag) headers["If-None-Match"] = this.expsEtag;
-    const res = await globalThis.fetch(`${this.baseUrl}/sdk/experiments`, { headers });
+    const { res, body } = await fetchBlob<ExpsBlob>(`${this.baseUrl}/sdk/experiments`, headers);
     if (res.status === 304) return false;
     if (!res.ok) throw new Error(`/sdk/experiments returned ${res.status}`);
     const etag = res.headers.get("ETag");
     if (etag) this.expsEtag = etag;
-    this.expsBlob = (await res.json()) as ExpsBlob;
+    this.expsBlob = body as ExpsBlob;
     return true;
   }
 
@@ -2174,7 +2215,8 @@ async function fetchJson<T>(
       next: { revalidate: 60 },
     } as RequestInit);
     if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
-    return res.json() as Promise<T>;
+    // Awaited inside the try so the abort timer also bounds the body read.
+    return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
   }
